@@ -44,7 +44,9 @@ export type ActivityKind =
   | "milestone_advanced"
   | "cost_edited"
   | "revenue_edited"
+  | "task_completed"
   | "note";
+
 
 export type Activity = {
   id: string;

@@ -1,13 +1,18 @@
+"use client";
+
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { MILESTONE_STAGES, type MilestoneStage } from "@/lib/types";
 
 export function MilestonesStrip({
   current,
+  onChange,
 }: {
   current: MilestoneStage;
+  onChange?: (stage: MilestoneStage) => void;
 }) {
   const currentIdx = MILESTONE_STAGES.findIndex((s) => s.key === current);
+  const interactive = !!onChange;
 
   return (
     <div className="flex items-center gap-0">
@@ -16,9 +21,20 @@ export function MilestonesStrip({
         const isCurrent = idx === currentIdx;
         const isLast = idx === MILESTONE_STAGES.length - 1;
 
+        const StepWrapper: React.ElementType = interactive ? "button" : "div";
+        const stepProps = interactive
+          ? {
+              type: "button" as const,
+              onClick: () => onChange?.(stage.key),
+              "aria-label": `Set milestone to ${stage.label}`,
+              className:
+                "flex items-center gap-2 shrink-0 group rounded-md focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft -m-1 p-1",
+            }
+          : { className: "flex items-center gap-2 shrink-0" };
+
         return (
           <div key={stage.key} className="flex items-center flex-1 last:flex-none">
-            <div className="flex items-center gap-2 shrink-0">
+            <StepWrapper {...stepProps}>
               <div
                 className={cn(
                   "h-6 w-6 rounded-full grid place-items-center text-xs font-medium border transition-colors duration-base",
@@ -28,7 +44,8 @@ export function MilestonesStrip({
                     "bg-accent border-accent text-white shadow-sm",
                   !isPast &&
                     !isCurrent &&
-                    "bg-surface border-border text-text-tertiary"
+                    "bg-surface border-border text-text-tertiary",
+                  interactive && "group-hover:scale-110 transition-transform"
                 )}
                 aria-current={isCurrent ? "step" : undefined}
               >
@@ -43,12 +60,13 @@ export function MilestonesStrip({
                   "text-xs font-medium whitespace-nowrap",
                   isCurrent && "text-text-primary",
                   isPast && "text-text-secondary",
-                  !isPast && !isCurrent && "text-text-tertiary"
+                  !isPast && !isCurrent && "text-text-tertiary",
+                  interactive && "group-hover:text-text-primary"
                 )}
               >
                 {stage.label}
               </span>
-            </div>
+            </StepWrapper>
             {!isLast && (
               <div
                 className={cn(

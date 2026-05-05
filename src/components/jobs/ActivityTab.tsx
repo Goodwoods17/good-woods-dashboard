@@ -8,6 +8,7 @@ import {
   DollarSign,
   CircleDot,
   StickyNote,
+  CheckCircle2,
 } from "lucide-react";
 
 const ICON: Record<Activity["kind"], typeof ArrowRightCircle> = {
@@ -16,6 +17,7 @@ const ICON: Record<Activity["kind"], typeof ArrowRightCircle> = {
   milestone_advanced: CircleDot,
   cost_edited: Coins,
   revenue_edited: DollarSign,
+  task_completed: CheckCircle2,
   note: StickyNote,
 };
 

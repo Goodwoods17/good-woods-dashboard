@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { JobsList } from "@/components/jobs/JobsList";
 import { KanbanBoard } from "@/components/jobs/KanbanBoard";
 import { ViewToggle, type JobsView } from "@/components/jobs/ViewToggle";
@@ -49,7 +51,18 @@ export default function Home() {
             ? "Loading…"
             : `${activeCount} active job${activeCount === 1 ? "" : "s"} · ${formatCAD(totals.revenue)} contracted · GM ${formatPct(overallPct)} blended`
         }
-        actions={<ViewToggle view={view} onChange={setView} />}
+        actions={
+          <>
+            <ViewToggle view={view} onChange={setView} />
+            <Link
+              href="/jobs/new"
+              className="inline-flex items-center gap-1.5 rounded-md bg-accent text-white px-3 py-1.5 text-sm font-medium hover:bg-accent-hover transition-colors duration-fast"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              New Job
+            </Link>
+          </>
+        }
       />
       <div className="px-8 py-6">
         {loading ? (

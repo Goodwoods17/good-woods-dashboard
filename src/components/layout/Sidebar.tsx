@@ -4,10 +4,17 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutGrid,
+  Calculator,
   Calendar,
   BarChart3,
   BookOpen,
   Settings,
+  Users,
+  Hammer,
+  Truck,
+  Package,
+  TrendingUp,
+  FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,15 +22,45 @@ type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutGrid;
-  enabled: boolean;
 };
 
-const NAV: NavItem[] = [
-  { href: "/", label: "Pipeline", icon: LayoutGrid, enabled: true },
-  { href: "/calendar", label: "Calendar", icon: Calendar, enabled: true },
-  { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
-  { href: "/catalog", label: "Catalog", icon: BookOpen, enabled: false },
-  { href: "/settings", label: "Settings", icon: Settings, enabled: true },
+type NavSection = {
+  label?: string;
+  items: NavItem[];
+};
+
+const NAV: NavSection[] = [
+  {
+    items: [{ href: "/", label: "Pipeline", icon: LayoutGrid }],
+  },
+  {
+    label: "Sell & Plan",
+    items: [
+      { href: "/estimator", label: "Estimator", icon: Calculator },
+      { href: "/calendar", label: "Calendar", icon: Calendar },
+      { href: "/crm", label: "Clients", icon: Users },
+    ],
+  },
+  {
+    label: "Build",
+    items: [
+      { href: "/shop", label: "Shop floor", icon: Hammer },
+      { href: "/sops", label: "SOPs", icon: BookOpen },
+      { href: "/installer", label: "Installer", icon: Truck },
+    ],
+  },
+  {
+    label: "Stock & Money",
+    items: [
+      { href: "/catalog", label: "Catalog", icon: FileText },
+      { href: "/inventory", label: "Inventory", icon: Package },
+      { href: "/reports", label: "Reports", icon: BarChart3 },
+      { href: "/pnl", label: "P&L", icon: TrendingUp },
+    ],
+  },
+  {
+    items: [{ href: "/settings", label: "Settings", icon: Settings }],
+  },
 ];
 
 export function Sidebar() {
@@ -47,48 +84,41 @@ export function Sidebar() {
         </Link>
       </div>
 
-      <nav className="flex-1 px-2 py-3">
-        <ul className="space-y-0.5">
-          {NAV.map((item) => {
-            const active =
-              item.href === "/"
-                ? pathname === "/" || pathname.startsWith("/jobs")
-                : pathname.startsWith(item.href);
-            const Icon = item.icon;
-            const className = cn(
-              "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-fast ease-standard",
-              active
-                ? "bg-accent-soft text-accent font-medium"
-                : item.enabled
-                  ? "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-                  : "text-text-disabled cursor-not-allowed"
-            );
-            const content = (
-              <>
-                <Icon className="h-4 w-4" strokeWidth={1.75} />
-                <span>{item.label}</span>
-                {!item.enabled && (
-                  <span className="ml-auto text-[10px] uppercase tracking-wider text-text-tertiary">
-                    M3
-                  </span>
-                )}
-              </>
-            );
-            return (
-              <li key={item.href}>
-                {item.enabled ? (
-                  <Link href={item.href} className={className}>
-                    {content}
-                  </Link>
-                ) : (
-                  <span className={className} aria-disabled="true">
-                    {content}
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+      <nav className="flex-1 px-2 py-3 overflow-y-auto">
+        {NAV.map((section, idx) => (
+          <div key={idx} className={cn(idx > 0 && "mt-4")}>
+            {section.label && (
+              <div className="px-2.5 mb-1 text-[10px] uppercase tracking-[0.08em] text-text-tertiary font-semibold">
+                {section.label}
+              </div>
+            )}
+            <ul className="space-y-0.5">
+              {section.items.map((item) => {
+                const active =
+                  item.href === "/"
+                    ? pathname === "/" || pathname.startsWith("/jobs")
+                    : pathname.startsWith(item.href);
+                const Icon = item.icon;
+                return (
+                  <li key={item.href}>
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-fast ease-standard",
+                        active
+                          ? "bg-accent-soft text-accent font-medium"
+                          : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+                      )}
+                    >
+                      <Icon className="h-4 w-4" strokeWidth={1.75} />
+                      <span>{item.label}</span>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        ))}
       </nav>
 
       <div className="px-4 py-3 border-t border-border space-y-2">
@@ -99,8 +129,8 @@ export function Sidebar() {
           jump anywhere
         </div>
         <div className="text-xs text-text-secondary">
-          M2 · partial
-          <span className="text-text-tertiary"> · v0.2.0</span>
+          M1–M7 · all modules
+          <span className="text-text-tertiary"> · v0.7.0</span>
         </div>
       </div>
     </aside>

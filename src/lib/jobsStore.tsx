@@ -32,6 +32,8 @@ type JobsContextValue = {
   backend: StoreBackend;
   error: string | null;
   updateJob: (id: string, patch: Partial<Job> | ((j: Job) => Job)) => void;
+  createJob: (job: Job) => Promise<void>;
+  deleteJob: (id: string) => Promise<void>;
   resetToSeed: () => Promise<void>;
   seedDatabase: () => Promise<{ inserted: number }>;
   refresh: () => Promise<void>;
@@ -87,6 +89,12 @@ async function supabaseUpsertMany(jobs: Job[]): Promise<void> {
 async function supabaseDeleteAll(): Promise<void> {
   const sb = getSupabase();
   const { error } = await sb.from(JOBS_TABLE).delete().not("id", "is", null);
+  if (error) throw error;
+}
+
+async function supabaseDeleteOne(id: string): Promise<void> {
+  const sb = getSupabase();
+  const { error } = await sb.from(JOBS_TABLE).delete().eq("id", id);
   if (error) throw error;
 }
 
@@ -204,6 +212,41 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     };
   }, [flushActivity, flushUpserts]);
 
+  const createJob = useCallback(
+    async (job: Job) => {
+      // Optimistic insert.
+      setJobs((prev) => [...prev, job]);
+      if (backend === "supabase") {
+        try {
+          await supabaseUpsertMany([job]);
+          setError(null);
+        } catch (e) {
+          setError(formatError(e));
+          // Roll back optimistic insert on failure.
+          setJobs((prev) => prev.filter((j) => j.id !== job.id));
+        }
+      }
+    },
+    [backend]
+  );
+
+  const deleteJob = useCallback(
+    async (id: string) => {
+      const previous = jobs;
+      setJobs((prev) => prev.filter((j) => j.id !== id));
+      if (backend === "supabase") {
+        try {
+          await supabaseDeleteOne(id);
+          setError(null);
+        } catch (e) {
+          setError(formatError(e));
+          setJobs(previous);
+        }
+      }
+    },
+    [backend, jobs]
+  );
+
   const refresh = useCallback(async () => {
     if (backend !== "supabase") return;
     setLoading(true);
@@ -256,6 +299,8 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         backend,
         error,
         updateJob,
+        createJob,
+        deleteJob,
         resetToSeed,
         seedDatabase,
         refresh,

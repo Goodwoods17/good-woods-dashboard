@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { Trash2 } from "lucide-react";
 import type { Job } from "@/lib/types";
 import { computeMargin } from "@/lib/types";
+import { useJobs } from "@/lib/jobsStore";
 import { formatCAD, formatDate, formatPct } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -14,6 +18,17 @@ const TEMPLATE_LABELS: Record<Job["template"], string> = {
 
 export function OverviewTab({ job }: { job: Job }) {
   const margin = computeMargin(job);
+  const { deleteJob } = useJobs();
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  async function handleDelete() {
+    setDeleting(true);
+    await deleteJob(job.id);
+    router.push("/");
+  }
+
   const matCost = job.costs
     .filter((c) => c.category === "materials")
     .reduce((s, c) => s + c.amount, 0);
@@ -57,6 +72,48 @@ export function OverviewTab({ job }: { job: Job }) {
               Notes
             </div>
             <p className="text-sm text-text-secondary leading-relaxed">{job.notes}</p>
+          </div>
+        )}
+      </section>
+
+      <section className="lg:col-span-3 bg-surface border border-border rounded-lg p-5">
+        <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-2">
+          Danger zone
+        </h3>
+        <p className="text-sm text-text-secondary mb-4 leading-relaxed">
+          Deleting this job removes it from the database and erases its costs,
+          activity log, and invoice. Cannot be undone.
+        </p>
+        {!confirming ? (
+          <button
+            onClick={() => setConfirming(true)}
+            className={cn(
+              "inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium",
+              "text-text-secondary hover:border-status-blocked hover:text-status-blocked transition-colors duration-fast"
+            )}
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Delete this job
+          </button>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 bg-status-blocked-soft border border-status-blocked/30 rounded-md p-3">
+            <span className="text-sm text-status-blocked flex-1 min-w-[200px]">
+              Permanently delete <strong>{job.name}</strong>?
+            </span>
+            <button
+              onClick={() => setConfirming(false)}
+              disabled={deleting}
+              className="px-3 py-1.5 text-sm rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors duration-fast"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-1.5 text-sm rounded-md bg-status-blocked text-white hover:opacity-90 transition-opacity duration-fast disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
           </div>
         )}
       </section>

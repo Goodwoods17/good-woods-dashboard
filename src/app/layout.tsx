@@ -3,6 +3,8 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 import { JobsProvider } from "@/lib/jobsStore";
+import { CatalogProvider } from "@/lib/catalogStore";
+import { ShopProvider } from "@/lib/shopStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -24,7 +26,11 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
         <JobsProvider>
-          <AppShell>{children}</AppShell>
+          <CatalogProvider>
+            <ShopProvider>
+              <AppShell>{children}</AppShell>
+            </ShopProvider>
+          </CatalogProvider>
         </JobsProvider>
       </body>
     </html>

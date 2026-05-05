@@ -16,6 +16,15 @@ import {
   Settings,
   Briefcase,
   CornerDownLeft,
+  Plus,
+  Calculator,
+  Users,
+  Hammer,
+  BookOpen,
+  Truck,
+  Package,
+  TrendingUp,
+  FileText,
 } from "lucide-react";
 import { useJobs } from "@/lib/jobsStore";
 import { cn } from "@/lib/utils";
@@ -26,9 +35,18 @@ type CommandItem =
   | { kind: "job"; id: string; job: Job };
 
 const PAGES: CommandItem[] = [
+  { kind: "page", id: "page-new-job", label: "New Job", href: "/jobs/new", icon: Plus },
   { kind: "page", id: "page-pipeline", label: "Pipeline · Jobs", href: "/", icon: LayoutGrid },
+  { kind: "page", id: "page-estimator", label: "Estimator", href: "/estimator", icon: Calculator },
   { kind: "page", id: "page-calendar", label: "Calendar", href: "/calendar", icon: Calendar },
+  { kind: "page", id: "page-crm", label: "Clients", href: "/crm", icon: Users },
+  { kind: "page", id: "page-shop", label: "Shop floor", href: "/shop", icon: Hammer },
+  { kind: "page", id: "page-sops", label: "SOPs", href: "/sops", icon: BookOpen },
+  { kind: "page", id: "page-installer", label: "Installer Portal", href: "/installer", icon: Truck },
+  { kind: "page", id: "page-catalog", label: "Catalog", href: "/catalog", icon: FileText },
+  { kind: "page", id: "page-inventory", label: "Inventory", href: "/inventory", icon: Package },
   { kind: "page", id: "page-reports", label: "Reports", href: "/reports", icon: BarChart3 },
+  { kind: "page", id: "page-pnl", label: "P&L", href: "/pnl", icon: TrendingUp },
   { kind: "page", id: "page-settings", label: "Settings", href: "/settings", icon: Settings },
 ];
 

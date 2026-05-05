@@ -1,38 +1,48 @@
 # Good Woods Dashboard
 
-Desktop web app for the Good Woods cabinetry business — pipeline, pricing, and margins in one quiet place.
+Desktop web app for the Good Woods cabinetry business — pipeline, pricing, margins, shop floor, installs, and the books.
+
+**Live:** https://good-woods-dashboard.vercel.app
 
 ## Status
 
-- **M1 — Jobs slice** (target 2026-06-03) ✅ shipped
-- **M2 — Pipeline Kanban + Activity log + Reports** (target 2026-07-03) 🚧 partial — built ahead of schedule, pending Supabase
+Built ahead of schedule the night of 2026-05-04 → 2026-05-05.
 
-## What ships today
+| Module | Plan target | Status |
+|---|---|---|
+| **M1** Jobs slice | 2026-06-03 | ✅ Live |
+| **M2** Kanban + Activity + Reports + Persistence | 2026-07-03 | ✅ Live (Supabase) |
+| **M3** Estimator + Catalog + Cmd+K + Calendar | 2026-08-03 | ✅ Live |
+| **M4** SOPs library | 2026-09-03 | ✅ Live |
+| **M5** Lean Tracker (shop floor) + Andon | later | ✅ Live |
+| **M6** Installer Portal (mobile) | later | ✅ Live |
+| **M7** CRM + Inventory + P&L | later | ✅ Live |
 
-### Jobs surface
-- AppShell with sidebar (Pipeline / Calendar / Reports / Settings active; Catalog stubbed)
-- **Cmd+K command palette** — jump to any job by name/code/client or any page
-- **Jobs list** at `/` — search, filter by pipeline status, blended GM% header
-- **Pipeline Kanban** — drag a card between lifecycle columns to advance stage; persists to localStorage and writes to activity log
-- **Job detail** at `/jobs/[id]` — pipeline + health pills, milestones strip (Sold → Materials → Cut → Assemble → Finish → Install)
-- **Tabs:** Overview · Costs · Activity (Tasks / Files arrive in M3)
-- **Calendar** at `/calendar` — month grid plotting install dates, color-coded by health, with month navigation and a "this month" install list
+## Modules
 
-### Margin engine
-- **Costs tab** — editable revenue + materials/labour/overhead lines
-- Live margin readout color-coded against bands (≥30% healthy · 20–30% tight · <20% below floor)
-- Edits coalesce into activity-log entries via 1.5s debounce
+### Sell & Plan
+- `/` **Pipeline** — list ↔ Kanban, search, status filter, blended GM% header
+- `/jobs/new` **New Job** — full form, generates next code, creates draft invoice
+- `/jobs/[id]` **Job Detail** — milestones strip (clickable), Overview · Costs · Tasks · Activity tabs, status pills with editors, ICS calendar export, delete-with-confirm
+- `/estimator` **Estimator** — line items, materials/labour/overhead/margin → quoted price, "Save as Job"
+- `/calendar` **Calendar** — month grid of installs, color-coded by health
+- `/crm` **Clients** — derived from jobs, lifetime revenue/margin per client
 
-### Invoicing
-- **Invoice PDF export** — branded react-pdf template with BC GST+PST 12% tax
-- Downloads as `INV-XXX_<client>.pdf`
+### Build
+- `/shop` **Shop floor** — drag-and-drop Kanban for work units (Cut → Assemble → Finish → Install) with WIP limits, Andon button + active issues banner
+- `/sops` **SOPs library** — 5 cabinet shop SOPs (cut list, drawer box, spray booth, install pre-flight, invoicing)
+- `/installer` **Installer Portal** — mobile-friendly daily view: Today / This week / Coming up / Past due, click-to-Maps, mark complete
 
-### Reports
-- `/reports` — trailing GM% across closed jobs, pipeline value by stage (bar chart), margin-sorted job table
+### Stock & Money
+- `/catalog` **Catalog** — Materials + Finishes editable tables (8 seed materials, 4 finishes)
+- `/inventory` **Inventory** — quantity on hand, reorder points, low-stock banner
+- `/reports` **Reports** — trailing GM%, pipeline value bar, margin-sorted job table
+- `/pnl` **P&L** — lifetime revenue/cost/margin tiles + month-by-month bar chart
 
-### Persistence
-- localStorage (`gw_jobs_v1`) — survives refresh, satisfies the "resume after 3 days" objective
-- Reset to seed jobs from Settings
+### Cross-cutting
+- **⌘K palette** — keyboard nav across every page and every job by name/code/client
+- **Cross-device sync** — Supabase Postgres backend (Canada Central)
+- **Branded invoice PDF** — react-pdf, BC GST+PST 12%, clay accent
 
 ## Stack
 
@@ -40,20 +50,10 @@ Desktop web app for the Good Woods cabinetry business — pipeline, pricing, and
 - Tailwind CSS with locked tokens from Build Direction Spec §3
 - Lucide icons
 - @dnd-kit for accessible drag-and-drop
-- Recharts for reports
+- Recharts for reports / P&L
 - @react-pdf/renderer for invoices
-
-## Routes
-
-| Route | Purpose |
-|-------|---------|
-| `/` | Jobs (List ↔ Kanban toggle) |
-| `/jobs/[id]` | Job detail · Overview · Costs · Activity tabs |
-| `/calendar` | Install schedule month grid + this-month list |
-| `/reports` | Trailing GM, pipeline value, margin by job |
-| `/settings` | Company info, tax rate, local-data reset |
-
-Press **⌘K** (or **Ctrl+K**) anywhere to jump.
+- @supabase/supabase-js for cloud persistence
+- Vercel hosting (auto-deploy from GitHub `main`)
 
 ## Develop
 
@@ -64,13 +64,19 @@ npm run build    # production build
 npm run lint
 ```
 
+`.env.local` (gitignored) holds Supabase credentials. Without it the app falls back to localStorage so you can fork-and-run with no setup.
+
 ## Design tokens
 
-All visual tokens live in `src/app/globals.css` (CSS variables) and `tailwind.config.ts` (Tailwind aliases).
-**Do not invent new tokens** — these are the canonical Good Woods brand. See plan §6 / Spec §3.
+All visual tokens live in `src/app/globals.css` (CSS variables) and `tailwind.config.ts`.
+**Locked decision L2** — these are the canonical Good Woods brand. Do not invent new tokens.
 
 ## What's still on the shelf
 
-CRM · Estimator · Lean Task Tracker · SOPs · Installer Portal · Inventory · Full P&L · Andon · Multi-role auth · Mobile / TV layouts · Gantt · Folders · Catalog · Supabase wire-up.
+- TV display mode (Spec §12)
+- Multi-role auth (Supabase Auth wire-up needed)
+- QuickBooks + Google Calendar two-way sync (M3 Q-Integrations)
+- Mobile voice-measure backend share (`cabinet-app-spec.md` v1.3)
+- Custom domain (`app.goodwoods.ca`)
 
-The Supabase migration is the next step that needs auth setup — see the M2 plan in memory.
+These need either a setup gate (auth, external accounts) or live data flowing first.
