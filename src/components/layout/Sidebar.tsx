@@ -20,7 +20,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/", label: "Pipeline", icon: LayoutGrid, enabled: true },
-  { href: "/calendar", label: "Calendar", icon: Calendar, enabled: false },
+  { href: "/calendar", label: "Calendar", icon: Calendar, enabled: true },
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   { href: "/catalog", label: "Catalog", icon: BookOpen, enabled: false },
   { href: "/settings", label: "Settings", icon: Settings, enabled: true },
@@ -91,13 +91,16 @@ export function Sidebar() {
         </ul>
       </nav>
 
-      <div className="px-4 py-3 border-t border-border">
-        <div className="text-[11px] uppercase tracking-[0.04em] text-text-tertiary mb-1">
-          Build
+      <div className="px-4 py-3 border-t border-border space-y-2">
+        <div className="text-[11px] text-text-tertiary flex items-center gap-2">
+          <kbd className="font-mono text-[10px] border border-border bg-surface-muted rounded px-1 py-0.5">
+            ⌘K
+          </kbd>
+          jump anywhere
         </div>
         <div className="text-xs text-text-secondary">
-          M1 · Jobs slice
-          <span className="text-text-tertiary"> · v0.1.0</span>
+          M2 · partial
+          <span className="text-text-tertiary"> · v0.2.0</span>
         </div>
       </div>
     </aside>

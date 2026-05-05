@@ -1,0 +1,254 @@
+"use client";
+
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from "react";
+import { useRouter } from "next/navigation";
+import {
+  Search,
+  LayoutGrid,
+  Calendar,
+  BarChart3,
+  Settings,
+  Briefcase,
+  CornerDownLeft,
+} from "lucide-react";
+import { useJobs } from "@/lib/jobsStore";
+import { cn } from "@/lib/utils";
+import { computeMargin, type Job } from "@/lib/types";
+
+type CommandItem =
+  | { kind: "page"; id: string; label: string; href: string; icon: typeof Search }
+  | { kind: "job"; id: string; job: Job };
+
+const PAGES: CommandItem[] = [
+  { kind: "page", id: "page-pipeline", label: "Pipeline · Jobs", href: "/", icon: LayoutGrid },
+  { kind: "page", id: "page-calendar", label: "Calendar", href: "/calendar", icon: Calendar },
+  { kind: "page", id: "page-reports", label: "Reports", href: "/reports", icon: BarChart3 },
+  { kind: "page", id: "page-settings", label: "Settings", href: "/settings", icon: Settings },
+];
+
+export function CommandPalette() {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [activeIdx, setActiveIdx] = useState(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const { jobs } = useJobs();
+
+  // Cmd/Ctrl+K toggles
+  useEffect(() => {
+    function onKey(e: globalThis.KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setOpen((v) => !v);
+      } else if (e.key === "Escape") {
+        setOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    if (open) {
+      setQuery("");
+      setActiveIdx(0);
+      // focus next tick so input is mounted
+      setTimeout(() => inputRef.current?.focus(), 0);
+    }
+  }, [open]);
+
+  const items = useMemo<CommandItem[]>(() => {
+    const q = query.toLowerCase().trim();
+    const jobItems: CommandItem[] = jobs.map((j) => ({
+      kind: "job" as const,
+      id: `job-${j.id}`,
+      job: j,
+    }));
+    const all: CommandItem[] = [...PAGES, ...jobItems];
+    if (!q) return all;
+    return all.filter((it) => {
+      if (it.kind === "page") return it.label.toLowerCase().includes(q);
+      const j = it.job;
+      return (
+        j.name.toLowerCase().includes(q) ||
+        j.client.toLowerCase().includes(q) ||
+        j.code.toLowerCase().includes(q)
+      );
+    });
+  }, [query, jobs]);
+
+  // Reset activeIdx when filter changes
+  useEffect(() => {
+    setActiveIdx(0);
+  }, [query]);
+
+  function executeItem(it: CommandItem) {
+    if (it.kind === "page") router.push(it.href);
+    else router.push(`/jobs/${it.job.id}`);
+    setOpen(false);
+  }
+
+  function onInputKey(e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.min(items.length - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIdx((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const it = items[activeIdx];
+      if (it) executeItem(it);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center pt-[12vh] px-4 bg-text-primary/30 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Command palette"
+      onClick={() => setOpen(false)}
+    >
+      <div
+        className="w-full max-w-xl bg-surface border border-border-strong rounded-xl shadow-lg overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+          <Search className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={onInputKey}
+            placeholder="Jump to a job, client, or page…"
+            className="flex-1 text-sm bg-transparent border-0 placeholder:text-text-tertiary focus:outline-none focus:ring-0 text-text-primary"
+            aria-controls="cmdk-list"
+            aria-activedescendant={items[activeIdx]?.id}
+          />
+          <kbd className="text-[10px] font-mono text-text-tertiary border border-border bg-surface-muted rounded px-1.5 py-0.5">
+            ESC
+          </kbd>
+        </div>
+        <ul
+          id="cmdk-list"
+          role="listbox"
+          className="max-h-80 overflow-y-auto py-1.5"
+        >
+          {items.length === 0 ? (
+            <li className="px-4 py-6 text-center text-sm text-text-tertiary">
+              No results for &ldquo;{query}&rdquo;.
+            </li>
+          ) : (
+            items.map((it, i) => (
+              <li
+                key={it.id}
+                id={it.id}
+                role="option"
+                aria-selected={activeIdx === i}
+                onMouseEnter={() => setActiveIdx(i)}
+                onClick={() => executeItem(it)}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-2 cursor-pointer",
+                  activeIdx === i ? "bg-accent-soft" : "hover:bg-surface-muted"
+                )}
+              >
+                {it.kind === "page" ? (
+                  <PageRow item={it} active={activeIdx === i} />
+                ) : (
+                  <JobRow item={it} active={activeIdx === i} />
+                )}
+              </li>
+            ))
+          )}
+        </ul>
+        <div className="px-4 py-2 border-t border-border bg-surface-muted text-[11px] text-text-tertiary flex items-center justify-between">
+          <span>↑ ↓ to navigate · ↵ to open</span>
+          <span>
+            <kbd className="font-mono">⌘K</kbd> toggles this palette
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PageRow({
+  item,
+  active,
+}: {
+  item: Extract<CommandItem, { kind: "page" }>;
+  active: boolean;
+}) {
+  const Icon = item.icon;
+  return (
+    <>
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0",
+          active ? "text-accent" : "text-text-tertiary"
+        )}
+        strokeWidth={1.75}
+      />
+      <span
+        className={cn(
+          "flex-1 text-sm",
+          active ? "text-accent" : "text-text-primary"
+        )}
+      >
+        {item.label}
+      </span>
+      {active && (
+        <CornerDownLeft className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
+      )}
+    </>
+  );
+}
+
+function JobRow({
+  item,
+  active,
+}: {
+  item: Extract<CommandItem, { kind: "job" }>;
+  active: boolean;
+}) {
+  const margin = computeMargin(item.job);
+  return (
+    <>
+      <Briefcase
+        className={cn(
+          "h-4 w-4 shrink-0",
+          active ? "text-accent" : "text-text-tertiary"
+        )}
+        strokeWidth={1.75}
+      />
+      <div className="flex-1 min-w-0">
+        <div
+          className={cn(
+            "text-sm truncate",
+            active ? "text-accent font-medium" : "text-text-primary"
+          )}
+        >
+          {item.job.name}
+        </div>
+        <div className="text-xs text-text-tertiary truncate">
+          {item.job.code} · {item.job.client}
+        </div>
+      </div>
+      <span className="text-xs tabular-nums text-text-tertiary shrink-0">
+        GM {margin.marginPct.toFixed(0)}%
+      </span>
+      {active && (
+        <CornerDownLeft className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
+      )}
+    </>
+  );
+}

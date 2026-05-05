@@ -10,11 +10,13 @@ Desktop web app for the Good Woods cabinetry business — pipeline, pricing, and
 ## What ships today
 
 ### Jobs surface
-- AppShell with sidebar (Pipeline / Reports / Settings active; Calendar / Catalog stubbed)
+- AppShell with sidebar (Pipeline / Calendar / Reports / Settings active; Catalog stubbed)
+- **Cmd+K command palette** — jump to any job by name/code/client or any page
 - **Jobs list** at `/` — search, filter by pipeline status, blended GM% header
 - **Pipeline Kanban** — drag a card between lifecycle columns to advance stage; persists to localStorage and writes to activity log
 - **Job detail** at `/jobs/[id]` — pipeline + health pills, milestones strip (Sold → Materials → Cut → Assemble → Finish → Install)
 - **Tabs:** Overview · Costs · Activity (Tasks / Files arrive in M3)
+- **Calendar** at `/calendar` — month grid plotting install dates, color-coded by health, with month navigation and a "this month" install list
 
 ### Margin engine
 - **Costs tab** — editable revenue + materials/labour/overhead lines
@@ -46,9 +48,12 @@ Desktop web app for the Good Woods cabinetry business — pipeline, pricing, and
 | Route | Purpose |
 |-------|---------|
 | `/` | Jobs (List ↔ Kanban toggle) |
-| `/jobs/[id]` | Job detail · Costs · Activity · Overview tabs |
+| `/jobs/[id]` | Job detail · Overview · Costs · Activity tabs |
+| `/calendar` | Install schedule month grid + this-month list |
 | `/reports` | Trailing GM, pipeline value, margin by job |
 | `/settings` | Company info, tax rate, local-data reset |
+
+Press **⌘K** (or **Ctrl+K**) anywhere to jump.
 
 ## Develop
 
@@ -66,6 +71,6 @@ All visual tokens live in `src/app/globals.css` (CSS variables) and `tailwind.co
 
 ## What's still on the shelf
 
-CRM · Estimator · Lean Task Tracker · SOPs · Installer Portal · Inventory · Full P&L · Andon · Multi-role auth · Mobile / TV layouts · Cmd+K · Gantt · Folders · Calendar · Catalog · Supabase wire-up.
+CRM · Estimator · Lean Task Tracker · SOPs · Installer Portal · Inventory · Full P&L · Andon · Multi-role auth · Mobile / TV layouts · Gantt · Folders · Catalog · Supabase wire-up.
 
 The Supabase migration is the next step that needs auth setup — see the M2 plan in memory.
