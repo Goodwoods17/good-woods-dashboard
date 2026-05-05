@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #FAF9F7;
+    --surface: #FFFFFF;
+    --surface-muted: #F4F2EE;
+    --surface-sunken: #EFEDE8;
+
+    --border: #E8E4DD;
+    --border-strong: #D6D1C7;
+
+    --text-primary: #2B2926;
+    --text-secondary: #6B6862;
+    --text-tertiary: #9A968D;
+    --text-disabled: #C4BFB6;
+
+    --accent: #B86F52;
+    --accent-hover: #A45F44;
+    --accent-active: #8F4F36;
+    --accent-soft: #F1E4DC;
+
+    --secondary: #8B7355;
+    --secondary-hover: #75614A;
+    --secondary-soft: #EDE7DD;
+
+    --status-on-track: #6B8E5C;
+    --status-at-risk: #C99846;
+    --status-blocked: #B5544C;
+    --status-complete: #7A8B6F;
+    --status-paused: #9A968D;
+    --status-andon: #D14D3F;
+
+    --status-on-track-soft: #E8EFE3;
+    --status-at-risk-soft: #F7EBD5;
+    --status-blocked-soft: #F2DDDA;
+    --status-andon-soft: #FADBD7;
+
+    --shadow-sm: 0 1px 2px 0 rgb(43 41 38 / 0.04);
+    --shadow-md: 0 4px 12px -2px rgb(43 41 38 / 0.06), 0 2px 4px -2px rgb(43 41 38 / 0.04);
+    --shadow-lg: 0 12px 32px -8px rgb(43 41 38 / 0.10), 0 4px 8px -4px rgb(43 41 38 / 0.06);
+
+    --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+    --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+    --duration-fast: 120ms;
+    --duration-base: 200ms;
+    --duration-slow: 320ms;
+
+    --radius: 0.5rem;
+  }
+
+  [data-theme="dark"] {
+    --background: #1C1B19;
+    --surface: #25241F;
+    --surface-muted: #2D2C27;
+    --surface-sunken: #1F1E1B;
+
+    --border: #3A3833;
+    --border-strong: #4A4842;
+
+    --text-primary: #ECEAE4;
+    --text-secondary: #B5B1A8;
+    --text-tertiary: #807C73;
+    --text-disabled: #5A5750;
+
+    --accent: #D08B6F;
+    --accent-hover: #DD9C82;
+    --accent-active: #BA785D;
+    --accent-soft: #3D2A22;
+
+    --secondary: #A8927A;
+    --secondary-soft: #2F2820;
+
+    --status-on-track: #87A977;
+    --status-at-risk: #DBAA5C;
+    --status-blocked: #C9685F;
+    --status-complete: #95A689;
+    --status-paused: #807C73;
+    --status-andon: #E36050;
+
+    --status-on-track-soft: #2A352A;
+    --status-at-risk-soft: #3A2F1F;
+    --status-blocked-soft: #3A2624;
+    --status-andon-soft: #3D211D;
+  }
+
+  html {
+    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.01em;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular figures on numeric containers */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}
