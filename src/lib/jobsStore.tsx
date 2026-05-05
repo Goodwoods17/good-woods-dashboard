@@ -14,6 +14,7 @@ import { SEED_JOBS } from "./jobs";
 import { diffActivity } from "./activity";
 import { hasSupabase, getSupabase, JOBS_TABLE } from "./supabase";
 import { rowToJob, jobToRow, type JobRow } from "./jobsRowMap";
+import { formatError } from "./formatError";
 
 const STORAGE_KEY = "gw_jobs_v1";
 const SCHEMA_VERSION = 1;
@@ -118,7 +119,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         }
       } catch (e) {
         if (!cancelled) {
-          setError(e instanceof Error ? e.message : String(e));
+          setError(formatError(e));
           setJobs(localLoad());
         }
       } finally {
@@ -164,7 +165,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       const targets = prev.filter((j) => ids.includes(j.id));
       // Fire-and-forget — failures show up in the error banner.
       supabaseUpsertMany(targets).catch((e) => {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(formatError(e));
       });
       return prev;
     });
@@ -211,7 +212,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       setJobs(remote);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatError(e));
     } finally {
       setLoading(false);
     }
@@ -225,7 +226,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         setJobs(SEED_JOBS);
         setError(null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        setError(formatError(e));
       }
     } else {
       setJobs(SEED_JOBS);
@@ -242,7 +243,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       setError(null);
       return { inserted: SEED_JOBS.length };
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(formatError(e));
       return { inserted: 0 };
     }
   }, [backend]);
