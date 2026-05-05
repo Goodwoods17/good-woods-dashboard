@@ -3,28 +3,33 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, MapPin, Calendar as CalendarIcon } from "lucide-react";
-import type { Job } from "@/lib/types";
 import { computeMargin } from "@/lib/types";
+import { useJob, useJobs } from "@/lib/jobsStore";
 import { formatCAD, formatDate, formatPct } from "@/lib/format";
 import { HealthPill } from "@/components/ui/HealthPill";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { MilestonesStrip } from "./MilestonesStrip";
 import { CostsTab } from "./CostsTab";
+import { OverviewTab } from "./OverviewTab";
+import { ActivityTab } from "./ActivityTab";
 import { cn } from "@/lib/utils";
 
-type TabKey = "overview" | "tasks" | "files" | "costs";
+type TabKey = "overview" | "tasks" | "files" | "costs" | "activity";
 
 const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
-  { key: "overview", label: "Overview", enabled: false },
+  { key: "overview", label: "Overview", enabled: true },
+  { key: "costs", label: "Costs", enabled: true },
+  { key: "activity", label: "Activity", enabled: true },
   { key: "tasks", label: "Tasks", enabled: false },
   { key: "files", label: "Files", enabled: false },
-  { key: "costs", label: "Costs", enabled: true },
 ];
 
-export function JobDetail({ initialJob }: { initialJob: Job }) {
-  const [job, setJob] = useState<Job>(initialJob);
+export function JobDetail({ jobId }: { jobId: string }) {
+  const job = useJob(jobId);
+  const { updateJob } = useJobs();
   const [activeTab, setActiveTab] = useState<TabKey>("costs");
 
+  if (!job) return null;
   const margin = computeMargin(job);
   const marginToneText =
     margin.band === "on_track"
@@ -56,7 +61,7 @@ export function JobDetail({ initialJob }: { initialJob: Job }) {
             <h1 className="text-xl font-semibold text-text-primary tracking-tight">
               {job.name}
             </h1>
-            <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary">
+            <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary flex-wrap">
               <span>{job.client}</span>
               <span className="inline-flex items-center gap-1">
                 <MapPin className="h-3.5 w-3.5 text-text-tertiary" strokeWidth={1.75} />
@@ -85,7 +90,7 @@ export function JobDetail({ initialJob }: { initialJob: Job }) {
         <MilestonesStrip current={job.currentMilestone} />
       </header>
 
-      <nav className="border-b border-border bg-surface px-8">
+      <nav className="border-b border-border bg-surface px-8" aria-label="Job sections">
         <div className="flex items-center gap-0">
           {TABS.map((tab) => (
             <button
@@ -100,11 +105,12 @@ export function JobDetail({ initialJob }: { initialJob: Job }) {
                     ? "border-transparent text-text-secondary hover:text-text-primary"
                     : "border-transparent text-text-disabled cursor-not-allowed"
               )}
+              aria-current={activeTab === tab.key ? "page" : undefined}
             >
               {tab.label}
               {!tab.enabled && (
                 <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-tertiary">
-                  M2
+                  M3
                 </span>
               )}
             </button>
@@ -113,7 +119,14 @@ export function JobDetail({ initialJob }: { initialJob: Job }) {
       </nav>
 
       <div className="flex-1 px-8 py-6">
-        {activeTab === "costs" && <CostsTab job={job} onChange={setJob} />}
+        {activeTab === "overview" && <OverviewTab job={job} />}
+        {activeTab === "costs" && (
+          <CostsTab
+            job={job}
+            onChange={(updated) => updateJob(job.id, () => updated)}
+          />
+        )}
+        {activeTab === "activity" && <ActivityTab job={job} />}
       </div>
     </div>
   );

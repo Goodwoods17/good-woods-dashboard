@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { JobsProvider } from "@/lib/jobsStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -22,7 +23,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
-        <AppShell>{children}</AppShell>
+        <JobsProvider>
+          <AppShell>{children}</AppShell>
+        </JobsProvider>
       </body>
     </html>
   );

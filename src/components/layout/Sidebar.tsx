@@ -21,9 +21,9 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/", label: "Pipeline", icon: LayoutGrid, enabled: true },
   { href: "/calendar", label: "Calendar", icon: Calendar, enabled: false },
-  { href: "/reports", label: "Reports", icon: BarChart3, enabled: false },
+  { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   { href: "/catalog", label: "Catalog", icon: BookOpen, enabled: false },
-  { href: "/settings", label: "Settings", icon: Settings, enabled: false },
+  { href: "/settings", label: "Settings", icon: Settings, enabled: true },
 ];
 
 export function Sidebar() {
@@ -69,7 +69,7 @@ export function Sidebar() {
                 <span>{item.label}</span>
                 {!item.enabled && (
                   <span className="ml-auto text-[10px] uppercase tracking-wider text-text-tertiary">
-                    M2
+                    M3
                   </span>
                 )}
               </>

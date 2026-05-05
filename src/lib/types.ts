@@ -38,6 +38,22 @@ export type CostLine = {
   amount: number;
 };
 
+export type ActivityKind =
+  | "pipeline_changed"
+  | "health_changed"
+  | "milestone_advanced"
+  | "cost_edited"
+  | "revenue_edited"
+  | "note";
+
+export type Activity = {
+  id: string;
+  timestamp: string;
+  actor: string;
+  kind: ActivityKind;
+  message: string;
+};
+
 export type Job = {
   id: string;
   code: string;
@@ -52,6 +68,7 @@ export type Job = {
   revenue: number;
   costs: CostLine[];
   notes?: string;
+  activity?: Activity[];
   invoice: {
     number: string;
     issuedDate: string;
