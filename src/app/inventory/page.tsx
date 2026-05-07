@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Package, Plus, Trash2, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useCatalog } from "@/lib/catalogStore";
+import { useCatalog } from "@features/catalog/lib/catalogStore";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 

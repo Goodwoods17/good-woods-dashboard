@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useCatalog, type Material, type Finish } from "@/lib/catalogStore";
+import { useCatalog, type Material, type Finish } from "@features/catalog/lib/catalogStore";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
