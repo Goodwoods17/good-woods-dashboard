@@ -35,4 +35,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# claude code / local tooling
+.claude/
+.remember/
+codemap.html
