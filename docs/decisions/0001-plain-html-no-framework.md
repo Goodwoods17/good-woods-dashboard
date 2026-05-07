@@ -3,7 +3,14 @@
 Date: 2026-05-07
 
 ## Status
-Accepted
+**Superseded by [0004](0004-nextjs-not-plain-html.md)** on 2026-05-07.
+
+This ADR was aspirational — written the same day as a planned restructure
+of the dashboard, but at the time it was written, the working production
+app was already Next.js + TypeScript + Supabase with M1–M7 features live.
+Honouring the constraint would have meant a multi-week rewrite to satisfy
+a goal (zero install) that hadn't paid off in practice. ADR 0004
+documents the actual stack that ships.
 
 ## Context
 
