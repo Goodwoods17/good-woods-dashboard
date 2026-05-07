@@ -5,7 +5,7 @@ import { AppShell } from "@shared/components/layout/AppShell";
 import { AuthProvider } from "@/lib/authStore";
 import { JobsProvider } from "@/lib/jobsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
-import { ShopProvider } from "@/lib/shopStore";
+import { ShopProvider } from "@features/shop/lib/shopStore";
 
 const inter = Inter({
   subsets: ["latin"],
