@@ -1,7 +1,7 @@
 "use client";
 
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { CalendarView } from "@features/calendar/components/CalendarView";
 
 export default function CalendarPage() {

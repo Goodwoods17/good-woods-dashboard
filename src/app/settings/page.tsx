@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { COMPANY, TAX_RATE } from "@/lib/invoice";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { COMPANY, TAX_RATE } from "@features/jobs/lib/invoice";
 import { RotateCcw, Database, AlertCircle, Sprout, RefreshCw } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 

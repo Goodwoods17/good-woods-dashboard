@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { Job } from "@shared/lib/types";
 import { computeMargin } from "@shared/lib/types";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 

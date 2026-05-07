@@ -25,7 +25,7 @@ import {
   PIPELINE_LABELS,
   computeMargin,
 } from "@shared/lib/types";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { MarginCell } from "@shared/components/ui/MarginCell";

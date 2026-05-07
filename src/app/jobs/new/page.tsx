@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import {
   type Job,
   type PipelineStatus,
@@ -13,7 +13,7 @@ import {
   PIPELINE_LABELS,
   HEALTH_LABELS,
 } from "@shared/lib/types";
-import { newActivity } from "@/lib/activity";
+import { newActivity } from "@features/jobs/lib/activity";
 import { cn } from "@shared/lib/utils";
 
 const TEMPLATE_OPTIONS: { value: Job["template"]; label: string; hint: string }[] = [

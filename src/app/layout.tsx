@@ -3,7 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@shared/components/layout/AppShell";
 import { AuthProvider } from "@shared/lib/authStore";
-import { JobsProvider } from "@/lib/jobsStore";
+import { JobsProvider } from "@features/jobs/lib/jobsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
 

@@ -26,7 +26,7 @@ import {
   TrendingUp,
   FileText,
 } from "lucide-react";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { cn } from "@shared/lib/utils";
 import { computeMargin, type Job } from "@shared/lib/types";
 

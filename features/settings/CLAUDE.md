@@ -20,8 +20,7 @@ Page logic in `src/app/settings/page.tsx`. No feature-specific lib code.
 
 It depends on:
 - `useJobs()` — for the seed/refresh actions and storage diagnostics
-- `COMPANY` and `TAX_RATE` from `@/lib/invoice` (will become
-  `@features/jobs/lib/invoice` after the jobs migration)
+- `COMPANY` and `TAX_RATE` from `@features/jobs/lib/invoice`
 
 ## Domain notes
 

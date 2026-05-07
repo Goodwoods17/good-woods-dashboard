@@ -6,7 +6,7 @@ import type { Job, CostLine } from "@shared/lib/types";
 import { computeMargin } from "@shared/lib/types";
 import { formatCADPrecise, formatCAD } from "@shared/lib/format";
 import { MarginCell } from "@shared/components/ui/MarginCell";
-import { generateInvoicePdf } from "@/lib/invoice";
+import { generateInvoicePdf } from "@features/jobs/lib/invoice";
 import { cn } from "@shared/lib/utils";
 
 const CATEGORY_LABELS: Record<CostLine["category"], string> = {

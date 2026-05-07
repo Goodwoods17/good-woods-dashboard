@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, MapPin, Calendar as CalendarIcon, CalendarPlus } from "lucide-react";
-import { downloadJobICS } from "@/lib/ics";
+import { downloadJobICS } from "@features/jobs/lib/ics";
 import {
   computeMargin,
   PIPELINE_LABELS,
@@ -11,7 +11,7 @@ import {
   type PipelineStatus,
   type HealthStatus,
 } from "@shared/lib/types";
-import { useJob, useJobs } from "@/lib/jobsStore";
+import { useJob, useJobs } from "@features/jobs/lib/jobsStore";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";

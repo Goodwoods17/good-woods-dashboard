@@ -10,7 +10,7 @@ import {
   Truck,
 } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { formatDate } from "@shared/lib/format";
 import type { Job } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";

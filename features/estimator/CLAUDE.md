@@ -29,7 +29,7 @@ the canonical `CostLine` schema (`materials | labour | overhead`).
 It depends on:
 - `useJobs()` — `createJob` to save the result
 - `useCatalog()` — material list for the dropdown + price defaults
-- `newActivity` from `@/lib/activity` (will move with the jobs migration)
+- `newActivity` from `@features/jobs/lib/activity`
 
 ## Domain notes
 

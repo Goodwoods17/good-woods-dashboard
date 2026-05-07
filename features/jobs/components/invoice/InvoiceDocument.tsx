@@ -8,7 +8,7 @@ import {
   StyleSheet,
 } from "@react-pdf/renderer";
 import type { Job } from "@shared/lib/types";
-import { COMPANY, computeInvoiceTotals, TAX_RATE } from "@/lib/invoice";
+import { COMPANY, computeInvoiceTotals, TAX_RATE } from "@features/jobs/lib/invoice";
 
 const COLORS = {
   bg: "#FAF9F7",

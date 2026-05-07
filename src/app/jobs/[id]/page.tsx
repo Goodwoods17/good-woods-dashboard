@@ -1,8 +1,8 @@
 "use client";
 
-import { JobDetail } from "@/components/jobs/JobDetail";
+import { JobDetail } from "@features/jobs/components/JobDetail";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJob, useJobs } from "@/lib/jobsStore";
+import { useJob, useJobs } from "@features/jobs/lib/jobsStore";
 import Link from "next/link";
 
 export default function JobPage({ params }: { params: { id: string } }) {

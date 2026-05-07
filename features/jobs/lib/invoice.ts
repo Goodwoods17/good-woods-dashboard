@@ -28,7 +28,7 @@ export function computeInvoiceTotals(job: Job): InvoiceTotals {
 
 export async function generateInvoicePdf(job: Job): Promise<void> {
   const { pdf } = await import("@react-pdf/renderer");
-  const { InvoiceDocument } = await import("@/components/invoice/InvoiceDocument");
+  const { InvoiceDocument } = await import("@features/jobs/components/invoice/InvoiceDocument");
 
   const blob = await pdf(InvoiceDocument({ job })).toBlob();
   const url = URL.createObjectURL(blob);

@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
-import { JobsList } from "@/components/jobs/JobsList";
-import { KanbanBoard } from "@/components/jobs/KanbanBoard";
-import { ViewToggle, type JobsView } from "@/components/jobs/ViewToggle";
+import { JobsList } from "@features/jobs/components/JobsList";
+import { KanbanBoard } from "@features/jobs/components/KanbanBoard";
+import { ViewToggle, type JobsView } from "@features/jobs/components/ViewToggle";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import { computeMargin } from "@shared/lib/types";
 import { formatCAD, formatPct } from "@shared/lib/format";
 
