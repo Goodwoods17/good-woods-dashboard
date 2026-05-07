@@ -1,9 +1,9 @@
 "use client";
 
 import { Check, Circle, ArrowRight } from "lucide-react";
-import { MILESTONE_STAGES, type Job, type MilestoneStage } from "@/lib/types";
+import { MILESTONE_STAGES, type Job, type MilestoneStage } from "@shared/lib/types";
 import { useJobs } from "@/lib/jobsStore";
-import { cn } from "@/lib/utils";
+import { cn } from "@shared/lib/utils";
 
 const STAGE_HINTS: Record<MilestoneStage, string> = {
   sold: "Quote accepted, deposit captured, drawings signed off",

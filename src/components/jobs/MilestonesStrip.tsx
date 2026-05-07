@@ -1,8 +1,8 @@
 "use client";
 
 import { Check } from "lucide-react";
-import { cn } from "@/lib/utils";
-import { MILESTONE_STAGES, type MilestoneStage } from "@/lib/types";
+import { cn } from "@shared/lib/utils";
+import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
 
 export function MilestonesStrip({
   current,

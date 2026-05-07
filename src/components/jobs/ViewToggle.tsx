@@ -1,7 +1,7 @@
 "use client";
 
 import { LayoutList, LayoutGrid } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@shared/lib/utils";
 
 export type JobsView = "list" | "kanban";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { JobDetail } from "@/components/jobs/JobDetail";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJob, useJobs } from "@/lib/jobsStore";
 import Link from "next/link";
 

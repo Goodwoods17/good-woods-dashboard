@@ -18,9 +18,11 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@features/*": ["./features/*"],
+      "@shared/*": ["./shared/*"]
     }
   },
-  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "features/**/*.ts", "features/**/*.tsx", "shared/**/*.ts", "shared/**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules"]
 }

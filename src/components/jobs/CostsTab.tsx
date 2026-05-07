@@ -2,12 +2,12 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, FileDown } from "lucide-react";
-import type { Job, CostLine } from "@/lib/types";
-import { computeMargin } from "@/lib/types";
-import { formatCADPrecise, formatCAD } from "@/lib/format";
-import { MarginCell } from "@/components/ui/MarginCell";
+import type { Job, CostLine } from "@shared/lib/types";
+import { computeMargin } from "@shared/lib/types";
+import { formatCADPrecise, formatCAD } from "@shared/lib/format";
+import { MarginCell } from "@shared/components/ui/MarginCell";
 import { generateInvoicePdf } from "@/lib/invoice";
-import { cn } from "@/lib/utils";
+import { cn } from "@shared/lib/utils";
 
 const CATEGORY_LABELS: Record<CostLine["category"], string> = {
   materials: "Materials",

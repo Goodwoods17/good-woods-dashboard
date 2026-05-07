@@ -1,4 +1,4 @@
-import { PIPELINE_LABELS, type PipelineStatus } from "@/lib/types";
+import { PIPELINE_LABELS, type PipelineStatus } from "@shared/lib/types";
 
 export function StatusBadge({ status }: { status: PipelineStatus }) {
   return (

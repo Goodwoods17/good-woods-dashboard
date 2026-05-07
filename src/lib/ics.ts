@@ -1,4 +1,4 @@
-import type { Job } from "./types";
+import type { Job } from "@shared/lib/types";
 import { COMPANY } from "./invoice";
 
 function pad(n: number): string {

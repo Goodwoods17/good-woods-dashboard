@@ -24,12 +24,12 @@ import {
   type PipelineStatus,
   PIPELINE_LABELS,
   computeMargin,
-} from "@/lib/types";
+} from "@shared/lib/types";
 import { useJobs } from "@/lib/jobsStore";
-import { formatCAD, formatDate } from "@/lib/format";
-import { HealthPill } from "@/components/ui/HealthPill";
-import { MarginCell } from "@/components/ui/MarginCell";
-import { cn } from "@/lib/utils";
+import { formatCAD, formatDate } from "@shared/lib/format";
+import { HealthPill } from "@shared/components/ui/HealthPill";
+import { MarginCell } from "@shared/components/ui/MarginCell";
+import { cn } from "@shared/lib/utils";
 
 const COLUMNS: PipelineStatus[] = [
   "sold",

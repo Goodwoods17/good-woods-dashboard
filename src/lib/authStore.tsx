@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from "react";
 import type { User } from "@supabase/supabase-js";
-import { getSupabase, hasSupabase } from "./supabase";
+import { getSupabase, hasSupabase } from "@shared/lib/supabase";
 
 type AuthContextValue = {
   user: User | null;

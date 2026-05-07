@@ -1,6 +1,6 @@
 "use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
+import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@/lib/jobsStore";
 import { ReportsView } from "@/components/reports/ReportsView";
 

@@ -1,4 +1,4 @@
-import type { Job } from "./types";
+import type { Job } from "@shared/lib/types";
 
 // Database row shape (snake_case, mirrors public.jobs).
 export type JobRow = {

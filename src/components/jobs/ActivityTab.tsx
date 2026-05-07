@@ -1,6 +1,6 @@
 "use client";
 
-import type { Job, Activity } from "@/lib/types";
+import type { Job, Activity } from "@shared/lib/types";
 import {
   ArrowRightCircle,
   Heart,

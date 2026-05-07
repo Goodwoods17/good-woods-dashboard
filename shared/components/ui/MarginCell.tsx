@@ -1,6 +1,6 @@
-import { cn } from "@/lib/utils";
-import { formatPct } from "@/lib/format";
-import type { Margin } from "@/lib/types";
+import { cn } from "@shared/lib/utils";
+import { formatPct } from "@shared/lib/format";
+import type { Margin } from "@shared/lib/types";
 
 const TONE: Record<Margin["band"], { dot: string; text: string; label: string }> = {
   on_track: {

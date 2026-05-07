@@ -3,10 +3,10 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import type { Job, HealthStatus } from "@/lib/types";
-import { computeMargin } from "@/lib/types";
-import { formatCAD } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import type { Job, HealthStatus } from "@shared/lib/types";
+import { computeMargin } from "@shared/lib/types";
+import { formatCAD } from "@shared/lib/format";
+import { cn } from "@shared/lib/utils";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 

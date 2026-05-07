@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import type { Job } from "@/lib/types";
-import { computeMargin } from "@/lib/types";
+import type { Job } from "@shared/lib/types";
+import { computeMargin } from "@shared/lib/types";
 import { useJobs } from "@/lib/jobsStore";
-import { formatCAD, formatDate, formatPct } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
+import { cn } from "@shared/lib/utils";
 
 const TEMPLATE_LABELS: Record<Job["template"], string> = {
   refacing: "Refacing",

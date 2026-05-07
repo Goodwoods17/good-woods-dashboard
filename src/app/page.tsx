@@ -6,10 +6,10 @@ import { Plus } from "lucide-react";
 import { JobsList } from "@/components/jobs/JobsList";
 import { KanbanBoard } from "@/components/jobs/KanbanBoard";
 import { ViewToggle, type JobsView } from "@/components/jobs/ViewToggle";
-import { PageHeader } from "@/components/layout/PageHeader";
+import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@/lib/jobsStore";
-import { computeMargin } from "@/lib/types";
-import { formatCAD, formatPct } from "@/lib/format";
+import { computeMargin } from "@shared/lib/types";
+import { formatCAD, formatPct } from "@shared/lib/format";
 
 const VIEW_KEY = "gw_jobs_view_v1";
 

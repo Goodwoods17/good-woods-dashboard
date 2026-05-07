@@ -7,7 +7,7 @@ import {
   View,
   StyleSheet,
 } from "@react-pdf/renderer";
-import type { Job } from "@/lib/types";
+import type { Job } from "@shared/lib/types";
 import { COMPANY, computeInvoiceTotals, TAX_RATE } from "@/lib/invoice";
 
 const COLORS = {

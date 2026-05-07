@@ -16,11 +16,11 @@ import {
   type PipelineStatus,
   PIPELINE_LABELS,
   computeMargin,
-} from "@/lib/types";
-import { formatCAD, formatPct } from "@/lib/format";
-import { MarginCell } from "@/components/ui/MarginCell";
-import { HealthPill } from "@/components/ui/HealthPill";
-import { cn } from "@/lib/utils";
+} from "@shared/lib/types";
+import { formatCAD, formatPct } from "@shared/lib/format";
+import { MarginCell } from "@shared/components/ui/MarginCell";
+import { HealthPill } from "@shared/components/ui/HealthPill";
+import { cn } from "@shared/lib/utils";
 
 const TOKEN = {
   accent: "#B86F52",

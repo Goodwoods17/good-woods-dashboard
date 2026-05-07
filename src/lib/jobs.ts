@@ -1,4 +1,4 @@
-import type { Job } from "./types";
+import type { Job } from "@shared/lib/types";
 
 export const SEED_JOBS: Job[] = [
   {

@@ -9,12 +9,12 @@ import {
   useRef,
   type ReactNode,
 } from "react";
-import type { Job } from "./types";
+import type { Job } from "@shared/lib/types";
 import { SEED_JOBS } from "./jobs";
 import { diffActivity } from "./activity";
-import { hasSupabase, getSupabase, JOBS_TABLE } from "./supabase";
+import { hasSupabase, getSupabase, JOBS_TABLE } from "@shared/lib/supabase";
 import { rowToJob, jobToRow, type JobRow } from "./jobsRowMap";
-import { formatError } from "./formatError";
+import { formatError } from "@shared/lib/formatError";
 
 const STORAGE_KEY = "gw_jobs_v1";
 const SCHEMA_VERSION = 1;

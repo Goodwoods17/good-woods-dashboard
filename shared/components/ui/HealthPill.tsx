@@ -1,5 +1,5 @@
-import { cn } from "@/lib/utils";
-import { HEALTH_LABELS, type HealthStatus } from "@/lib/types";
+import { cn } from "@shared/lib/utils";
+import { HEALTH_LABELS, type HealthStatus } from "@shared/lib/types";
 
 const TONES: Record<
   HealthStatus,

@@ -17,7 +17,7 @@ import {
   FileText,
   LogOut,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn } from "@shared/lib/utils";
 import { useAuth } from "@/lib/authStore";
 
 type NavItem = {

@@ -8,12 +8,12 @@ import {
   type PipelineStatus,
   PIPELINE_LABELS,
   computeMargin,
-} from "@/lib/types";
-import { formatCAD, formatDate } from "@/lib/format";
-import { HealthPill } from "@/components/ui/HealthPill";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { MarginCell } from "@/components/ui/MarginCell";
-import { cn } from "@/lib/utils";
+} from "@shared/lib/types";
+import { formatCAD, formatDate } from "@shared/lib/format";
+import { HealthPill } from "@shared/components/ui/HealthPill";
+import { StatusBadge } from "@shared/components/ui/StatusBadge";
+import { MarginCell } from "@shared/components/ui/MarginCell";
+import { cn } from "@shared/lib/utils";
 
 const STATUS_FILTERS: ("all" | PipelineStatus)[] = [
   "all",

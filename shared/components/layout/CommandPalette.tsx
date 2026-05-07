@@ -27,8 +27,8 @@ import {
   FileText,
 } from "lucide-react";
 import { useJobs } from "@/lib/jobsStore";
-import { cn } from "@/lib/utils";
-import { computeMargin, type Job } from "@/lib/types";
+import { cn } from "@shared/lib/utils";
+import { computeMargin, type Job } from "@shared/lib/types";
 
 type CommandItem =
   | { kind: "page"; id: string; label: string; href: string; icon: typeof Search }

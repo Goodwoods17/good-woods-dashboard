@@ -10,18 +10,18 @@ import {
   HEALTH_LABELS,
   type PipelineStatus,
   type HealthStatus,
-} from "@/lib/types";
+} from "@shared/lib/types";
 import { useJob, useJobs } from "@/lib/jobsStore";
-import { formatCAD, formatDate, formatPct } from "@/lib/format";
-import { HealthPill } from "@/components/ui/HealthPill";
-import { StatusBadge } from "@/components/ui/StatusBadge";
-import { StatusEditor } from "@/components/ui/StatusEditor";
+import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
+import { HealthPill } from "@shared/components/ui/HealthPill";
+import { StatusBadge } from "@shared/components/ui/StatusBadge";
+import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
 import { ActivityTab } from "./ActivityTab";
 import { TasksTab } from "./TasksTab";
-import { cn } from "@/lib/utils";
+import { cn } from "@shared/lib/utils";
 
 const PIPELINE_OPTIONS: PipelineStatus[] = [
   "new",

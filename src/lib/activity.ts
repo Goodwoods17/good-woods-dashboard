@@ -1,5 +1,5 @@
-import type { Activity, ActivityKind, Job } from "./types";
-import { HEALTH_LABELS, PIPELINE_LABELS } from "./types";
+import type { Activity, ActivityKind, Job } from "@shared/lib/types";
+import { HEALTH_LABELS, PIPELINE_LABELS } from "@shared/lib/types";
 
 export const DEFAULT_ACTOR = "Andrew";
 

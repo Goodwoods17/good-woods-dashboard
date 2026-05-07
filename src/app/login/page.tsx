@@ -3,8 +3,8 @@
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { LogIn } from "lucide-react";
-import { getSupabase, hasSupabase } from "@/lib/supabase";
-import { cn } from "@/lib/utils";
+import { getSupabase, hasSupabase } from "@shared/lib/supabase";
+import { cn } from "@shared/lib/utils";
 
 export default function LoginPage() {
   return (

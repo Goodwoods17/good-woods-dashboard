@@ -1,6 +1,6 @@
 "use client";
 
-import type { Job } from "./types";
+import type { Job } from "@shared/lib/types";
 
 export const TAX_RATE = 0.12; // BC: 5% GST + 7% PST
 export const COMPANY = {
