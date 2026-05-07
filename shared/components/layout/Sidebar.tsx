@@ -18,7 +18,7 @@ import {
   LogOut,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
-import { useAuth } from "@/lib/authStore";
+import { useAuth } from "@shared/lib/authStore";
 
 type NavItem = {
   href: string;

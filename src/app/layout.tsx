@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@shared/components/layout/AppShell";
-import { AuthProvider } from "@/lib/authStore";
+import { AuthProvider } from "@shared/lib/authStore";
 import { JobsProvider } from "@/lib/jobsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
