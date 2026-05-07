@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { BookOpen, Hammer, Paintbrush, Truck, FileText } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { SOPS, type SOP } from "@/lib/sops";
+import { SOPS, type SOP } from "@features/sops/lib/sops";
 import { cn } from "@shared/lib/utils";
 
 const CATEGORY_ICON: Record<SOP["category"], typeof BookOpen> = {
