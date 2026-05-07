@@ -106,6 +106,13 @@ export function JobsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Mirror of `jobs` for stable callbacks — debounced flushers run after the
+  // closure was created, so a ref keeps them honest about current state.
+  const jobsRef = useRef<Job[]>(SEED_JOBS);
+  useEffect(() => {
+    jobsRef.current = jobs;
+  }, [jobs]);
+
   // Pending activity log writes — debounced so quick edits coalesce.
   const pendingDiff = useRef<Map<string, { prev: Job; next: Job }>>(new Map());
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -163,20 +170,27 @@ export function JobsProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
-  // Push debounced upserts to Supabase.
+  // Push debounced upserts to Supabase. On failure, refresh from the DB so the
+  // UI doesn't keep claiming success while edits sit unsent.
   const flushUpserts = useCallback(async () => {
     if (backend !== "supabase") return;
     const ids = Array.from(pendingUpserts.current);
     pendingUpserts.current.clear();
     if (ids.length === 0) return;
-    setJobs((prev) => {
-      const targets = prev.filter((j) => ids.includes(j.id));
-      // Fire-and-forget — failures show up in the error banner.
-      supabaseUpsertMany(targets).catch((e) => {
-        setError(formatError(e));
-      });
-      return prev;
-    });
+    const idSet = new Set(ids);
+    const targets = jobsRef.current.filter((j) => idSet.has(j.id));
+    try {
+      await supabaseUpsertMany(targets);
+      setError(null);
+    } catch (e) {
+      setError(formatError(e));
+      try {
+        const remote = await supabaseLoad();
+        setJobs(remote);
+      } catch {
+        /* refresh failed too — user already sees the upsert error */
+      }
+    }
   }, [backend]);
 
   const updateJob = useCallback(
@@ -232,7 +246,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
 
   const deleteJob = useCallback(
     async (id: string) => {
-      const previous = jobs;
+      const previous = jobsRef.current;
       setJobs((prev) => prev.filter((j) => j.id !== id));
       if (backend === "supabase") {
         try {
@@ -244,7 +258,7 @@ export function JobsProvider({ children }: { children: ReactNode }) {
         }
       }
     },
-    [backend, jobs]
+    [backend]
   );
 
   const refresh = useCallback(async () => {
