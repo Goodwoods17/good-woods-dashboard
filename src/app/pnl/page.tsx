@@ -11,11 +11,11 @@ import {
   Legend,
 } from "recharts";
 import { TrendingUp, TrendingDown } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { computeMargin } from "@/lib/types";
-import { formatCAD, formatPct } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { computeMargin } from "@shared/lib/types";
+import { formatCAD, formatPct } from "@shared/lib/format";
+import { cn } from "@shared/lib/utils";
 
 const TOKEN = {
   accent: "#B86F52",

@@ -4,17 +4,17 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 import {
   type Job,
   type PipelineStatus,
   type HealthStatus,
   PIPELINE_LABELS,
   HEALTH_LABELS,
-} from "@/lib/types";
-import { newActivity } from "@/lib/activity";
-import { cn } from "@/lib/utils";
+} from "@shared/lib/types";
+import { newActivity } from "@features/jobs/lib/activity";
+import { cn } from "@shared/lib/utils";
 
 const TEMPLATE_OPTIONS: { value: Job["template"]; label: string; hint: string }[] = [
   {

@@ -1,8 +1,8 @@
 "use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { CalendarView } from "@/components/calendar/CalendarView";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { CalendarView } from "@features/calendar/components/CalendarView";
 
 export default function CalendarPage() {
   const { jobs, loading } = useJobs();

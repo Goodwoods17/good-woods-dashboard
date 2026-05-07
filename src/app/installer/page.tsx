@@ -9,11 +9,11 @@ import {
   Check,
   Truck,
 } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { formatDate } from "@/lib/format";
-import type { Job } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { formatDate } from "@shared/lib/format";
+import type { Job } from "@shared/lib/types";
+import { cn } from "@shared/lib/utils";
 
 function bucket(job: Job, today: Date): "today" | "this_week" | "later" | "past" {
   const install = new Date(job.installDate + "T12:00:00");

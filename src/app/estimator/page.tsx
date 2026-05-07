@@ -3,13 +3,13 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2, ArrowRight } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { useCatalog } from "@/lib/catalogStore";
-import { newActivity } from "@/lib/activity";
-import type { Job, CostLine } from "@/lib/types";
-import { formatCAD, formatPct } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useCatalog } from "@features/catalog/lib/catalogStore";
+import { newActivity } from "@features/jobs/lib/activity";
+import type { Job, CostLine } from "@shared/lib/types";
+import { formatCAD, formatPct } from "@shared/lib/format";
+import { cn } from "@shared/lib/utils";
 
 type LineItem = {
   id: string;

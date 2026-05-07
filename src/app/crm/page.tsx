@@ -3,10 +3,10 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { Users, Briefcase, ArrowUpRight } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { computeMargin, type Job } from "@/lib/types";
-import { formatCAD, formatDate, formatPct } from "@/lib/format";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { computeMargin, type Job } from "@shared/lib/types";
+import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 
 type ClientRow = {
   name: string;

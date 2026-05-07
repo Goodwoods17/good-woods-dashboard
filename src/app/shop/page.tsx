@@ -11,9 +11,9 @@ import {
   useDraggable,
 } from "@dnd-kit/core";
 import { AlertOctagon, Plus, X } from "lucide-react";
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useShop, WORK_STATIONS, type WorkStation } from "@/lib/shopStore";
-import { cn } from "@/lib/utils";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useShop, WORK_STATIONS, type WorkStation } from "@features/shop/lib/shopStore";
+import { cn } from "@shared/lib/utils";
 
 function hoursAgo(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();

@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-import { AppShell } from "@/components/layout/AppShell";
-import { AuthProvider } from "@/lib/authStore";
-import { JobsProvider } from "@/lib/jobsStore";
-import { CatalogProvider } from "@/lib/catalogStore";
-import { ShopProvider } from "@/lib/shopStore";
+import { AppShell } from "@shared/components/layout/AppShell";
+import { AuthProvider } from "@shared/lib/authStore";
+import { JobsProvider } from "@features/jobs/lib/jobsStore";
+import { CatalogProvider } from "@features/catalog/lib/catalogStore";
+import { ShopProvider } from "@features/shop/lib/shopStore";
 
 const inter = Inter({
   subsets: ["latin"],

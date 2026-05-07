@@ -1,8 +1,8 @@
 "use client";
 
-import { PageHeader } from "@/components/layout/PageHeader";
-import { useJobs } from "@/lib/jobsStore";
-import { ReportsView } from "@/components/reports/ReportsView";
+import { PageHeader } from "@shared/components/layout/PageHeader";
+import { useJobs } from "@features/jobs/lib/jobsStore";
+import { ReportsView } from "@features/reports/components/ReportsView";
 
 export default function ReportsPage() {
   const { jobs, loading } = useJobs();
