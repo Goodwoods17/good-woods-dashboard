@@ -15,8 +15,10 @@ import {
   Package,
   TrendingUp,
   FileText,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/lib/authStore";
 
 type NavItem = {
   href: string;
@@ -65,6 +67,7 @@ const NAV: NavSection[] = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user, signOut } = useAuth();
 
   return (
     <aside className="w-56 shrink-0 border-r border-border bg-surface flex flex-col">
@@ -121,7 +124,26 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="px-4 py-3 border-t border-border space-y-2">
+      <div className="px-4 py-3 border-t border-border space-y-2.5">
+        {user && (
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="text-xs font-medium text-text-primary truncate">
+                {user.email}
+              </div>
+              <div className="text-[10px] uppercase tracking-wider text-text-tertiary">
+                Signed in
+              </div>
+            </div>
+            <button
+              onClick={signOut}
+              title="Sign out"
+              className="text-text-tertiary hover:text-status-blocked transition-colors duration-fast p-1 rounded hover:bg-surface-muted"
+            >
+              <LogOut className="h-3.5 w-3.5" strokeWidth={1.75} />
+            </button>
+          </div>
+        )}
         <div className="text-[11px] text-text-tertiary flex items-center gap-2">
           <kbd className="font-mono text-[10px] border border-border bg-surface-muted rounded px-1 py-0.5">
             ⌘K

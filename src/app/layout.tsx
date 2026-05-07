@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/AppShell";
+import { AuthProvider } from "@/lib/authStore";
 import { JobsProvider } from "@/lib/jobsStore";
 import { CatalogProvider } from "@/lib/catalogStore";
 import { ShopProvider } from "@/lib/shopStore";
@@ -25,13 +26,15 @@ export default function RootLayout({
   return (
     <html lang="en" className={inter.variable}>
       <body className="font-sans">
-        <JobsProvider>
-          <CatalogProvider>
-            <ShopProvider>
-              <AppShell>{children}</AppShell>
-            </ShopProvider>
-          </CatalogProvider>
-        </JobsProvider>
+        <AuthProvider>
+          <JobsProvider>
+            <CatalogProvider>
+              <ShopProvider>
+                <AppShell>{children}</AppShell>
+              </ShopProvider>
+            </CatalogProvider>
+          </JobsProvider>
+        </AuthProvider>
       </body>
     </html>
   );
