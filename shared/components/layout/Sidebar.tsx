@@ -16,6 +16,7 @@ import {
   TrendingUp,
   FileText,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
@@ -33,7 +34,10 @@ type NavSection = {
 
 const NAV: NavSection[] = [
   {
-    items: [{ href: "/", label: "Pipeline", icon: LayoutGrid }],
+    items: [
+      { href: "/", label: "Pipeline", icon: LayoutGrid },
+      { href: "/briefing", label: "Briefing", icon: Sparkles },
+    ],
   },
   {
     label: "Sell & Plan",

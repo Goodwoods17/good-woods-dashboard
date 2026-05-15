@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { JobsList } from "@features/jobs/components/JobsList";
 import { KanbanBoard } from "@features/jobs/components/KanbanBoard";
 import { ViewToggle, type JobsView } from "@features/jobs/components/ViewToggle";
+import { BriefingCard } from "@features/briefing/components/BriefingCard";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { computeMargin } from "@shared/lib/types";
@@ -64,7 +65,10 @@ export default function Home() {
           </>
         }
       />
-      <div className="px-8 py-6">
+      <div className="px-8 pt-5">
+        <BriefingCard />
+      </div>
+      <div className="px-8 pb-6 pt-1">
         {loading ? (
           <ListSkeleton />
         ) : view === "list" ? (
