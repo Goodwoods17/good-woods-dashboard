@@ -52,12 +52,17 @@ Depends on:
 - Materials cost = sum of (qty × pricePerSqft) for each line.
 - Labour cost = sum of (labourHours × labourRate). Labour is per-line so
   different lines can have different rates (e.g. install vs. shop time).
-- Overhead is applied as a % of (materials + labour).
-- **Margin is margin-on-revenue, not markup.** `price = cost / (1 - margin%)`.
-  So a "35% margin" means 35% of the *price* is gross profit (not 35%
-  on top of cost). This is the correct definition for `computeMargin`
-  in `shared/lib/types.ts` to round-trip. Keep this consistent — if a
-  future change confuses it with markup, prices drop ~10% on a 35% job.
+- **Markup is per-line.** Each line item has its own `markupPct`. The
+  "Default markup %" in the Defaults section seeds new lines — it does
+  not retroactively update existing rows. Formula:
+  `linePrice = lineDirect × (1 + markupPct/100)`.
+- Overhead is applied as a % of total direct cost (materials + labour),
+  added to the quoted price after per-line markups.
+- **Markup is on cost, margin is on price.** Don't confuse them. A 35%
+  markup on $1,000 cost = $1,350. A 35% margin would be $1,538. The
+  effective margin% shown in the Quote summary is computed back from
+  the final numbers so the cabinetmaker mental model (markup) and the
+  P&L mental model (margin) line up.
 
 ## When to revisit
 

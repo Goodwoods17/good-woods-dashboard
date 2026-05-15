@@ -9,14 +9,12 @@ type Input = {
   project: string;
   lines: LineItem[];
   overheadPct: number;
-  marginPct: number;
   totals: EstimateTotals;
   existingJobs: Job[];
 };
 
 export function createJobFromEstimate(input: Input): Job {
-  const { client, project, lines, overheadPct, marginPct, totals, existingJobs } =
-    input;
+  const { client, project, lines, overheadPct, totals, existingJobs } = input;
 
   const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
   const code = nextJobCode(existingJobs);
@@ -60,23 +58,25 @@ export function createJobFromEstimate(input: Input): Job {
     healthStatus: "on_track",
     currentMilestone: "sold",
     installDate: installDate.toISOString().slice(0, 10),
-    revenue: Math.round(totals.price * 100) / 100,
+    revenue: Math.round(totals.quoted * 100) / 100,
     costs,
-    notes: `Created from estimator with ${lines.length} line item(s) at ${marginPct}% target margin.`,
+    notes: `Created from estimator with ${lines.length} line item(s); effective margin ${totals.effectiveMarginPct.toFixed(1)}%.`,
     activity: [
-      newActivity("note", `Job created from estimator at price ${formatCAD(totals.price)}.`),
+      newActivity("note", `Job created from estimator at price ${formatCAD(totals.quoted)}.`),
     ],
     invoice: {
       number: `INV-${code.slice(3)}`,
       issuedDate: issued.toISOString().slice(0, 10),
       dueDate: due.toISOString().slice(0, 10),
-      lineItems: lines.map((l) => ({
-        description: l.description || "Line item",
-        qty: l.qty,
-        unitPrice:
-          (l.qty * l.materialPricePerSqft + l.labourHours * l.labourRate) /
-          Math.max(1, l.qty),
-      })),
+      lineItems: lines.map((l) => {
+        const direct = l.qty * l.materialPricePerSqft + l.labourHours * l.labourRate;
+        const price = direct * (1 + l.markupPct / 100);
+        return {
+          description: l.description || "Line item",
+          qty: l.qty,
+          unitPrice: price / Math.max(1, l.qty),
+        };
+      }),
     },
   };
 }

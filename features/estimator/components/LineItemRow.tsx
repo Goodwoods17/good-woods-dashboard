@@ -75,12 +75,34 @@ export function LineItemRow({
           />
         </Sub>
       </div>
-      <div className="text-xs text-text-tertiary tabular-nums mt-2 pt-2 border-t border-border flex items-center gap-4">
-        <span>Materials: {formatCAD(subtotal.matCost)}</span>
-        <span>Labour: {formatCAD(subtotal.labCost)}</span>
-        <span className="ml-auto font-medium text-text-secondary">
-          Direct: {formatCAD(subtotal.total)}
-        </span>
+
+      <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
+        <div className="flex items-center gap-3 text-text-tertiary">
+          <span>Materials: {formatCAD(subtotal.matCost)}</span>
+          <span>Labour: {formatCAD(subtotal.labCost)}</span>
+          <span className="ml-auto md:ml-0 font-medium text-text-secondary">
+            Cost: {formatCAD(subtotal.direct)}
+          </span>
+        </div>
+        <div className="flex items-center gap-2 md:justify-end">
+          <span className="text-text-tertiary">Markup</span>
+          <input
+            type="number"
+            value={line.markupPct}
+            step="1"
+            onChange={(e) =>
+              onUpdate({ markupPct: parseFloat(e.target.value) || 0 })
+            }
+            className="w-16 text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-0.5 focus:outline-none focus:border-border-strong"
+          />
+          <span className="text-text-tertiary">%</span>
+          <span className="text-text-tertiary">
+            (+{formatCAD(subtotal.markupAmount)})
+          </span>
+          <span className="ml-2 font-semibold text-accent">
+            = {formatCAD(subtotal.price)}
+          </span>
+        </div>
       </div>
     </div>
   );

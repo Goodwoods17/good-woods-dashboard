@@ -7,6 +7,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useCatalog } from "@features/catalog/lib/catalogStore";
 import {
   DEFAULT_LABOUR_RATE,
+  DEFAULT_MARKUP_PCT,
   type LineItem,
 } from "@features/estimator/lib/types";
 import { computeTotals } from "@features/estimator/lib/totals";
@@ -24,7 +25,7 @@ export function EstimatorView() {
   const [client, setClient] = useState("");
   const [project, setProject] = useState("");
   const [overheadPct, setOverheadPct] = useState(8);
-  const [marginPct, setMarginPct] = useState(35);
+  const [defaultMarkupPct, setDefaultMarkupPct] = useState(DEFAULT_MARKUP_PCT);
   const [lines, setLines] = useState<LineItem[]>([
     {
       id: "l1",
@@ -34,6 +35,7 @@ export function EstimatorView() {
       materialPricePerSqft: materials[0]?.pricePerSqft ?? 0,
       labourHours: 18,
       labourRate: DEFAULT_LABOUR_RATE,
+      markupPct: DEFAULT_MARKUP_PCT,
     },
   ]);
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +51,7 @@ export function EstimatorView() {
         materialPricePerSqft: materials[0]?.pricePerSqft ?? 0,
         labourHours: 0,
         labourRate: DEFAULT_LABOUR_RATE,
+        markupPct: defaultMarkupPct,
       },
     ]);
   }
@@ -71,8 +74,8 @@ export function EstimatorView() {
   }
 
   const totals = useMemo(
-    () => computeTotals(lines, overheadPct, marginPct),
-    [lines, overheadPct, marginPct]
+    () => computeTotals(lines, overheadPct),
+    [lines, overheadPct]
   );
 
   async function saveAsJob() {
@@ -83,7 +86,6 @@ export function EstimatorView() {
       project,
       lines,
       overheadPct,
-      marginPct,
       totals,
       existingJobs: jobs,
     });
@@ -96,7 +98,7 @@ export function EstimatorView() {
       <PageHeader
         eyebrow="Estimator"
         title="New estimate"
-        subtitle="Direct cost + overhead + margin = quoted price. Convert to a Job in one click."
+        subtitle="Direct cost × per-line markup + overhead = quoted price. Convert to a Job in one click."
       />
       <div className="px-8 py-6 grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 max-w-6xl">
         <div className="space-y-5">
@@ -117,16 +119,15 @@ export function EstimatorView() {
           />
           <MarkupSection
             overheadPct={overheadPct}
-            marginPct={marginPct}
+            defaultMarkupPct={defaultMarkupPct}
             onOverhead={setOverheadPct}
-            onMargin={setMarginPct}
+            onDefaultMarkup={setDefaultMarkupPct}
           />
         </div>
 
         <QuoteSummary
           totals={totals}
           overheadPct={overheadPct}
-          marginPct={marginPct}
           canSave={Boolean(client.trim() && project.trim())}
           submitting={submitting}
           onSave={saveAsJob}

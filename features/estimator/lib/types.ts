@@ -6,6 +6,8 @@ export type LineItem = {
   materialPricePerSqft: number;
   labourHours: number;
   labourRate: number;
+  markupPct: number;
 };
 
 export const DEFAULT_LABOUR_RATE = 85;
+export const DEFAULT_MARKUP_PCT = 35;

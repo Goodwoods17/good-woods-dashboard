@@ -9,14 +9,12 @@ import { SummaryRow } from "./inputs";
 export function QuoteSummary({
   totals,
   overheadPct,
-  marginPct,
   canSave,
   submitting,
   onSave,
 }: {
   totals: EstimateTotals;
   overheadPct: number;
-  marginPct: number;
   canSave: boolean;
   submitting: boolean;
   onSave: () => void;
@@ -29,23 +27,24 @@ export function QuoteSummary({
         </h3>
         <SummaryRow label="Materials" value={formatCAD(totals.directs.mat)} />
         <SummaryRow label="Labour" value={formatCAD(totals.directs.lab)} />
+        <SummaryRow label="Direct cost" value={formatCAD(totals.directs.total)} />
         <SummaryRow
           label={`Overhead (${overheadPct}%)`}
           value={formatCAD(totals.overhead)}
           muted
         />
         <div className="border-t border-border my-3" />
-        <SummaryRow label="Total cost" value={formatCAD(totals.cost)} />
+        <SummaryRow label="Total cost" value={formatCAD(totals.totalCost)} />
         <SummaryRow
-          label={`Margin (${formatPct(marginPct)})`}
-          value={formatCAD(totals.grossMargin)}
+          label={`Markup (${formatPct(totals.effectiveMarginPct)} margin)`}
+          value={formatCAD(totals.markupTotal)}
           muted
         />
         <div className="border-t border-border my-3" />
         <div className="flex items-center justify-between">
           <span className="text-sm font-medium text-text-primary">Quoted price</span>
           <span className="text-xl font-semibold tabular-nums text-accent">
-            {formatCAD(totals.price)}
+            {formatCAD(totals.quoted)}
           </span>
         </div>
       </div>
