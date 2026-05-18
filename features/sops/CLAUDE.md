@@ -15,12 +15,17 @@ no Supabase. The SOP corpus lives in source as a typed `SOPS` array.
 
 ## Where things live
 
-- `lib/sops.ts` — the typed `SOP` model and the canonical `SOPS` array
-  (currently 5 procedures: cut list, drawer box, spray booth, install
-  pre-flight, invoicing).
+```
+features/sops/
+├── lib/
+│   └── sops.ts            SOP type + canonical SOPS array
+└── components/
+    ├── SopsView.tsx       top-level two-pane view
+    ├── SopLibrary.tsx     left sidebar with category icons + selection
+    └── SopArticle.tsx     right pane: title, steps, pitfalls
+```
 
-The route file at `src/app/sops/page.tsx` imports from
-`@features/sops/lib/sops` and renders the two-pane reader UI.
+`src/app/sops/page.tsx` is a 4-line shell that renders `<SopsView />`.
 
 ## Domain notes
 
@@ -33,6 +38,6 @@ The route file at `src/app/sops/page.tsx` imports from
 
 - Add a new SOP → append to the `SOPS` array.
 - Add a new category → extend the union in `SOP["category"]` and update
-  the icon/label maps in `src/app/sops/page.tsx`.
+  the icon/label maps in `components/SopLibrary.tsx`.
 - If SOPs ever need editing in-app, that's a real feature, not a tweak —
   worth a `/plan-feature` pass before building.
