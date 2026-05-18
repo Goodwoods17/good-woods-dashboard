@@ -25,9 +25,9 @@ export function QuoteSummary({
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
           Quote summary
         </h3>
-        <SummaryRow label="Materials" value={formatCAD(totals.directs.mat)} />
-        <SummaryRow label="Labour" value={formatCAD(totals.directs.lab)} />
-        <SummaryRow label="Direct cost" value={formatCAD(totals.directs.total)} />
+        <SummaryRow label="Materials" value={formatCAD(totals.costs.materials)} />
+        <SummaryRow label="Labour" value={formatCAD(totals.costs.labour)} />
+        <SummaryRow label="Direct cost" value={formatCAD(totals.costs.direct)} />
         <SummaryRow
           label={`Overhead (${overheadPct}%)`}
           value={formatCAD(totals.overhead)}

@@ -2,107 +2,128 @@
 
 import { Trash2 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
-import type { Material } from "@features/catalog/lib/catalogStore";
-import type { LineItem } from "@features/estimator/lib/types";
+import {
+  UNITS,
+  UNIT_LABELS,
+  type LineItem,
+  type Unit,
+  unitHasWaste,
+} from "@features/estimator/lib/types";
 import type { LineSubtotal } from "@features/estimator/lib/totals";
-import { NumberInput, Sub } from "./inputs";
+import { CategoryInput, NumberInput, Sub } from "./inputs";
 
 export function LineItemRow({
   line,
   subtotal,
-  materials,
+  categorySuggestions,
+  categoryListId,
   onUpdate,
   onRemove,
-  onPickMaterial,
 }: {
   line: LineItem;
   subtotal: LineSubtotal;
-  materials: Material[];
+  categorySuggestions: string[];
+  categoryListId: string;
   onUpdate: (patch: Partial<LineItem>) => void;
   onRemove: () => void;
-  onPickMaterial: (materialId: string) => void;
 }) {
+  const showWaste = unitHasWaste(line.unit) || line.wastePct > 0;
+
   return (
-    <div className="p-4 group">
-      <div className="flex items-start gap-3 mb-3">
+    <div className="p-4 group space-y-2.5">
+      {/* Row 1 — identification: category · item · description · remove */}
+      <div className="grid grid-cols-[8rem_1fr_12rem_auto] gap-2 items-start">
+        <CategoryInput
+          value={line.category}
+          onChange={(v) => onUpdate({ category: v })}
+          suggestions={categorySuggestions}
+          listId={categoryListId}
+        />
         <input
           type="text"
-          value={line.description}
+          value={line.item}
+          onChange={(e) => onUpdate({ item: e.target.value })}
+          placeholder="Item name (e.g. 5/8 Plywood Birch Prefinished)"
+          className="text-sm bg-surface-muted border border-border rounded-md px-3 py-1.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+        />
+        <input
+          type="text"
+          value={line.description ?? ""}
           onChange={(e) => onUpdate({ description: e.target.value })}
-          placeholder="Line description (e.g. Lower cabinets — 7 boxes)"
-          className="flex-1 text-sm bg-surface-muted border border-border rounded-md px-3 py-1.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+          placeholder="Description (optional)"
+          className="text-sm bg-surface-muted border border-border rounded-md px-3 py-1.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong"
         />
         <button
           onClick={onRemove}
-          className="text-text-tertiary hover:text-status-blocked opacity-0 group-hover:opacity-100 transition-opacity duration-fast mt-1.5"
+          className="text-text-tertiary hover:text-status-blocked opacity-0 group-hover:opacity-100 transition-opacity duration-fast mt-1.5 px-1.5"
+          aria-label="Remove line"
         >
           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
         </button>
       </div>
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
-        <Sub label="Qty (sqft)">
+
+      {/* Row 2 — numbers: qty · unit · $/unit · waste% (if relevant) · markup% */}
+      <div className={`grid ${showWaste ? "grid-cols-5" : "grid-cols-4"} gap-2 text-xs`}>
+        <Sub label="Qty">
           <NumberInput value={line.qty} onChange={(v) => onUpdate({ qty: v })} />
         </Sub>
-        <Sub label="Material">
+        <Sub label="Unit">
           <select
-            value={line.materialId ?? ""}
-            onChange={(e) => onPickMaterial(e.target.value)}
+            value={line.unit}
+            onChange={(e) => onUpdate({ unit: e.target.value as Unit })}
             className="w-full text-sm bg-surface-muted border border-border rounded-md px-2 py-1 focus:outline-none focus:border-border-strong"
           >
-            {materials.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABELS[u]}
               </option>
             ))}
           </select>
         </Sub>
-        <Sub label="$ / sqft">
+        <Sub label="$ / Unit">
           <NumberInput
-            value={line.materialPricePerSqft}
-            onChange={(v) => onUpdate({ materialPricePerSqft: v })}
+            value={line.unitPrice}
+            onChange={(v) => onUpdate({ unitPrice: v })}
           />
         </Sub>
-        <Sub label="Labour hrs">
+        {showWaste && (
+          <Sub label="Waste %">
+            <NumberInput
+              value={line.wastePct}
+              step="1"
+              onChange={(v) => onUpdate({ wastePct: v })}
+            />
+          </Sub>
+        )}
+        <Sub label="Markup %">
           <NumberInput
-            value={line.labourHours}
-            onChange={(v) => onUpdate({ labourHours: v })}
-          />
-        </Sub>
-        <Sub label="$ / hr">
-          <NumberInput
-            value={line.labourRate}
-            onChange={(v) => onUpdate({ labourRate: v })}
+            value={line.markupPct}
+            step="1"
+            onChange={(v) => onUpdate({ markupPct: v })}
           />
         </Sub>
       </div>
 
-      <div className="mt-2 pt-2 border-t border-border grid grid-cols-1 md:grid-cols-2 gap-3 text-xs tabular-nums">
-        <div className="flex items-center gap-3 text-text-tertiary">
-          <span>Materials: {formatCAD(subtotal.matCost)}</span>
-          <span>Labour: {formatCAD(subtotal.labCost)}</span>
-          <span className="ml-auto md:ml-0 font-medium text-text-secondary">
-            Cost: {formatCAD(subtotal.direct)}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 md:justify-end">
-          <span className="text-text-tertiary">Markup</span>
-          <input
-            type="number"
-            value={line.markupPct}
-            step="1"
-            onChange={(e) =>
-              onUpdate({ markupPct: parseFloat(e.target.value) || 0 })
-            }
-            className="w-16 text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-0.5 focus:outline-none focus:border-border-strong"
-          />
-          <span className="text-text-tertiary">%</span>
+      {/* Row 3 — calculated: cost · markup ($ and %) · line total */}
+      <div className="pt-2 border-t border-border flex flex-wrap items-center gap-x-4 gap-y-1 text-xs tabular-nums">
+        {line.wastePct > 0 && (
           <span className="text-text-tertiary">
-            (+{formatCAD(subtotal.markupAmount)})
+            Buying {subtotal.buyingQty.toFixed(2)} {UNIT_LABELS[line.unit]}
+            <span className="text-text-tertiary/70"> ({line.qty} + {line.wastePct}% waste)</span>
           </span>
-          <span className="ml-2 font-semibold text-accent">
-            = {formatCAD(subtotal.price)}
-          </span>
-        </div>
+        )}
+        <span className="text-text-secondary">
+          Cost <span className="font-medium text-text-primary">{formatCAD(subtotal.cost)}</span>
+        </span>
+        <span className="text-text-tertiary">·</span>
+        <span className="text-text-secondary">
+          Markup <span className="font-medium text-text-primary">{line.markupPct}%</span>
+          <span className="text-text-tertiary"> (+{formatCAD(subtotal.markupAmount)})</span>
+        </span>
+        <span className="text-text-tertiary">·</span>
+        <span className="ml-auto font-semibold text-accent">
+          Line {formatCAD(subtotal.price)}
+        </span>
       </div>
     </div>
   );

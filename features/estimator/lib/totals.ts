@@ -2,62 +2,88 @@ import type { LineItem } from "./types";
 
 export type LineSubtotal = {
   id: string;
-  matCost: number;
-  labCost: number;
-  direct: number;
-  markupAmount: number;
-  price: number;
+  buyingQty: number; // qty × (1 + waste%)
+  cost: number; // buyingQty × unitPrice
+  markupAmount: number; // cost × markup%
+  price: number; // cost + markupAmount
+  isLabour: boolean;
+  isMaterial: boolean;
 };
 
 export type EstimateTotals = {
   lineSubtotals: LineSubtotal[];
-  directs: { mat: number; lab: number; total: number };
-  markupTotal: number;
-  overhead: number;
-  totalCost: number;
-  quoted: number;
-  effectiveMarginPct: number;
+  costs: {
+    materials: number; // anything not labour and not "Overhead" category
+    labour: number; // unit === "hr"
+    direct: number; // materials + labour
+  };
+  markupTotal: number; // sum of per-line markupAmount
+  overhead: number; // directs × overheadPct
+  totalCost: number; // direct + overhead
+  quoted: number; // sum of line prices + overhead
+  effectiveMarginPct: number; // (quoted - totalCost) / quoted × 100
 };
 
-// Per-line markup model:
-//   linePrice = direct cost × (1 + markupPct/100)
-//   quote     = sum(linePrice) + overhead
-// Markup is applied to direct cost only (materials + labour for that line),
-// not to overhead — overhead is a separate workshop-wide line on top.
+function isLabourLine(line: LineItem): boolean {
+  // Heuristic: labour is anything priced in hours. Mozaik exports
+  // Machining / Labor / Part Labor as Hrs — they all roll up here.
+  return line.unit === "hr";
+}
+
+function isMaterialLine(line: LineItem): boolean {
+  return !isLabourLine(line);
+}
+
+// Per-line markup model, with waste% on cost-of-materials math:
+//   buyingQty   = qty × (1 + waste%/100)
+//   lineCost    = buyingQty × unitPrice
+//   linePrice   = lineCost × (1 + markup%/100)
+//   quoted      = sum(linePrice) + overhead
+//
+// Markup is on the WASTE-ADJUSTED cost, not the finished-qty cost — so
+// you're not eating the waste yourself. Overhead is workshop-wide on
+// total direct cost.
 export function computeTotals(
   lines: LineItem[],
   overheadPct: number
 ): EstimateTotals {
   const lineSubtotals: LineSubtotal[] = lines.map((l) => {
-    const matCost = l.qty * l.materialPricePerSqft;
-    const labCost = l.labourHours * l.labourRate;
-    const direct = matCost + labCost;
-    const markupAmount = direct * (l.markupPct / 100);
-    const price = direct + markupAmount;
-    return { id: l.id, matCost, labCost, direct, markupAmount, price };
+    const buyingQty = l.qty * (1 + l.wastePct / 100);
+    const cost = buyingQty * l.unitPrice;
+    const markupAmount = cost * (l.markupPct / 100);
+    const price = cost + markupAmount;
+    return {
+      id: l.id,
+      buyingQty,
+      cost,
+      markupAmount,
+      price,
+      isLabour: isLabourLine(l),
+      isMaterial: isMaterialLine(l),
+    };
   });
 
-  const directs = lineSubtotals.reduce(
-    (acc, l) => ({
-      mat: acc.mat + l.matCost,
-      lab: acc.lab + l.labCost,
-      total: acc.total + l.direct,
+  const costs = lineSubtotals.reduce(
+    (acc, s) => ({
+      materials: acc.materials + (s.isMaterial ? s.cost : 0),
+      labour: acc.labour + (s.isLabour ? s.cost : 0),
+      direct: acc.direct + s.cost,
     }),
-    { mat: 0, lab: 0, total: 0 }
+    { materials: 0, labour: 0, direct: 0 }
   );
 
-  const markupTotal = lineSubtotals.reduce((s, l) => s + l.markupAmount, 0);
-  const linesPriceSubtotal = lineSubtotals.reduce((s, l) => s + l.price, 0);
+  const markupTotal = lineSubtotals.reduce((sum, s) => sum + s.markupAmount, 0);
+  const linesPriceSubtotal = lineSubtotals.reduce((sum, s) => sum + s.price, 0);
 
-  const overhead = directs.total * (overheadPct / 100);
-  const totalCost = directs.total + overhead;
+  const overhead = costs.direct * (overheadPct / 100);
+  const totalCost = costs.direct + overhead;
   const quoted = linesPriceSubtotal + overhead;
   const effectiveMarginPct =
     quoted > 0 ? ((quoted - totalCost) / quoted) * 100 : 0;
 
   return {
     lineSubtotals,
-    directs,
+    costs,
     markupTotal,
     overhead,
     totalCost,

@@ -4,10 +4,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
-import { useCatalog } from "@features/catalog/lib/catalogStore";
 import {
   DEFAULT_LABOUR_RATE,
   DEFAULT_MARKUP_PCT,
+  emptyCabinetSummary,
+  type CabinetSummary as CabinetSummaryT,
   type LineItem,
 } from "@features/estimator/lib/types";
 import { computeTotals } from "@features/estimator/lib/totals";
@@ -15,12 +16,28 @@ import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEsti
 import { ProjectSection } from "./ProjectSection";
 import { LineItemsTable } from "./LineItemsTable";
 import { MarkupSection } from "./MarkupSection";
+import { CabinetSummary } from "./CabinetSummary";
 import { QuoteSummary } from "./QuoteSummary";
+
+// Seed categories so the dropdown isn't empty on first use. As Andrew
+// types new categories they get added to the suggestions live.
+const SEED_CATEGORIES = [
+  "Materials",
+  "Doors",
+  "Drawer Boxes",
+  "Banding",
+  "Fasteners",
+  "Hinges",
+  "Guides",
+  "Legs",
+  "Hardware",
+  "Labour",
+  "Add-On",
+];
 
 export function EstimatorView() {
   const router = useRouter();
   const { createJob, jobs } = useJobs();
-  const { materials } = useCatalog();
 
   const [client, setClient] = useState("");
   const [project, setProject] = useState("");
@@ -29,15 +46,28 @@ export function EstimatorView() {
   const [lines, setLines] = useState<LineItem[]>([
     {
       id: "l1",
-      description: "Upper cabinets — 5 boxes",
-      qty: 1,
-      materialId: materials[0]?.id ?? null,
-      materialPricePerSqft: materials[0]?.pricePerSqft ?? 0,
-      labourHours: 18,
-      labourRate: DEFAULT_LABOUR_RATE,
+      category: "Materials",
+      item: "5/8 Plywood Birch Prefinished",
+      qty: 10,
+      unit: "ea",
+      unitPrice: 59.5,
+      wastePct: 0,
+      markupPct: DEFAULT_MARKUP_PCT,
+    },
+    {
+      id: "l2",
+      category: "Labour",
+      item: "Machining",
+      qty: 5.77,
+      unit: "hr",
+      unitPrice: 175,
+      wastePct: 0,
       markupPct: DEFAULT_MARKUP_PCT,
     },
   ]);
+  const [cabinetSummary, setCabinetSummary] = useState<CabinetSummaryT>(
+    emptyCabinetSummary()
+  );
   const [submitting, setSubmitting] = useState(false);
 
   function addLine() {
@@ -45,12 +75,12 @@ export function EstimatorView() {
       ...prev,
       {
         id: `l${Date.now()}${Math.random().toString(36).slice(2, 5)}`,
-        description: "",
+        category: "",
+        item: "",
         qty: 1,
-        materialId: materials[0]?.id ?? null,
-        materialPricePerSqft: materials[0]?.pricePerSqft ?? 0,
-        labourHours: 0,
-        labourRate: DEFAULT_LABOUR_RATE,
+        unit: "ea",
+        unitPrice: 0,
+        wastePct: 0,
         markupPct: defaultMarkupPct,
       },
     ]);
@@ -64,19 +94,21 @@ export function EstimatorView() {
     setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
-  function pickMaterial(lineId: string, materialId: string) {
-    const m = materials.find((mat) => mat.id === materialId);
-    if (!m) return;
-    updateLine(lineId, {
-      materialId: m.id,
-      materialPricePerSqft: m.pricePerSqft,
-    });
+  function updateCabinetSummary(patch: Partial<CabinetSummaryT>) {
+    setCabinetSummary((prev) => ({ ...prev, ...patch }));
   }
 
   const totals = useMemo(
     () => computeTotals(lines, overheadPct),
     [lines, overheadPct]
   );
+
+  // Categories suggested in the line-row dropdown: seed list ∪ whatever
+  // the user has typed so far in this quote. Deduped.
+  const categorySuggestions = useMemo(() => {
+    const used = lines.map((l) => l.category).filter(Boolean);
+    return Array.from(new Set([...SEED_CATEGORIES, ...used]));
+  }, [lines]);
 
   async function saveAsJob() {
     if (!client.trim() || !project.trim()) return;
@@ -88,10 +120,15 @@ export function EstimatorView() {
       overheadPct,
       totals,
       existingJobs: jobs,
+      cabinetSummary,
     });
     await createJob(job);
     router.push(`/jobs/${job.id}`);
   }
+
+  // Mute unused import warning for DEFAULT_LABOUR_RATE — exported for
+  // Phase 2 catalog seeding, not used here yet.
+  void DEFAULT_LABOUR_RATE;
 
   return (
     <>
@@ -111,17 +148,20 @@ export function EstimatorView() {
           <LineItemsTable
             lines={lines}
             lineSubtotals={totals.lineSubtotals}
-            materials={materials}
+            categorySuggestions={categorySuggestions}
             onAdd={addLine}
             onUpdate={updateLine}
             onRemove={removeLine}
-            onPickMaterial={pickMaterial}
           />
           <MarkupSection
             overheadPct={overheadPct}
             defaultMarkupPct={defaultMarkupPct}
             onOverhead={setOverheadPct}
             onDefaultMarkup={setDefaultMarkupPct}
+          />
+          <CabinetSummary
+            summary={cabinetSummary}
+            onUpdate={updateCabinetSummary}
           />
         </div>
 

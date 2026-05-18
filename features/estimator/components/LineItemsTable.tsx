@@ -1,7 +1,6 @@
 "use client";
 
 import { Plus } from "lucide-react";
-import type { Material } from "@features/catalog/lib/catalogStore";
 import type { LineItem } from "@features/estimator/lib/types";
 import type { LineSubtotal } from "@features/estimator/lib/totals";
 import { LineItemRow } from "./LineItemRow";
@@ -9,19 +8,17 @@ import { LineItemRow } from "./LineItemRow";
 export function LineItemsTable({
   lines,
   lineSubtotals,
-  materials,
+  categorySuggestions,
   onAdd,
   onUpdate,
   onRemove,
-  onPickMaterial,
 }: {
   lines: LineItem[];
   lineSubtotals: LineSubtotal[];
-  materials: Material[];
+  categorySuggestions: string[];
   onAdd: () => void;
   onUpdate: (id: string, patch: Partial<LineItem>) => void;
   onRemove: (id: string) => void;
-  onPickMaterial: (lineId: string, materialId: string) => void;
 }) {
   return (
     <section className="bg-surface border border-border rounded-lg overflow-hidden">
@@ -39,10 +36,10 @@ export function LineItemsTable({
               key={line.id}
               line={line}
               subtotal={sub}
-              materials={materials}
+              categorySuggestions={categorySuggestions}
+              categoryListId="estimator-categories"
               onUpdate={(patch) => onUpdate(line.id, patch)}
               onRemove={() => onRemove(line.id)}
-              onPickMaterial={(matId) => onPickMaterial(line.id, matId)}
             />
           );
         })}
