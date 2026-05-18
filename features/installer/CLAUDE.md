@@ -21,12 +21,21 @@ one page that actually gets used on a phone.
 
 ## Where things live
 
-Page logic in `src/app/installer/page.tsx`. The bucketing helper
-(`bucket(job, today)`) is local to the file — small enough not to extract.
+```
+features/installer/
+├── lib/
+│   └── buckets.ts          InstallBucket type + bucket() +
+│                           groupByInstallBucket() pure functions
+└── components/
+    ├── InstallerView.tsx   top-level: 4 InstallGroup sections
+    ├── InstallGroup.tsx    one bucket (Today / This week / Later / Past)
+    └── InstallCard.tsx     individual job card with Maps + Done button
+```
 
-It depends on:
-- `useJobs()` — install dates and "mark complete" state
-- `formatDate` from `@shared/lib/format`
+`src/app/installer/page.tsx` is a 4-line shell.
+
+Depends on `useJobs()` for install dates + "mark complete," and
+`formatDate` from `@shared/lib/format`.
 
 ## Domain notes
 
