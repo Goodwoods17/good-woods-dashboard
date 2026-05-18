@@ -1,9 +1,10 @@
 "use client";
 
 import { Plus } from "lucide-react";
+import { cn } from "@shared/lib/utils";
 import type { LineItem } from "@features/estimator/lib/types";
 import type { LineSubtotal } from "@features/estimator/lib/totals";
-import { LineItemRow } from "./LineItemRow";
+import { LineItemRow, LINE_GRID_COLS } from "./LineItemRow";
 
 export function LineItemsTable({
   lines,
@@ -28,29 +29,58 @@ export function LineItemsTable({
           {lines.length} item{lines.length === 1 ? "" : "s"}
         </span>
       </div>
-      <div className="divide-y divide-border">
-        {lines.map((line) => {
-          const sub = lineSubtotals.find((s) => s.id === line.id)!;
-          return (
-            <LineItemRow
-              key={line.id}
-              line={line}
-              subtotal={sub}
-              categorySuggestions={categorySuggestions}
-              categoryListId="estimator-categories"
-              onUpdate={(patch) => onUpdate(line.id, patch)}
-              onRemove={() => onRemove(line.id)}
-            />
-          );
-        })}
-        <button
-          onClick={onAdd}
-          className="w-full px-5 py-2.5 flex items-center gap-2 text-sm text-text-tertiary hover:text-accent hover:bg-accent-soft/30 transition-colors duration-fast"
-        >
-          <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Add line
-        </button>
+
+      {/* Horizontally scrollable on narrow screens; min-width keeps columns aligned */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[68rem]">
+          {/* Column header */}
+          <div
+            className={cn(
+              "grid items-end gap-2 px-3 py-2 border-b border-border bg-surface-muted/60",
+              "text-[10px] uppercase tracking-wider text-text-tertiary font-semibold",
+              LINE_GRID_COLS
+            )}
+          >
+            <span>Category</span>
+            <span>Item</span>
+            <span className="text-right">Qty</span>
+            <span className="text-center">Unit</span>
+            <span className="text-right">Amount</span>
+            <span className="text-right">Waste %</span>
+            <span className="text-right">Cost</span>
+            <span className="text-right">Markup %</span>
+            <span className="text-right">Markup $</span>
+            <span className="text-right">Line $</span>
+            <span />
+          </div>
+
+          {/* Rows */}
+          <div className="divide-y divide-border">
+            {lines.map((line) => {
+              const sub = lineSubtotals.find((s) => s.id === line.id)!;
+              return (
+                <LineItemRow
+                  key={line.id}
+                  line={line}
+                  subtotal={sub}
+                  categorySuggestions={categorySuggestions}
+                  categoryListId="estimator-categories"
+                  onUpdate={(patch) => onUpdate(line.id, patch)}
+                  onRemove={() => onRemove(line.id)}
+                />
+              );
+            })}
+          </div>
+        </div>
       </div>
+
+      <button
+        onClick={onAdd}
+        className="w-full px-5 py-2.5 flex items-center gap-2 text-sm text-text-tertiary hover:text-accent hover:bg-accent-soft/30 transition-colors duration-fast border-t border-border"
+      >
+        <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+        Add line
+      </button>
     </section>
   );
 }
