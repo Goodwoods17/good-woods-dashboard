@@ -16,11 +16,21 @@ Persistence is dual-mode: when Supabase env is configured, writes go to
 
 ## Where things live
 
-- `lib/catalogStore.tsx` — `Material`, `Finish` types, `CatalogProvider`,
-  `useCatalog` hook, seed data.
+```
+features/catalog/
+├── lib/
+│   └── catalogStore.tsx     Material/Finish types, CatalogProvider,
+│                            useCatalog hook, seed data
+└── components/
+    ├── CatalogView.tsx      top-level view with tab nav
+    ├── MaterialsTable.tsx   materials CRUD table
+    ├── FinishesTable.tsx    finishes CRUD table
+    └── CrudTable.tsx        shared Th + CrudRow<T> primitives
+```
 
-The provider is mounted in `src/app/layout.tsx` (sits inside
-`AuthProvider`). Routes that consume it:
+`src/app/catalog/page.tsx` is a 4-line shell that renders
+`<CatalogView />`. The provider is mounted in `src/app/layout.tsx`
+(sits inside `AuthProvider`). Routes that consume it:
 
 - `/catalog` — direct CRUD on materials and finishes
 - `/estimator` — reads materials/finishes for line item pricing
