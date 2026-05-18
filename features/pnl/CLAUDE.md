@@ -17,14 +17,28 @@ date if not yet installed).
 
 ## Where things live
 
-Page logic and charts in `src/app/pnl/page.tsx`. Inline brand tokens
-(`TOKEN` constant) are hardcoded here for chart styling — these come from
-the Build Direction Spec PDF §3 and should match `tailwind.config.ts`.
+```
+features/pnl/
+├── lib/
+│   ├── aggregate.ts        PnlStats type + computePnlStats(jobs)
+│   └── chartTokens.ts      CHART_TOKENS for Recharts SVG fills
+└── components/
+    ├── PnlView.tsx         top-level: header + tiles + chart
+    ├── StatsTiles.tsx      the 4 KPI tiles (revenue/cost/margin/avg)
+    ├── MarginChart.tsx     Recharts bar chart for the monthly series
+    └── Tile.tsx            single tile primitive
+```
 
-It depends on:
+`src/app/pnl/page.tsx` is a 4-line shell.
+
+Depends on:
 - `useJobs()` — single source of revenue/cost truth
 - `computeMargin` from `@shared/lib/types`
 - `recharts` for the bar chart
+
+`CHART_TOKENS` are hardcoded SVG-safe hex values that match the brand
+palette in `tailwind.config.ts`. Recharts can't read CSS variables, so
+this duplication is intentional — update both when the palette changes.
 
 ## Domain notes
 
