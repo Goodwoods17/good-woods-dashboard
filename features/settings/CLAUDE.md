@@ -16,9 +16,22 @@ Single page (`/settings`) with three sections:
 
 ## Where things live
 
-Page logic in `src/app/settings/page.tsx`. No feature-specific lib code.
+```
+features/settings/
+└── components/
+    ├── SettingsView.tsx     top-level page wrapper
+    ├── Section.tsx          shared Section + Field primitives
+    ├── ErrorBanner.tsx      storage-error banner
+    ├── StorageSection.tsx   backend status + seed/refresh buttons
+    ├── CompanySection.tsx   read-only company info
+    ├── TaxSection.tsx       read-only tax info
+    └── ResetSection.tsx     destructive "reset to seed" action
+```
 
-It depends on:
+`src/app/settings/page.tsx` is a 4-line shell. No feature-specific lib
+code yet — sections pull from other features' stores.
+
+Depends on:
 - `useJobs()` — for the seed/refresh actions and storage diagnostics
 - `COMPANY` and `TAX_RATE` from `@features/jobs/lib/invoice`
 
