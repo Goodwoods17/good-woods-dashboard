@@ -13,27 +13,22 @@ import {
 } from "@features/estimator/lib/types";
 import { computeTotals } from "@features/estimator/lib/totals";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
+import {
+  QUOTE_SECTIONS,
+  SECTION_LABELS,
+  type SectionId,
+  type SectionToggles,
+} from "@features/estimator/lib/sections";
 import { ProjectSection } from "./ProjectSection";
 import { LineItemsTable } from "./LineItemsTable";
 import { MarkupSection } from "./MarkupSection";
 import { CabinetSummary } from "./CabinetSummary";
 import { QuoteSummary } from "./QuoteSummary";
 
-// Seed categories so the dropdown isn't empty on first use. As Andrew
-// types new categories they get added to the suggestions live.
-const SEED_CATEGORIES = [
-  "Materials",
-  "Doors",
-  "Drawer Boxes",
-  "Banding",
-  "Fasteners",
-  "Hinges",
-  "Guides",
-  "Legs",
-  "Hardware",
-  "Labour",
-  "Add-On",
-];
+// Tiny helper for IDs.
+function newId(prefix: string): string {
+  return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+}
 
 export function EstimatorView() {
   const router = useRouter();
@@ -43,6 +38,14 @@ export function EstimatorView() {
   const [project, setProject] = useState("");
   const [overheadPct, setOverheadPct] = useState(8);
   const [defaultMarkupPct, setDefaultMarkupPct] = useState(DEFAULT_MARKUP_PCT);
+
+  // Section toggles (only "gc" is toggleable today; default OFF since most
+  // jobs don't have GC subs). Adding more toggleable sections later is one
+  // line in lib/sections.ts + a default here.
+  const [sectionToggles, setSectionToggles] = useState<SectionToggles>({
+    gc: false,
+  });
+
   const [lines, setLines] = useState<LineItem[]>([
     {
       id: "l1",
@@ -56,7 +59,7 @@ export function EstimatorView() {
     },
     {
       id: "l2",
-      category: "Labour",
+      category: "CNC",
       item: "Machining",
       qty: 5.77,
       unit: "hr",
@@ -65,20 +68,34 @@ export function EstimatorView() {
       markupPct: DEFAULT_MARKUP_PCT,
     },
   ]);
+
   const [cabinetSummary, setCabinetSummary] = useState<CabinetSummaryT>(
     emptyCabinetSummary()
   );
   const [submitting, setSubmitting] = useState(false);
 
-  function addLine() {
+  function addLineInSection(sectionLabel: string) {
+    // Best-guess default unit per section so the user types less.
+    const unitGuess: Record<string, LineItem["unit"]> = {
+      Materials: "ea",
+      Hardware: "ea",
+      CNC: "hr",
+      "Doors & Faces": "sqft",
+      Assembly: "hr",
+      Finishing: "sqft",
+      Delivery: "ea",
+      Install: "hr",
+      "GC Subcontractors": "ea",
+    };
+
     setLines((prev) => [
       ...prev,
       {
-        id: `l${Date.now()}${Math.random().toString(36).slice(2, 5)}`,
-        category: "",
+        id: newId("l"),
+        category: sectionLabel,
         item: "",
         qty: 1,
-        unit: "ea",
+        unit: unitGuess[sectionLabel] ?? "ea",
         unitPrice: 0,
         wastePct: 0,
         markupPct: defaultMarkupPct,
@@ -94,20 +111,43 @@ export function EstimatorView() {
     setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
+  function toggleSection(id: SectionId, next: boolean) {
+    setSectionToggles((prev) => ({ ...prev, [id]: next }));
+  }
+
   function updateCabinetSummary(patch: Partial<CabinetSummaryT>) {
     setCabinetSummary((prev) => ({ ...prev, ...patch }));
   }
 
+  // Lines that contribute to totals — excludes any line whose section
+  // is toggleable and currently off.
+  const activeLines = useMemo(() => {
+    return lines.filter((l) => {
+      const sec = QUOTE_SECTIONS.find((s) => s.label === l.category);
+      if (!sec?.toggleable) return true;
+      return Boolean(sectionToggles[sec.id]);
+    });
+  }, [lines, sectionToggles]);
+
   const totals = useMemo(
+    () => computeTotals(activeLines, overheadPct),
+    [activeLines, overheadPct]
+  );
+
+  // For the SectionBlock components, we still need subtotals for ALL lines
+  // (including disabled GC ones, since they're rendered greyed-out). Compute
+  // a separate totals object on the full lines list so each section knows
+  // what its lines would cost if enabled.
+  const allLinesTotals = useMemo(
     () => computeTotals(lines, overheadPct),
     [lines, overheadPct]
   );
 
-  // Categories suggested in the line-row dropdown: seed list ∪ whatever
-  // the user has typed so far in this quote. Deduped.
+  // Category dropdown suggestions: the fixed 9 sections plus anything the
+  // user has typed manually (so custom categories surface for re-use).
   const categorySuggestions = useMemo(() => {
     const used = lines.map((l) => l.category).filter(Boolean);
-    return Array.from(new Set([...SEED_CATEGORIES, ...used]));
+    return Array.from(new Set([...SECTION_LABELS, ...used]));
   }, [lines]);
 
   async function saveAsJob() {
@@ -116,7 +156,7 @@ export function EstimatorView() {
     const job = createJobFromEstimate({
       client,
       project,
-      lines,
+      lines: activeLines, // only enabled-section lines are in the saved job
       overheadPct,
       totals,
       existingJobs: jobs,
@@ -126,9 +166,7 @@ export function EstimatorView() {
     router.push(`/jobs/${job.id}`);
   }
 
-  // Mute unused import warning for DEFAULT_LABOUR_RATE — exported for
-  // Phase 2 catalog seeding, not used here yet.
-  void DEFAULT_LABOUR_RATE;
+  void DEFAULT_LABOUR_RATE; // kept for Phase 2 Catalog seeding
 
   return (
     <>
@@ -147,9 +185,11 @@ export function EstimatorView() {
           />
           <LineItemsTable
             lines={lines}
-            lineSubtotals={totals.lineSubtotals}
+            lineSubtotals={allLinesTotals.lineSubtotals}
             categorySuggestions={categorySuggestions}
-            onAdd={addLine}
+            sectionToggles={sectionToggles}
+            onToggleSection={toggleSection}
+            onAdd={addLineInSection}
             onUpdate={updateLine}
             onRemove={removeLine}
           />

@@ -34,19 +34,46 @@ features/estimator/
 ├── lib/
 │   ├── types.ts                   LineItem, Unit + labels, CabinetSummary,
 │   │                              DEFAULT_LABOUR_RATE, DEFAULT_MARKUP_PCT
-│   ├── totals.ts                  computeTotals — pure pricing math with waste
+│   ├── sections.ts                QUOTE_SECTIONS (the fixed 9), bucket
+│   │                              mapping, toggle helpers
+│   ├── totals.ts                  computeTotals — pure pricing math with
+│   │                              waste, bucketed by section
 │   └── createJobFromEstimate.ts   builds a Job spec from estimator state
 └── components/
-    ├── EstimatorView.tsx          top-level: state + handlers + layout
+    ├── EstimatorView.tsx          top-level: state + handlers + GC toggle
     ├── ProjectSection.tsx         Client + Project fields
-    ├── LineItemsTable.tsx         Lines list header + Add button
-    ├── LineItemRow.tsx            Single row (3 sub-rows: id / numbers / totals)
+    ├── LineItemsTable.tsx         Wrapper card; renders one column header
+    │                              + one SectionBlock per quote section
+    ├── SectionBlock.tsx           One section: divider header + subtotal +
+    │                              its lines + "Add line in {section}". Has
+    │                              an on/off Toggle when section is
+    │                              toggleable (GC Subcontractors).
+    ├── LineItemRow.tsx            Single horizontal grid row, all 11
+    │                              columns side-by-side. Grid template is
+    │                              applied via inline style.
     ├── MarkupSection.tsx          Overhead % + Default markup %
     ├── CabinetSummary.tsx         Bottom info block (counts + linear ft)
     ├── QuoteSummary.tsx           Sidebar summary + Save
     └── inputs.tsx                 FieldInput, NumberInput, Sub, SummaryRow,
                                    CategoryInput (free-text + datalist)
 ```
+
+## The 9 sections
+
+| # | Section            | Bucket    | Notes                                             |
+|---|--------------------|-----------|---------------------------------------------------|
+| 1 | Materials          | materials | Sheet goods, hardwoods, banding                   |
+| 2 | Hardware           | materials | Hinges, guides, legs, fasteners, pulls            |
+| 3 | CNC                | labour    | Toolpath subcontract or in-house CNC time         |
+| 4 | Doors & Faces      | materials | Doors from supplier + CNC'd fillers/scribes       |
+| 5 | Assembly           | labour    | In-house assembly labour                          |
+| 6 | Finishing          | labour    | In-house spray ($ / SqFt)                         |
+| 7 | Delivery           | materials | Trucking to site                                  |
+| 8 | Install            | labour    | On-site labour at shop rate                       |
+| 9 | GC Subcontractors  | materials | Electricians, plumbers, painters — **toggleable** |
+
+Custom categories (anything not in this list) render in a fallback
+"Other" section at the bottom and bucket as materials by default.
 
 `src/app/estimator/page.tsx` is a 4-line shell.
 
@@ -60,11 +87,11 @@ features/estimator/
   Line cost is computed on the buying qty, not the finished qty — so
   Andrew doesn't eat the waste himself. Waste field auto-shows for
   `bf / SqFt / Ft` units; auto-hides for `#` and `Hrs`.
-- **Materials vs Labour** is determined by `unit === "hr"`. Labour lines
-  roll up into the Labour CostLine on the saved Job; everything else
-  into Materials. (No category check — a "Labour" category with a #
-  unit would still book under Materials. That's intentional: Mozaik
-  exports `Part Labor` in Hrs even though the category name varies.)
+- **Materials vs Labour bucketing** is by section (see `lib/sections.ts`):
+  CNC / Assembly / Finishing / Install bucket as labour; everything else
+  buckets as materials. Lines whose category doesn't match a known
+  section default to materials. This determines how the saved Job's
+  CostLine entries are grouped.
 - **Markup is on cost** (`linePrice = lineCost × (1 + markup%)`). Cost
   here already includes waste. So a 35% markup on a hardwood line is
   35% on the waste-adjusted purchase amount.

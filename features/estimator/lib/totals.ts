@@ -1,4 +1,5 @@
 import type { LineItem } from "./types";
+import { bucketForCategory } from "./sections";
 
 export type LineSubtotal = {
   id: string;
@@ -6,15 +7,14 @@ export type LineSubtotal = {
   cost: number; // buyingQty × unitPrice
   markupAmount: number; // cost × markup%
   price: number; // cost + markupAmount
-  isLabour: boolean;
-  isMaterial: boolean;
+  bucket: "materials" | "labour";
 };
 
 export type EstimateTotals = {
   lineSubtotals: LineSubtotal[];
   costs: {
-    materials: number; // anything not labour and not "Overhead" category
-    labour: number; // unit === "hr"
+    materials: number; // lines bucketed as "materials"
+    labour: number; // lines bucketed as "labour"
     direct: number; // materials + labour
   };
   markupTotal: number; // sum of per-line markupAmount
@@ -22,27 +22,17 @@ export type EstimateTotals = {
   totalCost: number; // direct + overhead
   quoted: number; // sum of line prices + overhead
   effectiveMarginPct: number; // (quoted - totalCost) / quoted × 100
+  perSection: Record<string, { count: number; cost: number; price: number }>;
 };
 
-function isLabourLine(line: LineItem): boolean {
-  // Heuristic: labour is anything priced in hours. Mozaik exports
-  // Machining / Labor / Part Labor as Hrs — they all roll up here.
-  return line.unit === "hr";
-}
-
-function isMaterialLine(line: LineItem): boolean {
-  return !isLabourLine(line);
-}
-
-// Per-line markup model, with waste% on cost-of-materials math:
-//   buyingQty   = qty × (1 + waste%/100)
-//   lineCost    = buyingQty × unitPrice
-//   linePrice   = lineCost × (1 + markup%/100)
-//   quoted      = sum(linePrice) + overhead
+// Per-line markup model, with waste% on the cost-of-materials math:
+//   buyingQty = qty × (1 + waste%/100)
+//   lineCost  = buyingQty × unitPrice
+//   linePrice = lineCost × (1 + markup%/100)
+//   quoted    = sum(linePrice) + overhead
 //
-// Markup is on the WASTE-ADJUSTED cost, not the finished-qty cost — so
-// you're not eating the waste yourself. Overhead is workshop-wide on
-// total direct cost.
+// Bucketing into materials vs labour is by section (lib/sections.ts).
+// Lines whose category doesn't match a section default to materials.
 export function computeTotals(
   lines: LineItem[],
   overheadPct: number
@@ -58,15 +48,14 @@ export function computeTotals(
       cost,
       markupAmount,
       price,
-      isLabour: isLabourLine(l),
-      isMaterial: isMaterialLine(l),
+      bucket: bucketForCategory(l.category),
     };
   });
 
   const costs = lineSubtotals.reduce(
     (acc, s) => ({
-      materials: acc.materials + (s.isMaterial ? s.cost : 0),
-      labour: acc.labour + (s.isLabour ? s.cost : 0),
+      materials: acc.materials + (s.bucket === "materials" ? s.cost : 0),
+      labour: acc.labour + (s.bucket === "labour" ? s.cost : 0),
       direct: acc.direct + s.cost,
     }),
     { materials: 0, labour: 0, direct: 0 }
@@ -81,6 +70,21 @@ export function computeTotals(
   const effectiveMarginPct =
     quoted > 0 ? ((quoted - totalCost) / quoted) * 100 : 0;
 
+  // Per-section breakdown for the section headers (count + cost + price).
+  const perSection: Record<
+    string,
+    { count: number; cost: number; price: number }
+  > = {};
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    const s = lineSubtotals[i];
+    const key = l.category || "Other";
+    if (!perSection[key]) perSection[key] = { count: 0, cost: 0, price: 0 };
+    perSection[key].count += 1;
+    perSection[key].cost += s.cost;
+    perSection[key].price += s.price;
+  }
+
   return {
     lineSubtotals,
     costs,
@@ -89,5 +93,6 @@ export function computeTotals(
     totalCost,
     quoted,
     effectiveMarginPct,
+    perSection,
   };
 }

@@ -12,16 +12,18 @@ import {
 import type { LineSubtotal } from "@features/estimator/lib/totals";
 import { CategoryInput } from "./inputs";
 
-// Column layout — kept in one place so the header and rows stay aligned.
-// Item column flexes; everything else is fixed-width for spreadsheet feel.
-export const LINE_GRID_COLS =
-  "grid-cols-[7rem_minmax(11rem,1fr)_4rem_3.5rem_5.5rem_4.5rem_6rem_4.5rem_6rem_6.5rem_1.75rem]";
+// Grid template applied via inline style so it can't be silently dropped
+// by Tailwind's content scanner. Both the column header and every row
+// use the same template so columns align perfectly.
+export const LINE_GRID_TEMPLATE =
+  "7rem minmax(11rem, 1fr) 4rem 3.5rem 5.5rem 4.5rem 6rem 4.5rem 6rem 6.5rem 1.75rem";
 
 export function LineItemRow({
   line,
   subtotal,
   categorySuggestions,
   categoryListId,
+  disabled,
   onUpdate,
   onRemove,
 }: {
@@ -29,13 +31,20 @@ export function LineItemRow({
   subtotal: LineSubtotal;
   categorySuggestions: string[];
   categoryListId: string;
+  disabled?: boolean;
   onUpdate: (patch: Partial<LineItem>) => void;
   onRemove: () => void;
 }) {
   const hasWaste = line.wastePct > 0;
 
   return (
-    <div className={cn("grid items-center gap-2 px-3 py-1.5 group", LINE_GRID_COLS)}>
+    <div
+      className={cn(
+        "grid items-center gap-2 px-3 py-1.5 group",
+        disabled && "opacity-50"
+      )}
+      style={{ gridTemplateColumns: LINE_GRID_TEMPLATE }}
+    >
       {/* Category */}
       <CategoryInput
         value={line.category}
@@ -45,7 +54,7 @@ export function LineItemRow({
       />
 
       {/* Item (+ optional description as small subtext) */}
-      <div className="flex flex-col gap-0.5">
+      <div className="flex flex-col gap-0.5 min-w-0">
         <input
           type="text"
           value={line.item}
@@ -63,10 +72,7 @@ export function LineItemRow({
       </div>
 
       {/* Qty */}
-      <NumCell
-        value={line.qty}
-        onChange={(v) => onUpdate({ qty: v })}
-      />
+      <NumCell value={line.qty} onChange={(v) => onUpdate({ qty: v })} />
 
       {/* Unit */}
       <select
@@ -82,10 +88,7 @@ export function LineItemRow({
       </select>
 
       {/* $/Unit (Amount) */}
-      <NumCell
-        value={line.unitPrice}
-        onChange={(v) => onUpdate({ unitPrice: v })}
-      />
+      <NumCell value={line.unitPrice} onChange={(v) => onUpdate({ unitPrice: v })} />
 
       {/* Waste % */}
       <NumCell
@@ -105,11 +108,7 @@ export function LineItemRow({
       </CalcCell>
 
       {/* Markup % */}
-      <NumCell
-        value={line.markupPct}
-        onChange={(v) => onUpdate({ markupPct: v })}
-        step="1"
-      />
+      <NumCell value={line.markupPct} onChange={(v) => onUpdate({ markupPct: v })} step="1" />
 
       {/* Markup $ (calculated) */}
       <CalcCell value={`+${formatCAD(subtotal.markupAmount)}`} muted />
