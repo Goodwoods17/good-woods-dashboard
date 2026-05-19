@@ -22,12 +22,24 @@ Anyone can hit the **Andon** button to open a new event.
 
 ## Where things live
 
-- `lib/shopStore.tsx` — `WorkStation`, `WorkUnit`, `AndonEvent` types,
-  `WORK_STATIONS` constant, `ShopProvider`, `useShop` hook.
+```
+features/shop/
+├── lib/
+│   └── shopStore.tsx    WorkStation/WorkUnit/AndonEvent types,
+│                        WORK_STATIONS constant, ShopProvider, useShop
+└── components/
+    ├── ShopBoard.tsx    Top-level view — header, DnD wiring, modals
+    ├── AndonBanner.tsx  Active-issues alert banner
+    ├── ShopColumn.tsx   One droppable column (header + WIP indicator)
+    ├── WorkUnitCard.tsx Draggable work-unit card + hoursAgo helper
+    ├── NewUnitModal.tsx New-unit form
+    ├── AndonModal.tsx   Raise-andon form
+    └── Modal.tsx        Modal shell + Field / FieldStack / Input
+```
 
-The provider is mounted in `src/app/layout.tsx`. Page logic at
-`src/app/shop/page.tsx` consumes `useShop()` and renders the Kanban
-using `@dnd-kit/core` + `@dnd-kit/sortable`.
+`ShopProvider` is mounted in `src/app/layout.tsx`. The page at
+`src/app/shop/page.tsx` is a 4-line shell that renders `<ShopBoard />`.
+DnD is `@dnd-kit/core`.
 
 ## Domain notes
 

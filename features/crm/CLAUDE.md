@@ -16,8 +16,18 @@ Click a client → links to a filtered jobs view for that client.
 
 ## Where things live
 
-Page logic in `src/app/crm/page.tsx` — pure derivation from
-`useJobs()`. No feature-specific lib code, no separate clients store.
+```
+features/crm/
+├── lib/
+│   └── aggregate.ts        ClientRow type + computeClients(jobs)
+└── components/
+    ├── CrmView.tsx         top-level: header + table or empty state
+    ├── ClientsTable.tsx    the lifetime-revenue table
+    └── EmptyState.tsx      shown when there are no jobs yet
+```
+
+`src/app/crm/page.tsx` is a 4-line shell. Pure derivation from
+`useJobs()` — no separate clients store.
 
 ## Domain notes
 

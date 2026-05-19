@@ -14,12 +14,20 @@ Supabase yet (intentional: low-stakes data, single-shop use).
 
 ## Where things live
 
-The page logic lives in `src/app/inventory/page.tsx` — it's small enough
-that extracting it would add boilerplate without value. No
-feature-specific lib code yet.
+```
+features/inventory/
+├── lib/
+│   └── inventoryStore.ts    StockEntry type, load/save, SEED_STOCK
+└── components/
+    ├── InventoryView.tsx    top-level: header + banner + table
+    ├── StockTable.tsx       the editable on-hand table
+    └── LowStockBanner.tsx   "N items need reorder" alert
+```
 
-It depends on:
-- `@features/catalog/lib/catalogStore` — to look up material names from `materialId`
+`src/app/inventory/page.tsx` is a 4-line shell.
+
+Depends on `@features/catalog/lib/catalogStore` — to look up material
+names from `materialId`.
 
 ## Domain notes
 
