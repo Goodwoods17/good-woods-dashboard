@@ -36,7 +36,7 @@ export function StockTable({
           {stock.map((entry) => {
             const mat = materials.find((m) => m.id === entry.materialId);
             const low = entry.qtyOnHand < entry.reorderPoint;
-            const value = (mat?.pricePerSqft ?? 0) * entry.qtyOnHand;
+            const value = (mat?.unitPrice ?? 0) * entry.qtyOnHand;
             return (
               <tr
                 key={entry.id}

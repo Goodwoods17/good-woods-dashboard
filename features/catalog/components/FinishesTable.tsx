@@ -10,12 +10,21 @@ export function FinishesTable() {
 
   return (
     <div className="bg-surface border border-border rounded-lg overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-border bg-surface-muted">
+        <h3 className="text-xs uppercase tracking-[0.08em] font-semibold text-text-primary">
+          Finishes (legacy)
+        </h3>
+        <p className="text-[11px] text-text-tertiary mt-0.5">
+          New finishing items now live in the Finishing section of Materials
+          above. This table is kept during the transition.
+        </p>
+      </div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-muted">
+          <tr className="border-b border-border bg-surface-muted/30">
             <Th>Name</Th>
             <Th align="right">Coats</Th>
-            <Th align="right">Price / sqft</Th>
+            <Th align="right">$ / sqft</Th>
             <Th>Notes</Th>
             <th className="w-8" />
           </tr>
@@ -29,7 +38,7 @@ export function FinishesTable() {
                 { key: "name", type: "text" },
                 { key: "coats", type: "number", align: "right" },
                 {
-                  key: "pricePerSqft",
+                  key: "unitPrice",
                   type: "number",
                   align: "right",
                   fmt: (v) => formatCAD(Number(v)),
@@ -43,11 +52,11 @@ export function FinishesTable() {
         </tbody>
       </table>
       <button
-        onClick={() => addFinish({ name: "", coats: 2, pricePerSqft: 0 })}
+        onClick={() => addFinish({ name: "", coats: 2, unitPrice: 0 })}
         className="w-full px-5 py-2.5 flex items-center gap-2 text-sm text-text-tertiary hover:text-accent hover:bg-accent-soft/30 transition-colors duration-fast border-t border-border"
       >
         <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-        Add finish
+        Add finish (legacy)
       </button>
     </div>
   );
