@@ -19,7 +19,9 @@ import { cn } from "@shared/lib/utils";
 import {
   buildHitlist,
   BLOCKER_META,
-  BLOCKER_IS_SYNTHETIC,
+  isSyntheticBlocker,
+  resolveBlockerText,
+  resolveBlockerTone,
   type HitlistEntry,
 } from "@features/jobs/lib/blockers";
 import { deriveHealth } from "@features/jobs/lib/health";
@@ -85,10 +87,11 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
         </section>
       )}
 
-      {BLOCKER_IS_SYNTHETIC && (
+      {entries.some((e) => isSyntheticBlocker(e.job)) && (
         <p className="text-xs text-text-tertiary px-1">
-          Blocker chips marked <DemoTag inline /> are placeholders. Wire real
-          blocker + next-step fields onto Jobs to retire the demo data.
+          Rows marked <DemoTag inline /> use a synthetic blocker fallback.
+          Open the job and set the real blocker + next step to retire the
+          tag.
         </p>
       )}
     </div>
@@ -96,7 +99,7 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
 }
 
 function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
-  const { job, blocker, nextStep, daysToInstall } = entry;
+  const { job, nextStep, daysToInstall } = entry;
   const health = deriveHealth(job);
   const installLabel =
     daysToInstall < 0
@@ -120,7 +123,7 @@ function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
             <span className="text-sm font-semibold text-text-primary truncate group-hover:text-accent transition-colors duration-fast">
               {nextStep}
             </span>
-            <BlockerChip kind={blocker} />
+            <BlockerChip job={job} />
           </div>
           <div className="flex items-center gap-2 text-xs text-text-tertiary">
             <span className="text-text-secondary font-medium">{job.name}</span>
@@ -151,7 +154,7 @@ function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
 }
 
 function RestRow({ entry }: { entry: HitlistEntry }) {
-  const { job, blocker, nextStep } = entry;
+  const { job, nextStep } = entry;
   return (
     <li className="border-b border-border last:border-0">
       <Link
@@ -171,7 +174,7 @@ function RestRow({ entry }: { entry: HitlistEntry }) {
             {nextStep}
           </div>
         </div>
-        <BlockerChip kind={blocker} subtle />
+        <BlockerChip job={job} subtle />
         <div className="text-xs text-text-tertiary tabular-nums w-24 text-right">
           {formatDate(job.installDate)}
         </div>
@@ -196,28 +199,34 @@ function DemoTag({ inline = false }: { inline?: boolean }) {
 }
 
 function BlockerChip({
-  kind,
+  job,
   subtle = false,
 }: {
-  kind: keyof typeof BLOCKER_META;
+  job: Job;
   subtle?: boolean;
 }) {
-  const meta = BLOCKER_META[kind];
-  if (kind === "none" && subtle) return null;
+  const synthetic = isSyntheticBlocker(job);
+  const text = resolveBlockerText(job);
+  const tone = resolveBlockerTone(job);
+
+  // Hide the "Clear" synthetic chip on rest-of-pipeline rows; keep
+  // real blockers visible at all sizes.
+  if (subtle && synthetic && tone === "on_track") return null;
+
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em]",
-        meta.tone === "blocked" && "bg-status-blocked-soft text-status-blocked",
-        meta.tone === "at_risk" && "bg-status-at-risk-soft text-status-at-risk",
-        meta.tone === "on_track" && "bg-status-on-track-soft text-status-on-track",
-        meta.tone === "neutral" && "bg-surface-muted text-text-secondary",
+        tone === "blocked" && "bg-status-blocked-soft text-status-blocked",
+        tone === "at_risk" && "bg-status-at-risk-soft text-status-at-risk",
+        tone === "on_track" && "bg-status-on-track-soft text-status-on-track",
+        tone === "neutral" && "bg-surface-muted text-text-secondary",
         subtle && "opacity-80"
       )}
-      title={`${meta.label} · synthetic demo data`}
+      title={synthetic ? `${text} · synthetic fallback` : text}
     >
-      {meta.short}
-      {BLOCKER_IS_SYNTHETIC && kind !== "none" && <DemoTag />}
+      {text}
+      {synthetic && <DemoTag />}
     </span>
   );
 }

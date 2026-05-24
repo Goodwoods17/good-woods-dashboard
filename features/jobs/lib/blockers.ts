@@ -1,12 +1,54 @@
 // Synthetic "what's blocking this job" + "what's the next step" derived
-// deterministically from job.id + pipelineStatus. Blocker chips render a
-// "demo" tag until real blocker/nextStep fields land on Job (or get
-// derived from open Tasks).
+// deterministically from job.id + pipelineStatus. Used as a FALLBACK
+// when the job doesn't have real `blocker` / `nextStep` fields set.
+// Jobs WITH real values render those verbatim; jobs WITHOUT render
+// the synthetic value with a "demo" tag.
 
 import type { Job, PipelineStatus, HealthStatus } from "@shared/lib/types";
 import { deriveHealth } from "@features/jobs/lib/health";
 
-export const BLOCKER_IS_SYNTHETIC = true;
+/**
+ * True when this job's blocker/nextStep is synthetic (heuristic-derived,
+ * not user-set). Hitlist + Schedule render a "demo" tag in this case.
+ * When `job.blocker` is set, this returns false for that job.
+ */
+export function isSyntheticBlocker(job: Job): boolean {
+  return !job.blocker;
+}
+
+/**
+ * Returns the user-facing blocker text. Prefers `job.blocker` (real,
+ * user-set) over the synthetic BlockerKind label.
+ */
+export function resolveBlockerText(job: Job, today: Date = new Date()): string {
+  if (job.blocker && job.blocker.trim().length > 0) return job.blocker.trim();
+  const kind = getBlocker(job, today);
+  return BLOCKER_META[kind].short;
+}
+
+/**
+ * Returns the BlockerKind that drives the chip tone (blocked / at_risk /
+ * neutral / on_track) when rendering a synthetic blocker. For real
+ * blockers, the chip tone derives from the job's health instead — see
+ * resolveBlockerTone().
+ */
+export function resolveBlockerTone(job: Job, today: Date = new Date()):
+  | "blocked"
+  | "at_risk"
+  | "neutral"
+  | "on_track"
+{
+  // Real blocker: tone follows the job's health.
+  if (job.blocker && job.blocker.trim().length > 0) {
+    const h = deriveHealth(job, today);
+    if (h === "blocked") return "blocked";
+    if (h === "at_risk") return "at_risk";
+    if (h === "on_track" || h === "complete") return "on_track";
+    return "neutral";
+  }
+  // Synthetic: tone comes from the BlockerKind table.
+  return BLOCKER_META[getBlocker(job, today)].tone;
+}
 
 export type BlockerKind =
   | "subcontractor"
@@ -101,6 +143,8 @@ const NEXT_STEP: Record<PipelineStatus, Partial<Record<BlockerKind, string>>> = 
 };
 
 export function getNextStep(job: Job, today: Date = new Date()): string {
+  // Real next-step wins.
+  if (job.nextStep && job.nextStep.trim().length > 0) return job.nextStep.trim();
   const stageMap = NEXT_STEP[job.pipelineStatus] ?? {};
   const blocker = getBlocker(job, today);
   return stageMap[blocker] ?? stageMap.none ?? "—";

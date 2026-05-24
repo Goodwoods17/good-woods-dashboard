@@ -70,6 +70,20 @@ export type Job = {
   revenue: number;
   costs: CostLine[];
   notes?: string;
+  /**
+   * Free-text description of what's blocking this job today.
+   * When set, the Hitlist + Schedule views render this exactly and
+   * `isSyntheticBlocker(job)` returns false. When undefined, the
+   * synthetic heuristic in `features/jobs/lib/blockers.ts` provides a
+   * fallback chip with a "demo" tag.
+   */
+  blocker?: string;
+  /**
+   * Free-text description of the next concrete action for this job.
+   * Like `blocker`: when set, used verbatim; when undefined, the
+   * synthetic NEXT_STEP table provides a fallback.
+   */
+  nextStep?: string;
   activity?: Activity[];
   invoice: {
     number: string;

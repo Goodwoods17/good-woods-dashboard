@@ -1,6 +1,8 @@
 import type { Job } from "@shared/lib/types";
 
 // Database row shape (snake_case, mirrors public.jobs).
+// blocker + next_step columns added 2026-05-24 — apply migration in
+// supabase/migrations/0006_jobs_blocker_nextstep.sql before deploying.
 export type JobRow = {
   id: string;
   code: string;
@@ -17,6 +19,8 @@ export type JobRow = {
   invoice: Job["invoice"];
   activity: NonNullable<Job["activity"]>;
   notes: string | null;
+  blocker: string | null;
+  next_step: string | null;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -36,6 +40,8 @@ export function rowToJob(row: JobRow): Job {
     invoice: row.invoice,
     activity: row.activity ?? [],
     notes: row.notes ?? undefined,
+    blocker: row.blocker ?? undefined,
+    nextStep: row.next_step ?? undefined,
   };
 }
 
@@ -56,5 +62,7 @@ export function jobToRow(job: Job): JobRow {
     invoice: job.invoice,
     activity: job.activity ?? [],
     notes: job.notes ?? null,
+    blocker: job.blocker ?? null,
+    next_step: job.nextStep ?? null,
   };
 }
