@@ -18,12 +18,8 @@ import {
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { cn } from "@shared/lib/utils";
-import {
-  getNextStep,
-  isSyntheticBlocker,
-  resolveBlockerText,
-  resolveBlockerTone,
-} from "@features/jobs/lib/blockers";
+import { getNextStep } from "@features/jobs/lib/blockers";
+import { BlockerChip } from "@features/jobs/components/BlockerChip";
 import { deriveHealth } from "@features/jobs/lib/health";
 import { STAGE_LEAD_DAYS } from "@features/jobs/lib/health";
 
@@ -186,7 +182,7 @@ function Lane({
           {job.name}
         </div>
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
-          <BlockerChip job={job} />
+          <BlockerChip job={job} size="sm" />
           <span className="text-xs text-text-secondary truncate">
             {nextStep}
           </span>
@@ -238,27 +234,3 @@ function Lane({
   );
 }
 
-function BlockerChip({ job }: { job: Job }) {
-  const synthetic = isSyntheticBlocker(job);
-  const text = resolveBlockerText(job);
-  const tone = resolveBlockerTone(job);
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] shrink-0",
-        tone === "blocked" && "bg-status-blocked-soft text-status-blocked",
-        tone === "at_risk" && "bg-status-at-risk-soft text-status-at-risk",
-        tone === "on_track" && "bg-status-on-track-soft text-status-on-track",
-        tone === "neutral" && "bg-surface-muted text-text-secondary"
-      )}
-      title={synthetic ? `${text} · synthetic fallback` : text}
-    >
-      {text}
-      {synthetic && (
-        <span className="rounded-sm bg-surface-sunken/70 px-0.5 text-[8px] text-text-tertiary">
-          demo
-        </span>
-      )}
-    </span>
-  );
-}

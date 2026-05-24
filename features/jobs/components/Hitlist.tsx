@@ -16,15 +16,14 @@ import { type Job } from "@shared/lib/types";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
+import { DemoTag } from "@shared/components/ui/DemoTag";
 import { cn } from "@shared/lib/utils";
 import {
   buildHitlist,
-  BLOCKER_META,
   isSyntheticBlocker,
-  resolveBlockerText,
-  resolveBlockerTone,
   type HitlistEntry,
 } from "@features/jobs/lib/blockers";
+import { BlockerChip } from "@features/jobs/components/BlockerChip";
 import { deriveHealth } from "@features/jobs/lib/health";
 
 // FLIP transition for row reorder + enter/exit on health-driven moves.
@@ -233,50 +232,3 @@ function RestRow({
   );
 }
 
-function DemoTag({ inline = false }: { inline?: boolean }) {
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-sm px-1 text-[9px] font-semibold uppercase tracking-[0.06em]",
-        "bg-surface-sunken text-text-tertiary",
-        inline && "mx-1 align-middle"
-      )}
-      aria-label="demo data"
-    >
-      demo
-    </span>
-  );
-}
-
-function BlockerChip({
-  job,
-  subtle = false,
-}: {
-  job: Job;
-  subtle?: boolean;
-}) {
-  const synthetic = isSyntheticBlocker(job);
-  const text = resolveBlockerText(job);
-  const tone = resolveBlockerTone(job);
-
-  // Hide the "Clear" synthetic chip on rest-of-pipeline rows; keep
-  // real blockers visible at all sizes.
-  if (subtle && synthetic && tone === "on_track") return null;
-
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.04em]",
-        tone === "blocked" && "bg-status-blocked-soft text-status-blocked",
-        tone === "at_risk" && "bg-status-at-risk-soft text-status-at-risk",
-        tone === "on_track" && "bg-status-on-track-soft text-status-on-track",
-        tone === "neutral" && "bg-surface-muted text-text-secondary",
-        subtle && "opacity-80"
-      )}
-      title={synthetic ? `${text} · synthetic fallback` : text}
-    >
-      {text}
-      {synthetic && <DemoTag />}
-    </span>
-  );
-}

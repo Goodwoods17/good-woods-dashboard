@@ -22,20 +22,7 @@ import { MarginCell } from "@shared/components/ui/MarginCell";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { cn } from "@shared/lib/utils";
 
-const TOKEN = {
-  accent: "#B86F52",
-  accentDeep: "#8F4F36",
-  accentSoft: "#F2E4DC",
-  border: "#E2DFD9",
-  borderFaint: "#ECE9E4",
-  surfaceMuted: "#F4F2EE",
-  textPrimary: "#1A1916",
-  textTertiary: "#8B8782",
-  onTrack: "#6B8E5C",
-  atRisk: "#C99846",
-  blocked: "#B5544C",
-  paused: "#9A968D",
-};
+import { PALETTE as TOKEN } from "@shared/lib/chartPalette";
 
 const PIPELINE_ORDER: PipelineStatus[] = [
   "new",

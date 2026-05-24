@@ -9,17 +9,22 @@ import {
 } from "@react-pdf/renderer";
 import type { Job } from "@shared/lib/types";
 import { COMPANY, computeInvoiceTotals, TAX_RATE } from "@features/jobs/lib/invoice";
+import { PALETTE } from "@shared/lib/chartPalette";
 
+// Map to the local key names the styles object expects. Keeps the JSX
+// readable while the palette stays in one canonical place. Previously
+// these hex values had silently drifted from globals.css; using PALETTE
+// means future palette shifts touch the invoice for free.
 const COLORS = {
-  bg: "#FAF9F7",
-  surface: "#FFFFFF",
-  border: "#E8E4DD",
-  borderStrong: "#D6D1C7",
-  textPrimary: "#2B2926",
-  textSecondary: "#6B6862",
-  textTertiary: "#9A968D",
-  accent: "#B86F52",
-  accentSoft: "#F1E4DC",
+  bg: PALETTE.background,
+  surface: PALETTE.surface,
+  border: PALETTE.border,
+  borderStrong: PALETTE.borderStrong,
+  textPrimary: PALETTE.textPrimary,
+  textSecondary: PALETTE.textSecondary,
+  textTertiary: PALETTE.textTertiary,
+  accent: PALETTE.accent,
+  accentSoft: PALETTE.accentSoft,
 };
 
 const styles = StyleSheet.create({
