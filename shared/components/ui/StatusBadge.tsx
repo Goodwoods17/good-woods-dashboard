@@ -1,16 +1,14 @@
-import { cn } from "@shared/lib/utils";
 import { PIPELINE_LABELS, type PipelineStatus } from "@shared/lib/types";
+import { Pill, type PillTone } from "@shared/components/ui/Pill";
 
 // Pipeline is a *stage* axis, not a *health* axis. Keep the green/amber/red
-// vocabulary reserved for HealthPill (spec §3.1: status colors are semantic-only).
-// Three buckets, mapped to the warm clay/taupe/neutral ramps the spec defines:
+// vocabulary reserved for HealthPill (spec §3.1: status colors are
+// semantic-only). Three buckets, mapped to the warm clay/taupe/neutral
+// ramps the spec defines:
 //   - boundary stages (new, complete)     → neutral
 //   - human-touch stages (sold, installing) → secondary taupe
 //   - active making (design/prod/finish)   → accent clay
-const TONES: Record<
-  PipelineStatus,
-  { bg: string; text: string; dot: string }
-> = {
+const TONES: Record<PipelineStatus, PillTone> = {
   new: {
     bg: "bg-surface-muted",
     text: "text-text-secondary",
@@ -49,17 +47,12 @@ const TONES: Record<
 };
 
 export function StatusBadge({ status }: { status: PipelineStatus }) {
-  const tone = TONES[status];
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 text-xs font-medium",
-        tone.bg,
-        tone.text
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} />
-      {PIPELINE_LABELS[status]}
-    </span>
+    <Pill
+      tone={TONES[status]}
+      label={PIPELINE_LABELS[status]}
+      shape="rounded"
+      size="sm"
+    />
   );
 }

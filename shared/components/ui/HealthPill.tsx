@@ -1,10 +1,11 @@
-import { cn } from "@shared/lib/utils";
 import { HEALTH_LABELS, type HealthStatus } from "@shared/lib/types";
+import { Pill, type PillTone } from "@shared/components/ui/Pill";
 
-const TONES: Record<
-  HealthStatus,
-  { bg: string; text: string; dot: string }
-> = {
+// Health is the "is this OK?" axis: green/amber/red vocabulary, plus
+// neutral states for complete (moss) and paused (gray). The Lean palette
+// is semantic-only per spec §3.1 — never reuse these tones for non-status
+// purposes.
+const TONES: Record<HealthStatus, PillTone> = {
   on_track: {
     bg: "bg-status-on-track-soft",
     text: "text-status-on-track",
@@ -39,18 +40,12 @@ export function HealthPill({
   status: HealthStatus;
   size?: "sm" | "md";
 }) {
-  const tone = TONES[status];
   return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded-full font-medium",
-        tone.bg,
-        tone.text,
-        size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-sm"
-      )}
-    >
-      <span className={cn("h-1.5 w-1.5 rounded-full", tone.dot)} />
-      {HEALTH_LABELS[status]}
-    </span>
+    <Pill
+      tone={TONES[status]}
+      label={HEALTH_LABELS[status]}
+      shape="pill"
+      size={size}
+    />
   );
 }

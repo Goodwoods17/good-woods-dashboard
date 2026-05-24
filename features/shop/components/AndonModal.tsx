@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AlertOctagon } from "lucide-react";
 import { WORK_STATIONS, type WorkStation } from "@features/shop/lib/shopStore";
-import { Modal, FieldStack, Field } from "./Modal";
+import { Modal } from "@shared/components/ui/Modal";
+import { FieldStack, Field } from "@shared/components/forms/FormField";
 
 export function AndonModal({
   onClose,

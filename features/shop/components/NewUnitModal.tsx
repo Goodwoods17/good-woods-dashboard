@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { WORK_STATIONS, type WorkStation } from "@features/shop/lib/shopStore";
-import { Modal, FieldStack, Field, Input } from "./Modal";
+import { Modal } from "@shared/components/ui/Modal";
+import { FieldStack, Field, Input } from "@shared/components/forms/FormField";
 
 export function NewUnitModal({
   onClose,
