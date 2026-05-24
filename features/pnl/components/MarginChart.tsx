@@ -15,10 +15,10 @@ import { CHART_TOKENS } from "@features/pnl/lib/chartTokens";
 
 export function MarginChart({ series }: { series: MonthBucket[] }) {
   return (
-    <section className="bg-surface border border-border rounded-lg p-5">
+    <section className="bg-surface rounded-xl shadow-resting p-5">
       <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-sm font-semibold text-text-primary">
-          Revenue / cost / margin by install month
+        <h2 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]">
+          Revenue, cost, margin by install month
         </h2>
         <span className="text-xs text-text-tertiary">
           {series.length} month{series.length === 1 ? "" : "s"}
@@ -35,16 +35,30 @@ export function MarginChart({ series }: { series: MonthBucket[] }) {
               data={series}
               margin={{ top: 8, right: 16, bottom: 8, left: 8 }}
             >
+              <defs>
+                <linearGradient id="bar-revenue" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_TOKENS.accent} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={CHART_TOKENS.accent} stopOpacity={0.35} />
+                </linearGradient>
+                <linearGradient id="bar-cost" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_TOKENS.atRisk} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={CHART_TOKENS.atRisk} stopOpacity={0.30} />
+                </linearGradient>
+                <linearGradient id="bar-margin" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={CHART_TOKENS.onTrack} stopOpacity={0.95} />
+                  <stop offset="100%" stopColor={CHART_TOKENS.onTrack} stopOpacity={0.30} />
+                </linearGradient>
+              </defs>
               <XAxis
                 dataKey="label"
                 tick={{ fontSize: 11, fill: CHART_TOKENS.textTertiary }}
-                axisLine={{ stroke: CHART_TOKENS.border }}
+                axisLine={{ stroke: CHART_TOKENS.borderFaint }}
                 tickLine={false}
               />
               <YAxis
                 tickFormatter={(v) => formatCAD(v as number)}
                 tick={{ fontSize: 11, fill: CHART_TOKENS.textTertiary }}
-                axisLine={{ stroke: CHART_TOKENS.border }}
+                axisLine={{ stroke: CHART_TOKENS.borderFaint }}
                 tickLine={false}
                 width={70}
               />
@@ -54,15 +68,16 @@ export function MarginChart({ series }: { series: MonthBucket[] }) {
                 contentStyle={{
                   background: "#FFFFFF",
                   border: `1px solid ${CHART_TOKENS.border}`,
-                  borderRadius: 6,
+                  borderRadius: 8,
                   fontSize: 12,
                   color: CHART_TOKENS.textPrimary,
+                  boxShadow: "0 8px 22px -14px rgba(26,25,22,0.18)",
                 }}
               />
-              <Legend wrapperStyle={{ fontSize: 11 }} />
-              <Bar dataKey="revenue" name="Revenue" fill={CHART_TOKENS.accent} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="cost" name="Cost" fill={CHART_TOKENS.atRisk} radius={[4, 4, 0, 0]} />
-              <Bar dataKey="margin" name="Margin" fill={CHART_TOKENS.onTrack} radius={[4, 4, 0, 0]} />
+              <Legend wrapperStyle={{ fontSize: 11, color: CHART_TOKENS.textTertiary }} />
+              <Bar dataKey="revenue" name="Revenue" fill="url(#bar-revenue)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="cost" name="Cost" fill="url(#bar-cost)" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="margin" name="Margin" fill="url(#bar-margin)" radius={[6, 6, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>

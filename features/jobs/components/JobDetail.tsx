@@ -105,7 +105,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 trigger={<HealthPill status={job.healthStatus} />}
               />
             </div>
-            <h1 className="text-xl font-semibold text-text-primary tracking-tight">
+            <h1 className="font-serif text-[28px] leading-[34px] font-medium text-text-primary tracking-[-0.02em]">
               {job.name}
             </h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary flex-wrap">

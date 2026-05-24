@@ -24,11 +24,13 @@ import { cn } from "@shared/lib/utils";
 
 const TOKEN = {
   accent: "#B86F52",
-  accentSoft: "#F1E4DC",
-  border: "#E8E4DD",
+  accentDeep: "#8F4F36",
+  accentSoft: "#F2E4DC",
+  border: "#E2DFD9",
+  borderFaint: "#ECE9E4",
   surfaceMuted: "#F4F2EE",
-  textPrimary: "#2B2926",
-  textTertiary: "#9A968D",
+  textPrimary: "#1A1916",
+  textTertiary: "#8B8782",
   onTrack: "#6B8E5C",
   atRisk: "#C99846",
   blocked: "#B5544C",
@@ -119,12 +121,12 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
         />
       </section>
 
-      <section className="bg-surface border border-border rounded-lg p-5">
+      <section className="bg-surface rounded-xl shadow-resting p-5">
         <div className="flex items-baseline justify-between mb-4">
-          <h2 className="text-sm font-semibold text-text-primary">
+          <h2 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]">
             Pipeline value by stage
           </h2>
-          <span className="text-xs text-text-tertiary">
+          <span className="text-xs text-text-tertiary tabular-nums">
             {formatCAD(stats.byStage.reduce((s, x) => s + x.value, 0))} total
           </span>
         </div>
@@ -136,16 +138,26 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
           <div className="h-64 -ml-2">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={stats.byStage} margin={{ top: 8, right: 16, bottom: 8, left: 8 }}>
+                <defs>
+                  <linearGradient id="pipeline-active" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={TOKEN.accent} stopOpacity={0.95} />
+                    <stop offset="100%" stopColor={TOKEN.accent} stopOpacity={0.35} />
+                  </linearGradient>
+                  <linearGradient id="pipeline-complete" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={TOKEN.onTrack} stopOpacity={0.95} />
+                    <stop offset="100%" stopColor={TOKEN.onTrack} stopOpacity={0.30} />
+                  </linearGradient>
+                </defs>
                 <XAxis
                   dataKey="label"
                   tick={{ fontSize: 11, fill: TOKEN.textTertiary }}
-                  axisLine={{ stroke: TOKEN.border }}
+                  axisLine={{ stroke: TOKEN.borderFaint }}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(v) => formatCAD(v as number)}
                   tick={{ fontSize: 11, fill: TOKEN.textTertiary }}
-                  axisLine={{ stroke: TOKEN.border }}
+                  axisLine={{ stroke: TOKEN.borderFaint }}
                   tickLine={false}
                   width={70}
                 />
@@ -155,17 +167,20 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
                   contentStyle={{
                     background: "#FFFFFF",
                     border: `1px solid ${TOKEN.border}`,
-                    borderRadius: 6,
+                    borderRadius: 8,
                     fontSize: 12,
                     color: TOKEN.textPrimary,
+                    boxShadow: "0 8px 22px -14px rgba(26,25,22,0.18)",
                   }}
                 />
-                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
                   {stats.byStage.map((entry) => (
                     <Cell
                       key={entry.stage}
                       fill={
-                        entry.stage === "complete" ? TOKEN.onTrack : TOKEN.accent
+                        entry.stage === "complete"
+                          ? "url(#pipeline-complete)"
+                          : "url(#pipeline-active)"
                       }
                     />
                   ))}
@@ -176,10 +191,10 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
         )}
       </section>
 
-      <section className="bg-surface border border-border rounded-lg overflow-hidden">
-        <div className="px-5 py-3.5 border-b border-border bg-surface-muted">
-          <h2 className="text-sm font-semibold text-text-primary">
-            Margin by job (high → low)
+      <section className="bg-surface rounded-xl shadow-resting overflow-hidden">
+        <div className="px-5 py-4 border-b border-border-faint">
+          <h2 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]">
+            Margin by job, high to low
           </h2>
         </div>
         <table className="w-full text-sm">
