@@ -153,4 +153,31 @@
       scroll-behavior: auto !important;
     }
   }
+
+  /* Andon pulse — the ONE sustained animation in the system.
+     Spec §4.6 + DESIGN.md "One Loud Red Rule": reserved for active
+     andon alerts only. Outward-expanding halo on the andon-red soft
+     fill, breathing at 1200ms. */
+  @keyframes andon-pulse {
+    0%, 100% {
+      box-shadow: 0 0 0 0 rgb(209 77 63 / 0.40), var(--shadow-resting);
+    }
+    50% {
+      box-shadow: 0 0 0 10px rgb(209 77 63 / 0), var(--shadow-resting);
+    }
+  }
+  .animate-andon-pulse {
+    animation: andon-pulse 1200ms cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
+
+  /* Companion icon pulse — slower than Tailwind's default animate-pulse
+     (which is too fast for the andon register). 1200ms to match the
+     banner's breathing. */
+  @keyframes andon-icon-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+  .animate-andon-icon-pulse {
+    animation: andon-icon-pulse 1200ms cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
 }

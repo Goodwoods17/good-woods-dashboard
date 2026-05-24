@@ -50,6 +50,19 @@ const PAGES: CommandItem[] = [
   { kind: "page", id: "page-settings", label: "Settings", href: "/settings", icon: Settings },
 ];
 
+// Loose match for a job code like "GW-2026-001" or "gw 26 5" or "26-5".
+// Returns the numeric portion to compare against job.code.
+function looksLikeJobCode(q: string): string | null {
+  // Strip whitespace and uppercase
+  const norm = q.trim().toUpperCase();
+  if (!norm) return null;
+  // Match anything containing "GW-" or 2+ consecutive digits.
+  if (/GW-?\d/.test(norm) || /\d{2,}/.test(norm)) return norm;
+  return null;
+}
+
+const HOTKEY_LIMIT = 5;
+
 export function CommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -76,7 +89,6 @@ export function CommandPalette() {
     if (open) {
       setQuery("");
       setActiveIdx(0);
-      // focus next tick so input is mounted
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   }, [open]);
@@ -90,6 +102,38 @@ export function CommandPalette() {
     }));
     const all: CommandItem[] = [...PAGES, ...jobItems];
     if (!q) return all;
+
+    // If the query smells like a job code, boost code matches to the top.
+    const codeQuery = looksLikeJobCode(q);
+    if (codeQuery) {
+      const codeNorm = codeQuery.replace(/[^A-Z0-9]/g, "");
+      const exact: CommandItem[] = [];
+      const prefix: CommandItem[] = [];
+      const rest: CommandItem[] = [];
+      for (const it of all) {
+        if (it.kind === "job") {
+          const cn = it.job.code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+          if (cn === codeNorm) {
+            exact.push(it);
+            continue;
+          }
+          if (cn.endsWith(codeNorm) || cn.includes(codeNorm)) {
+            prefix.push(it);
+            continue;
+          }
+        }
+        // Fall back to general fuzzy match for anything else
+        const matched =
+          it.kind === "page"
+            ? it.label.toLowerCase().includes(q)
+            : it.job.name.toLowerCase().includes(q) ||
+              it.job.client.toLowerCase().includes(q) ||
+              it.job.code.toLowerCase().includes(q);
+        if (matched) rest.push(it);
+      }
+      return [...exact, ...prefix, ...rest];
+    }
+
     return all.filter((it) => {
       if (it.kind === "page") return it.label.toLowerCase().includes(q);
       const j = it.job;
@@ -101,7 +145,6 @@ export function CommandPalette() {
     });
   }, [query, jobs]);
 
-  // Reset activeIdx when filter changes
   useEffect(() => {
     setActiveIdx(0);
   }, [query]);
@@ -113,6 +156,15 @@ export function CommandPalette() {
   }
 
   function onInputKey(e: KeyboardEvent<HTMLInputElement>) {
+    // Cmd/Ctrl + digit (1–5) jumps to the corresponding result.
+    if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) {
+      const idx = parseInt(e.key, 10) - 1;
+      if (idx < items.length && idx < HOTKEY_LIMIT) {
+        e.preventDefault();
+        executeItem(items[idx]);
+      }
+      return;
+    }
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setActiveIdx((i) => Math.min(items.length - 1, i + 1));
@@ -137,17 +189,17 @@ export function CommandPalette() {
       onClick={() => setOpen(false)}
     >
       <div
-        className="w-full max-w-xl bg-surface border border-border-strong rounded-xl shadow-lg overflow-hidden"
+        className="w-full max-w-xl bg-surface rounded-xl shadow-modal overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-border-faint">
           <Search className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
           <input
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKey}
-            placeholder="Jump to a job, client, or page…"
+            placeholder="Jump to a job, code, or page (try “GW-2026-001”)…"
             className="flex-1 text-sm bg-transparent border-0 placeholder:text-text-tertiary focus:outline-none focus:ring-0 text-text-primary"
             aria-controls="cmdk-list"
             aria-activedescendant={items[activeIdx]?.id}
@@ -166,30 +218,33 @@ export function CommandPalette() {
               No results for &ldquo;{query}&rdquo;.
             </li>
           ) : (
-            items.map((it, i) => (
-              <li
-                key={it.id}
-                id={it.id}
-                role="option"
-                aria-selected={activeIdx === i}
-                onMouseEnter={() => setActiveIdx(i)}
-                onClick={() => executeItem(it)}
-                className={cn(
-                  "flex items-center gap-3 px-4 py-2 cursor-pointer",
-                  activeIdx === i ? "bg-accent-soft" : "hover:bg-surface-muted"
-                )}
-              >
-                {it.kind === "page" ? (
-                  <PageRow item={it} active={activeIdx === i} />
-                ) : (
-                  <JobRow item={it} active={activeIdx === i} />
-                )}
-              </li>
-            ))
+            items.map((it, i) => {
+              const hotkey = i < HOTKEY_LIMIT ? i + 1 : null;
+              return (
+                <li
+                  key={it.id}
+                  id={it.id}
+                  role="option"
+                  aria-selected={activeIdx === i}
+                  onMouseEnter={() => setActiveIdx(i)}
+                  onClick={() => executeItem(it)}
+                  className={cn(
+                    "flex items-center gap-3 px-4 py-2 cursor-pointer",
+                    activeIdx === i ? "bg-accent-soft" : "hover:bg-surface-muted"
+                  )}
+                >
+                  {it.kind === "page" ? (
+                    <PageRow item={it} active={activeIdx === i} hotkey={hotkey} />
+                  ) : (
+                    <JobRow item={it} active={activeIdx === i} hotkey={hotkey} />
+                  )}
+                </li>
+              );
+            })
           )}
         </ul>
-        <div className="px-4 py-2 border-t border-border bg-surface-muted text-[11px] text-text-tertiary flex items-center justify-between">
-          <span>↑ ↓ to navigate · ↵ to open</span>
+        <div className="px-4 py-2 border-t border-border-faint bg-surface-muted text-[11px] text-text-tertiary flex items-center justify-between">
+          <span>↑ ↓ navigate · ↵ open · ⌘1–5 jump</span>
           <span>
             <kbd className="font-mono">⌘K</kbd> toggles this palette
           </span>
@@ -199,12 +254,22 @@ export function CommandPalette() {
   );
 }
 
+function HotkeyBadge({ n }: { n: number }) {
+  return (
+    <kbd className="text-[10px] font-mono text-text-tertiary border border-border-faint bg-surface-muted rounded px-1 py-0.5 shrink-0">
+      ⌘{n}
+    </kbd>
+  );
+}
+
 function PageRow({
   item,
   active,
+  hotkey,
 }: {
   item: Extract<CommandItem, { kind: "page" }>;
   active: boolean;
+  hotkey: number | null;
 }) {
   const Icon = item.icon;
   return (
@@ -224,6 +289,7 @@ function PageRow({
       >
         {item.label}
       </span>
+      {hotkey !== null && !active && <HotkeyBadge n={hotkey} />}
       {active && (
         <CornerDownLeft className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
       )}
@@ -234,9 +300,11 @@ function PageRow({
 function JobRow({
   item,
   active,
+  hotkey,
 }: {
   item: Extract<CommandItem, { kind: "job" }>;
   active: boolean;
+  hotkey: number | null;
 }) {
   const margin = computeMargin(item.job);
   return (
@@ -264,6 +332,7 @@ function JobRow({
       <span className="text-xs tabular-nums text-text-tertiary shrink-0">
         GM {margin.marginPct.toFixed(0)}%
       </span>
+      {hotkey !== null && !active && <HotkeyBadge n={hotkey} />}
       {active && (
         <CornerDownLeft className="h-3.5 w-3.5 text-accent" strokeWidth={1.75} />
       )}

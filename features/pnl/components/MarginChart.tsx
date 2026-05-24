@@ -75,9 +75,36 @@ export function MarginChart({ series }: { series: MonthBucket[] }) {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: 11, color: CHART_TOKENS.textTertiary }} />
-              <Bar dataKey="revenue" name="Revenue" fill="url(#bar-revenue)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="cost" name="Cost" fill="url(#bar-cost)" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="margin" name="Margin" fill="url(#bar-margin)" radius={[6, 6, 0, 0]} />
+              <Bar
+                dataKey="revenue"
+                name="Revenue"
+                fill="url(#bar-revenue)"
+                radius={[6, 6, 0, 0]}
+                isAnimationActive
+                animationBegin={0}
+                animationDuration={400}
+                animationEasing="ease-out"
+              />
+              <Bar
+                dataKey="cost"
+                name="Cost"
+                fill="url(#bar-cost)"
+                radius={[6, 6, 0, 0]}
+                isAnimationActive
+                animationBegin={80}
+                animationDuration={400}
+                animationEasing="ease-out"
+              />
+              <Bar
+                dataKey="margin"
+                name="Margin"
+                fill="url(#bar-margin)"
+                radius={[6, 6, 0, 0]}
+                isAnimationActive
+                animationBegin={160}
+                animationDuration={400}
+                animationEasing="ease-out"
+              />
             </BarChart>
           </ResponsiveContainer>
         </div>

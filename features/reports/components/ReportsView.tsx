@@ -173,7 +173,14 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
                     boxShadow: "0 8px 22px -14px rgba(26,25,22,0.18)",
                   }}
                 />
-                <Bar dataKey="value" radius={[6, 6, 0, 0]}>
+                <Bar
+                  dataKey="value"
+                  radius={[6, 6, 0, 0]}
+                  isAnimationActive
+                  animationBegin={0}
+                  animationDuration={400}
+                  animationEasing="ease-out"
+                >
                   {stats.byStage.map((entry) => (
                     <Cell
                       key={entry.stage}

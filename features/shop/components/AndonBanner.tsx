@@ -13,9 +13,13 @@ export function AndonBanner({
   if (events.length === 0) return null;
 
   return (
-    <div className="mb-4 bg-status-andon-soft border border-status-andon rounded-lg p-3 flex items-start gap-3">
+    <div
+      className="mb-4 bg-status-andon-soft rounded-xl p-4 flex items-start gap-3 animate-andon-pulse"
+      role="alert"
+      aria-live="assertive"
+    >
       <AlertOctagon
-        className="h-5 w-5 text-status-andon shrink-0 mt-0.5 animate-pulse"
+        className="h-5 w-5 text-status-andon shrink-0 mt-0.5 animate-andon-icon-pulse"
         strokeWidth={2}
       />
       <div className="flex-1">
