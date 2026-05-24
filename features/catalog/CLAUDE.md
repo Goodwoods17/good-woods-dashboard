@@ -10,9 +10,10 @@ page can read/write. Seeds with 8 materials (Independent Lumber, Windsor
 Plywood, Frameware Hardware, Cabinetdoors.com, Stone Tile West) and 4
 finishes (2K poly, conversion varnish, hardwax oil).
 
-Persistence is dual-mode: when Supabase env is configured, writes go to
-`gw_catalog` table; otherwise it falls back to localStorage under key
-`gw_catalog_v1` so fork-and-run still works without setup.
+Persistence is **localStorage only** today (`gw_catalog_v1` key, schema
+v2 with migration from v1). Supabase backing is on the deferred list —
+when it lands, do it via `createDualStore` in `shared/lib/` so the
+pattern matches jobsStore (architecture review 2026-05-24 candidate #7).
 
 ## Where things live
 
