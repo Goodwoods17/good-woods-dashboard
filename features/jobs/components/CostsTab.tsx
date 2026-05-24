@@ -191,8 +191,8 @@ export function CostsTab({
           onClick={exportPdf}
           disabled={exporting}
           className={cn(
-            "w-full inline-flex items-center justify-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors duration-fast ease-standard",
-            "bg-accent text-white hover:bg-accent-hover active:bg-accent-active",
+            "w-full inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-fast ease-standard",
+            "bg-ink-pill text-white hover:bg-accent-active",
             "disabled:bg-text-disabled disabled:cursor-wait"
           )}
         >

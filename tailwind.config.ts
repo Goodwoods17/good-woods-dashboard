@@ -12,6 +12,8 @@ const config: Config = {
     extend: {
       colors: {
         background: "var(--background)",
+        "canvas-top": "var(--canvas-top)",
+        "canvas-foot-tint": "var(--canvas-foot-tint)",
         surface: {
           DEFAULT: "var(--surface)",
           muted: "var(--surface-muted)",
@@ -19,6 +21,7 @@ const config: Config = {
         },
         border: {
           DEFAULT: "var(--border)",
+          faint: "var(--border-faint)",
           strong: "var(--border-strong)",
         },
         text: {
@@ -38,6 +41,7 @@ const config: Config = {
           hover: "var(--secondary-hover)",
           soft: "var(--secondary-soft)",
         },
+        "ink-pill": "var(--ink-pill)",
         status: {
           "on-track": "var(--status-on-track)",
           "at-risk": "var(--status-at-risk)",
@@ -53,6 +57,7 @@ const config: Config = {
       },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
+        serif: ["var(--font-cormorant)", "Tiempos Headline", "Georgia", "serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       fontSize: {
@@ -74,9 +79,14 @@ const config: Config = {
         "2xl": "16px",
       },
       boxShadow: {
-        sm: "var(--shadow-sm)",
-        md: "var(--shadow-md)",
-        lg: "var(--shadow-lg)",
+        resting: "var(--shadow-resting)",
+        hover: "var(--shadow-hover)",
+        floating: "var(--shadow-floating)",
+        modal: "var(--shadow-modal)",
+        // Legacy aliases so existing code keeps building while we migrate.
+        sm: "var(--shadow-resting)",
+        md: "var(--shadow-floating)",
+        lg: "var(--shadow-modal)",
       },
       transitionTimingFunction: {
         standard: "var(--ease-standard)",

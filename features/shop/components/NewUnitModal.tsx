@@ -62,7 +62,7 @@ export function NewUnitModal({
               });
               onClose();
             }}
-            className="px-3 py-1.5 text-sm rounded-md bg-accent text-white hover:bg-accent-hover"
+            className="px-4 py-1.5 text-sm rounded-full bg-ink-pill text-white hover:bg-accent-active transition-colors duration-fast"
           >
             Add unit
           </button>

@@ -29,6 +29,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { MarginCell } from "@shared/components/ui/MarginCell";
+import { deriveHealth } from "@features/jobs/lib/health";
 import { cn } from "@shared/lib/utils";
 
 const COLUMNS: PipelineStatus[] = [
@@ -179,6 +180,7 @@ function SortableCard({ job }: { job: Job }) {
 
 function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
   const margin = computeMargin(job);
+  const health = deriveHealth(job);
   return (
     <Link
       href={`/jobs/${job.id}`}
@@ -197,7 +199,7 @@ function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
         <div className="text-xs tabular-nums text-text-tertiary uppercase tracking-wider">
           {job.code}
         </div>
-        <HealthPill status={job.healthStatus} />
+        <HealthPill status={health} />
       </div>
       <div className="text-sm font-medium text-text-primary leading-snug mb-1.5 line-clamp-2">
         {job.name}

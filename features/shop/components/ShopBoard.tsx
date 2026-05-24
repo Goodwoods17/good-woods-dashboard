@@ -73,7 +73,7 @@ export function ShopBoard() {
             </button>
             <button
               onClick={() => setShowAdd(true)}
-              className="inline-flex items-center gap-1.5 rounded-md bg-accent text-white px-3 py-1.5 text-sm font-medium hover:bg-accent-hover transition-colors duration-fast"
+              className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
               New unit

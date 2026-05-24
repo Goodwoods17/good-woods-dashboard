@@ -1,54 +1,50 @@
 "use client";
 
-// PROTOTYPE — Variant A — Schedule-first timeline.
-// Time as the lead axis. Each job is a horizontal lane; the bar runs from
-// a derived "start" (based on current pipeline stage) to the install date.
-// Today is a vertical line. Window = today − 1w through today + 12w.
+// Schedule + blocker overlay — timeline lanes view.
+// Time as the lead axis, with each lane carrying the next-step text + a
+// blocker chip so the "what's holding this up?" answer lands in the same
+// glance as "when's it due?"
+//
+// Blocker text is currently synthetic (see lib/blockers.ts). Demo chips
+// flag it inline.
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import {
   type Job,
-  type PipelineStatus,
   PIPELINE_LABELS,
   computeMargin,
 } from "@shared/lib/types";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { cn } from "@shared/lib/utils";
+import {
+  getBlocker,
+  getNextStep,
+  BLOCKER_META,
+  BLOCKER_IS_SYNTHETIC,
+} from "@features/jobs/lib/blockers";
+import { deriveHealth } from "@features/jobs/lib/health";
+import { STAGE_LEAD_DAYS } from "@features/jobs/lib/health";
 
 const WEEKS_AHEAD = 12;
 const WEEKS_BEHIND = 1;
-
-// Rough lead-time per stage, in days, so the bar tells the eye
-// "this job still has lots to go" vs "this is imminent."
-const STAGE_LEAD_DAYS: Record<PipelineStatus, number> = {
-  new: 60,
-  sold: 45,
-  in_design: 30,
-  in_production: 21,
-  in_finishing: 10,
-  installing: 3,
-  complete: 0,
-};
 
 function startOfDay(d: Date) {
   const x = new Date(d);
   x.setHours(0, 0, 0, 0);
   return x;
 }
-
 function addDays(d: Date, days: number) {
   const x = new Date(d);
   x.setDate(x.getDate() + days);
   return x;
 }
-
 function daysBetween(a: Date, b: Date) {
   return Math.round((b.getTime() - a.getTime()) / (1000 * 60 * 60 * 24));
 }
 
-export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
+export function Schedule({ jobs }: { jobs: Job[] }) {
   const today = startOfDay(new Date());
   const windowStart = addDays(today, -WEEKS_BEHIND * 7);
   const windowEnd = addDays(today, WEEKS_AHEAD * 7);
@@ -56,7 +52,6 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
 
   const [hovered, setHovered] = useState<string | null>(null);
 
-  // Sort by install date soonest-first; keep completes at the bottom.
   const ordered = useMemo(() => {
     return [...jobs].sort((a, b) => {
       if (a.pipelineStatus === "complete" && b.pipelineStatus !== "complete") return 1;
@@ -65,7 +60,6 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
     });
   }, [jobs]);
 
-  // Week tick offsets (in %) across the window.
   const weekTicks = useMemo(() => {
     const ticks: { offsetPct: number; date: Date; label: string }[] = [];
     for (let w = 0; w <= WEEKS_AHEAD + WEEKS_BEHIND; w++) {
@@ -81,11 +75,10 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
 
   return (
     <div className="space-y-3">
-      {/* Legend / scale strip */}
-      <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-[220px_1fr] border-b border-border bg-surface-muted">
+      <div className="bg-surface rounded-xl shadow-resting overflow-hidden">
+        <div className="grid grid-cols-[280px_1fr] border-b border-border-faint bg-surface-muted/60">
           <div className="px-4 py-2 text-xs font-medium uppercase tracking-wider text-text-tertiary border-r border-border">
-            Job · Client
+            Job · Next step
           </div>
           <div className="relative h-8">
             {weekTicks.map((t, i) => (
@@ -99,7 +92,6 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
                 </span>
               </div>
             ))}
-            {/* Today line in header */}
             <div
               className="absolute top-0 bottom-0 w-px bg-accent"
               style={{ left: `${todayPct}%` }}
@@ -107,7 +99,6 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
           </div>
         </div>
 
-        {/* Lanes */}
         <div className="relative">
           {ordered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-text-secondary">
@@ -125,18 +116,13 @@ export function VariantA_Schedule({ jobs }: { jobs: Job[] }) {
               />
             ))
           )}
-
-          {/* Today vertical line spans full lane area */}
-          <div
-            className="absolute top-0 bottom-0 w-px bg-accent/40 pointer-events-none"
-            style={{ left: `calc(220px + ${todayPct}% * (100% - 220px) / 100%)` }}
-          />
         </div>
       </div>
 
       <p className="text-xs text-text-tertiary px-1">
-        Each bar runs from a derived start date (based on current stage) to the install date.
-        Marker = install date. Today is the orange line. Drag/click coming in v2.
+        Each lane shows the job&rsquo;s next step on the left and the install bar on
+        the right. The blocker chip beside the next step says what&rsquo;s holding it
+        up. Orange line = today.
       </p>
     </div>
   );
@@ -162,7 +148,6 @@ function Lane({
   const startOffset = daysBetween(windowStart, derivedStart);
   const endOffset = daysBetween(windowStart, install);
 
-  // Clip to window.
   const clippedStart = Math.max(0, startOffset);
   const clippedEnd = Math.min(totalDays, endOffset);
   const visible = clippedEnd > 0 && clippedStart < totalDays;
@@ -173,16 +158,19 @@ function Lane({
   const isPast = endOffset < 0;
   const isFuture = startOffset > totalDays;
 
+  const health = deriveHealth(job);
   const barColor =
     job.pipelineStatus === "complete"
       ? "bg-status-paused/40 border-status-paused"
-      : job.healthStatus === "blocked"
+      : health === "blocked"
       ? "bg-status-blocked/30 border-status-blocked"
-      : job.healthStatus === "at_risk"
+      : health === "at_risk"
       ? "bg-status-at-risk/30 border-status-at-risk"
       : "bg-status-on-track/30 border-status-on-track";
 
   const margin = computeMargin(job);
+  const blocker = getBlocker(job);
+  const nextStep = getNextStep(job);
 
   return (
     <Link
@@ -190,7 +178,7 @@ function Lane({
       onMouseEnter={() => onHover(true)}
       onMouseLeave={() => onHover(false)}
       className={cn(
-        "grid grid-cols-[220px_1fr] border-b border-border last:border-0 transition-colors duration-fast group",
+        "grid grid-cols-[280px_1fr] border-b border-border last:border-0 transition-colors duration-fast group",
         hovered ? "bg-surface-muted/40" : "hover:bg-surface-muted/20"
       )}
     >
@@ -198,9 +186,14 @@ function Lane({
         <div className="text-sm font-medium text-text-primary truncate group-hover:text-accent transition-colors duration-fast">
           {job.name}
         </div>
-        <div className="text-xs text-text-tertiary truncate">{job.client}</div>
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
+          <BlockerChip kind={blocker} />
+          <span className="text-xs text-text-secondary truncate">
+            {nextStep}
+          </span>
+        </div>
       </div>
-      <div className="relative h-12">
+      <div className="relative h-14">
         {visible && !isPast && !isFuture && (
           <>
             <div
@@ -210,7 +203,6 @@ function Lane({
               )}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             />
-            {/* Install marker dot at end */}
             <div
               className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 h-3 w-3 rounded-full border-2 border-text-primary bg-surface"
               style={{ left: `${(endOffset / totalDays) * 100}%` }}
@@ -233,16 +225,45 @@ function Lane({
         )}
         {hovered && (
           <div className="absolute top-1 right-2 flex items-center gap-2 pointer-events-none">
-            <HealthPill status={job.healthStatus} />
+            <HealthPill status={health} />
             <span className="text-[11px] tabular-nums text-text-secondary">
               {formatCAD(job.revenue)} · {margin.marginPct.toFixed(0)}%
             </span>
-            <span className="text-[10px] text-text-tertiary uppercase tracking-wider">
+            <span className="text-[10px] text-text-tertiary uppercase tracking-[0.04em]">
               {PIPELINE_LABELS[job.pipelineStatus]}
             </span>
           </div>
         )}
       </div>
     </Link>
+  );
+}
+
+function BlockerChip({ kind }: { kind: keyof typeof BLOCKER_META }) {
+  const meta = BLOCKER_META[kind];
+  if (kind === "none") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] bg-status-on-track-soft text-status-on-track">
+        Clear
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-[0.04em] shrink-0",
+        meta.tone === "blocked" && "bg-status-blocked-soft text-status-blocked",
+        meta.tone === "at_risk" && "bg-status-at-risk-soft text-status-at-risk",
+        meta.tone === "neutral" && "bg-surface-muted text-text-secondary"
+      )}
+      title={`${meta.label}${BLOCKER_IS_SYNTHETIC ? " · synthetic demo data" : ""}`}
+    >
+      {meta.short}
+      {BLOCKER_IS_SYNTHETIC && (
+        <span className="rounded-sm bg-surface-sunken/70 px-0.5 text-[8px] text-text-tertiary">
+          demo
+        </span>
+      )}
+    </span>
   );
 }

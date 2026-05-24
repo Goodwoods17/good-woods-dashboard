@@ -1,9 +1,16 @@
 "use client";
 
-import { LayoutList, LayoutGrid } from "lucide-react";
+import { Flame, CalendarRange, LayoutList, LayoutGrid, type LucideIcon } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 
-export type JobsView = "list" | "kanban";
+export type JobsView = "hitlist" | "schedule" | "list" | "kanban";
+
+const VIEWS: { key: JobsView; label: string; icon: LucideIcon }[] = [
+  { key: "hitlist", label: "Hitlist", icon: Flame },
+  { key: "schedule", label: "Schedule", icon: CalendarRange },
+  { key: "list", label: "List", icon: LayoutList },
+  { key: "kanban", label: "Kanban", icon: LayoutGrid },
+];
 
 export function ViewToggle({
   view,
@@ -13,47 +20,23 @@ export function ViewToggle({
   onChange: (v: JobsView) => void;
 }) {
   return (
-    <div className="inline-flex items-center bg-surface border border-border rounded-md p-0.5">
-      <Btn
-        active={view === "list"}
-        onClick={() => onChange("list")}
-        icon={<LayoutList className="h-3.5 w-3.5" strokeWidth={1.75} />}
-        label="List"
-      />
-      <Btn
-        active={view === "kanban"}
-        onClick={() => onChange("kanban")}
-        icon={<LayoutGrid className="h-3.5 w-3.5" strokeWidth={1.75} />}
-        label="Kanban"
-      />
+    <div className="inline-flex items-center gap-0.5 bg-surface/70 backdrop-blur-md rounded-full p-1 shadow-floating">
+      {VIEWS.map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          onClick={() => onChange(key)}
+          className={cn(
+            "inline-flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-full transition-colors duration-fast",
+            view === key
+              ? "bg-ink-pill text-white"
+              : "text-text-secondary hover:text-text-primary"
+          )}
+          aria-pressed={view === key}
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+          {label}
+        </button>
+      ))}
     </div>
-  );
-}
-
-function Btn({
-  active,
-  onClick,
-  icon,
-  label,
-}: {
-  active: boolean;
-  onClick: () => void;
-  icon: React.ReactNode;
-  label: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded transition-colors duration-fast",
-        active
-          ? "bg-accent-soft text-accent"
-          : "text-text-secondary hover:text-text-primary"
-      )}
-      aria-pressed={active}
-    >
-      {icon}
-      {label}
-    </button>
   );
 }

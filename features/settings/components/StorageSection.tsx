@@ -48,7 +48,7 @@ export function StorageSection() {
               setSeeding(false);
             }}
             disabled={seeding}
-            className="inline-flex items-center gap-2 rounded-md bg-accent text-white px-3 py-1.5 text-xs font-medium hover:bg-accent-hover transition-colors duration-fast disabled:bg-text-disabled disabled:cursor-wait"
+            className="inline-flex items-center gap-2 rounded-full bg-ink-pill text-white px-4 py-1.5 text-xs font-medium hover:bg-accent-active transition-colors duration-fast disabled:bg-text-disabled disabled:cursor-wait"
           >
             <Sprout className="h-3.5 w-3.5" strokeWidth={1.75} />
             {seeding ? "Seeding…" : "Seed 6 demo jobs"}

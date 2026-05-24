@@ -4,44 +4,62 @@
 
 @layer base {
   :root {
-    --background: #FAF9F7;
+    /* Canvas + surfaces — Lit Workshop, lighter (DESIGN.md §2) */
+    --background: #FAFAF9;
+    --canvas-top: #FFFFFF;
+    --canvas-foot-tint: #F2EDE9;
     --surface: #FFFFFF;
     --surface-muted: #F4F2EE;
-    --surface-sunken: #EFEDE8;
+    --surface-sunken: #ECE9E4;
 
-    --border: #E8E4DD;
-    --border-strong: #D6D1C7;
+    /* Borders — used sparingly; cards rely on shadow, not borders */
+    --border-faint: #ECE9E4;
+    --border: #E2DFD9;
+    --border-strong: #CDC9C1;
 
-    --text-primary: #2B2926;
-    --text-secondary: #6B6862;
-    --text-tertiary: #9A968D;
+    /* Text — warm graphite, never pure black */
+    --text-primary: #1A1916;
+    --text-secondary: #4F4D49;
+    --text-tertiary: #8B8782;
     --text-disabled: #C4BFB6;
 
+    /* Accent — muted clay/terracotta */
     --accent: #B86F52;
     --accent-hover: #A45F44;
     --accent-active: #8F4F36;
-    --accent-soft: #F1E4DC;
+    --accent-soft: #F2E4DC;
 
+    /* Secondary — warm taupe */
     --secondary: #8B7355;
     --secondary-hover: #75614A;
     --secondary-soft: #EDE7DD;
 
+    /* Ink pill — primary CTA background (semantically distinct from text-primary) */
+    --ink-pill: #1A1916;
+
+    /* Status — Lean visual management (held from spec §3.1) */
     --status-on-track: #6B8E5C;
     --status-at-risk: #C99846;
     --status-blocked: #B5544C;
     --status-complete: #7A8B6F;
     --status-paused: #9A968D;
     --status-andon: #D14D3F;
-
     --status-on-track-soft: #E8EFE3;
     --status-at-risk-soft: #F7EBD5;
     --status-blocked-soft: #F2DDDA;
     --status-andon-soft: #FADBD7;
 
-    --shadow-sm: 0 1px 2px 0 rgb(43 41 38 / 0.04);
-    --shadow-md: 0 4px 12px -2px rgb(43 41 38 / 0.06), 0 2px 4px -2px rgb(43 41 38 / 0.04);
-    --shadow-lg: 0 12px 32px -8px rgb(43 41 38 / 0.10), 0 4px 8px -4px rgb(43 41 38 / 0.06);
+    /* Shadow vocabulary — soft elevation, no borders (DESIGN.md §4) */
+    --shadow-resting: 0 8px 22px -14px rgb(26 25 22 / 0.10);
+    --shadow-hover: 0 12px 30px -18px rgb(26 25 22 / 0.18);
+    --shadow-floating: 0 1px 2px rgb(26 25 22 / 0.04), 0 6px 18px -10px rgb(26 25 22 / 0.10);
+    --shadow-modal: 0 12px 32px -8px rgb(26 25 22 / 0.10), 0 4px 8px -4px rgb(26 25 22 / 0.06);
+    /* Legacy aliases for code that still references the old names */
+    --shadow-sm: var(--shadow-resting);
+    --shadow-md: var(--shadow-floating);
+    --shadow-lg: var(--shadow-modal);
 
+    /* Motion */
     --ease-standard: cubic-bezier(0.2, 0, 0, 1);
     --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
     --duration-fast: 120ms;
@@ -53,10 +71,13 @@
 
   [data-theme="dark"] {
     --background: #1C1B19;
+    --canvas-top: #1F1E1B;
+    --canvas-foot-tint: #2A211B;
     --surface: #25241F;
     --surface-muted: #2D2C27;
     --surface-sunken: #1F1E1B;
 
+    --border-faint: #2D2C27;
     --border: #3A3833;
     --border-strong: #4A4842;
 
@@ -73,13 +94,14 @@
     --secondary: #A8927A;
     --secondary-soft: #2F2820;
 
+    --ink-pill: #ECEAE4;
+
     --status-on-track: #87A977;
     --status-at-risk: #DBAA5C;
     --status-blocked: #C9685F;
     --status-complete: #95A689;
     --status-paused: #807C73;
     --status-andon: #E36050;
-
     --status-on-track-soft: #2A352A;
     --status-at-risk-soft: #3A2F1F;
     --status-blocked-soft: #3A2624;
@@ -92,10 +114,20 @@
   }
 
   body {
-    background-color: var(--background);
     color: var(--text-primary);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    /* Foot-glow canvas: pure white at top, near-white through 60%,
+       whisper of warm clay at the very foot. DESIGN.md "Foot-Glow Rule". */
+    background:
+      linear-gradient(
+        180deg,
+        var(--canvas-top) 0%,
+        var(--background) 60%,
+        var(--canvas-foot-tint) 100%
+      );
+    background-attachment: fixed;
+    min-height: 100vh;
   }
 
   /* Tabular figures on numeric containers */

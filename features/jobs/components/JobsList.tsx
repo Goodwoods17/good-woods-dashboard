@@ -12,8 +12,11 @@ import {
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
+import { StatusDot } from "@shared/components/ui/StatusDot";
 import { MarginCell } from "@shared/components/ui/MarginCell";
+import { HEALTH_LABELS } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";
+import { deriveHealth } from "@features/jobs/lib/health";
 
 const STATUS_FILTERS: ("all" | PipelineStatus)[] = [
   "all",
@@ -87,6 +90,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-surface-muted">
+                <th className="w-3 pl-4 pr-0 py-2.5" aria-label="Health" />
                 <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-text-tertiary">
                   Job
                 </th>
@@ -114,11 +118,19 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
             <tbody>
               {filtered.map((job) => {
                 const margin = computeMargin(job);
+                const health = deriveHealth(job);
                 return (
                   <tr
                     key={job.id}
                     className="border-b border-border last:border-0 hover:bg-surface-muted/40 transition-colors duration-fast"
                   >
+                    <td
+                      className="pl-4 pr-0 py-3 align-middle"
+                      title={HEALTH_LABELS[health]}
+                    >
+                      <StatusDot status={health} />
+                      <span className="sr-only">{HEALTH_LABELS[health]}</span>
+                    </td>
                     <td className="px-4 py-3">
                       <Link
                         href={`/jobs/${job.id}`}
@@ -139,7 +151,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
                       <StatusBadge status={job.pipelineStatus} />
                     </td>
                     <td className="px-4 py-3">
-                      <HealthPill status={job.healthStatus} />
+                      <HealthPill status={health} />
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums text-text-primary">
                       {formatCAD(job.revenue)}
