@@ -11,6 +11,7 @@
 import { useMemo } from "react";
 import Link from "next/link";
 import { ArrowRight, AlertTriangle, Flame } from "lucide-react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { type Job } from "@shared/lib/types";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
@@ -26,12 +27,21 @@ import {
 } from "@features/jobs/lib/blockers";
 import { deriveHealth } from "@features/jobs/lib/health";
 
+// FLIP transition for row reorder + enter/exit on health-driven moves.
+// Duration + curve match DESIGN.md §3.6 motion vocabulary (ease-emphasized,
+// duration-base scaled up slightly for the snap to be noticeable but quiet).
+const REORDER_TRANSITION = {
+  layout: { duration: 0.24, ease: [0.3, 0, 0, 1] as const },
+  opacity: { duration: 0.18, ease: [0.3, 0, 0, 1] as const },
+} as const;
+
 const TOP_N = 8;
 
 export function Hitlist({ jobs }: { jobs: Job[] }) {
   const entries = useMemo(() => buildHitlist(jobs), [jobs]);
   const top = entries.slice(0, TOP_N);
   const rest = entries.slice(TOP_N);
+  const reduceMotion = useReducedMotion();
 
   const exposure = top.reduce((s, e) => s + e.job.revenue, 0);
   const blockedCount = top.filter((e) => deriveHealth(e.job) === "blocked").length;
@@ -65,9 +75,16 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
           </div>
         ) : (
           <ul>
-            {top.map((entry, i) => (
-              <HitlistRow key={entry.job.id} entry={entry} index={i + 1} />
-            ))}
+            <AnimatePresence initial={false}>
+              {top.map((entry, i) => (
+                <HitlistRow
+                  key={entry.job.id}
+                  entry={entry}
+                  index={i + 1}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+            </AnimatePresence>
           </ul>
         )}
       </section>
@@ -80,9 +97,15 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
             </h3>
           </header>
           <ul>
-            {rest.map((entry) => (
-              <RestRow key={entry.job.id} entry={entry} />
-            ))}
+            <AnimatePresence initial={false}>
+              {rest.map((entry) => (
+                <RestRow
+                  key={entry.job.id}
+                  entry={entry}
+                  reduceMotion={reduceMotion}
+                />
+              ))}
+            </AnimatePresence>
           </ul>
         </section>
       )}
@@ -98,7 +121,15 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
   );
 }
 
-function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
+function HitlistRow({
+  entry,
+  index,
+  reduceMotion,
+}: {
+  entry: HitlistEntry;
+  index: number;
+  reduceMotion: boolean | null;
+}) {
   const { job, nextStep, daysToInstall } = entry;
   const health = deriveHealth(job);
   const installLabel =
@@ -110,7 +141,13 @@ function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
       ? `${daysToInstall}d to install`
       : formatDate(job.installDate);
   return (
-    <li className="border-b border-border last:border-0">
+    <motion.li
+      layout={reduceMotion ? false : "position"}
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={reduceMotion ? { opacity: 0 } : { opacity: 0 }}
+      transition={REORDER_TRANSITION}
+      className="border-b border-border last:border-0">
       <Link
         href={`/jobs/${job.id}`}
         className="group grid grid-cols-[28px_1fr_auto] items-center gap-4 px-4 py-3 hover:bg-surface-muted/40 transition-colors duration-fast"
@@ -149,14 +186,27 @@ function HitlistRow({ entry, index }: { entry: HitlistEntry; index: number }) {
           />
         </div>
       </Link>
-    </li>
+    </motion.li>
   );
 }
 
-function RestRow({ entry }: { entry: HitlistEntry }) {
+function RestRow({
+  entry,
+  reduceMotion,
+}: {
+  entry: HitlistEntry;
+  reduceMotion: boolean | null;
+}) {
   const { job, nextStep } = entry;
   return (
-    <li className="border-b border-border last:border-0">
+    <motion.li
+      layout={reduceMotion ? false : "position"}
+      initial={reduceMotion ? false : { opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={REORDER_TRANSITION}
+      className="border-b border-border last:border-0"
+    >
       <Link
         href={`/jobs/${job.id}`}
         className="grid grid-cols-[1fr_auto_auto] items-center gap-4 px-4 py-2.5 hover:bg-surface-muted/40 transition-colors duration-fast group"
@@ -179,7 +229,7 @@ function RestRow({ entry }: { entry: HitlistEntry }) {
           {formatDate(job.installDate)}
         </div>
       </Link>
-    </li>
+    </motion.li>
   );
 }
 
