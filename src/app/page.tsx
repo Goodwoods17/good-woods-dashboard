@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Plus } from "lucide-react";
 import { JobsList } from "@features/jobs/components/JobsList";
 import { KanbanBoard } from "@features/jobs/components/KanbanBoard";
@@ -11,13 +12,35 @@ import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { computeMargin } from "@shared/lib/types";
 import { formatCAD, formatPct } from "@shared/lib/format";
+// PROTOTYPE — swap these out (and the ?variant= block below) when a winner is picked.
+import { VariantA_Schedule } from "@features/jobs/prototype/VariantA_Schedule";
+import { VariantB_Cashflow } from "@features/jobs/prototype/VariantB_Cashflow";
+import { VariantC_Funnel } from "@features/jobs/prototype/VariantC_Funnel";
+import { PrototypeSwitcher } from "@features/jobs/prototype/PrototypeSwitcher";
 
 const VIEW_KEY = "gw_jobs_view_v1";
 
+// Wrapping in Suspense is required for useSearchParams() to prerender at
+// build time on Next.js 14 App Router. Without it the `/` route fails to
+// export and ships as a runtime-error page.
 export default function Home() {
+  return (
+    <Suspense fallback={<HomeShell loading />}>
+      <HomeInner />
+    </Suspense>
+  );
+}
+
+function HomeInner() {
   const { jobs, loading } = useJobs();
   const [view, setView] = useState<JobsView>("list");
   const [hydrated, setHydrated] = useState(false);
+  const searchParams = useSearchParams();
+  const variantParam = searchParams.get("variant");
+  const variant: "A" | "B" | "C" | null =
+    variantParam === "A" || variantParam === "B" || variantParam === "C"
+      ? variantParam
+      : null;
 
   useEffect(() => {
     const saved = window.localStorage.getItem(VIEW_KEY);
@@ -45,7 +68,7 @@ export default function Home() {
   return (
     <>
       <PageHeader
-        eyebrow="Pipeline"
+        eyebrow={variant ? `Prototype · Variant ${variant}` : "Pipeline"}
         title="Jobs"
         subtitle={
           loading
@@ -54,7 +77,7 @@ export default function Home() {
         }
         actions={
           <>
-            <ViewToggle view={view} onChange={setView} />
+            {!variant && <ViewToggle view={view} onChange={setView} />}
             <Link
               href="/jobs/new"
               className="inline-flex items-center gap-1.5 rounded-md bg-accent text-white px-3 py-1.5 text-sm font-medium hover:bg-accent-hover transition-colors duration-fast"
@@ -71,11 +94,33 @@ export default function Home() {
       <div className="px-8 pb-6 pt-1">
         {loading ? (
           <ListSkeleton />
+        ) : variant === "A" ? (
+          <VariantA_Schedule jobs={jobs} />
+        ) : variant === "B" ? (
+          <VariantB_Cashflow jobs={jobs} />
+        ) : variant === "C" ? (
+          <VariantC_Funnel jobs={jobs} />
         ) : view === "list" ? (
           <JobsList jobs={jobs} />
         ) : (
           <KanbanBoard jobs={jobs} />
         )}
+      </div>
+      <PrototypeSwitcher />
+    </>
+  );
+}
+
+function HomeShell({ loading }: { loading?: boolean }) {
+  return (
+    <>
+      <PageHeader
+        eyebrow="Pipeline"
+        title="Jobs"
+        subtitle={loading ? "Loading…" : ""}
+      />
+      <div className="px-8 py-6">
+        <ListSkeleton />
       </div>
     </>
   );

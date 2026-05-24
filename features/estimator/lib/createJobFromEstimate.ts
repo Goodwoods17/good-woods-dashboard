@@ -36,8 +36,10 @@ export function createJobFromEstimate(input: Input): Job {
 
   // The job-level CostLine schema is (materials | labour | overhead). We
   // also expose pre-work as a separate labour-flavoured bucket so margin
-  // reports can see it isolated. The shipped Job type accepts free-form
-  // category strings, so "prework" lands cleanly.
+  // reports can see it isolated. Contingency is recorded at FULL value
+  // since the estimator's effectiveMarginPct already treats it as
+  // expected labour (i.e. not as bonus profit) — bookkeeping reconciles
+  // with the in-app margin.
   const costs: CostLine[] = [
     {
       id: "c-mat",
@@ -67,12 +69,15 @@ export function createJobFromEstimate(input: Input): Job {
     });
   }
   if (totals.contingency > 0) {
-    // Contingency on the cost side too — it represents budgeted
-    // unknowns that will likely materialize as labour.
+    // Contingency is expected labour for unknowns. Recording it as a
+    // labour cost line means revenue - sum(costs) = the same profit
+    // figure as totals.effectiveMarginPct (now treats contingency as
+    // expected labour) so the estimator preview and the saved Job
+    // reconcile.
     costs.push({
       id: "c-contingency",
       category: "labour",
-      label: "Contingency budget",
+      label: "Contingency budget (expected unknowns)",
       amount: round2(totals.contingency),
     });
   }
@@ -89,15 +94,62 @@ export function createJobFromEstimate(input: Input): Job {
   const cabNote =
     cabCount > 0 ? ` · ${cabCount} cabinets, ${cabLf.toFixed(2)} lf` : "";
 
-  // Filter out disabled rooms' lines + excluded-from-quote lines from the
-  // invoice so the client only sees what they're paying for.
+  // Filter out disabled rooms' lines + excluded-from-quote (pre-work)
+  // lines so the invoice only carries billable rows. Build invoice lines
+  // FIRST, then append overhead + contingency at the bottom so
+  // Σ(qty × unitPrice) reconciles to job.revenue.
   const disabledRoomIds = new Set(
     (rooms ?? []).filter((r) => !r.enabled).map((r) => r.id),
   );
-  const billableLines = lines.filter(
-    (l) =>
-      !(l.roomId && disabledRoomIds.has(l.roomId)) && !l.excludeFromQuote,
-  );
+
+  type IndexedLine = { line: LineItem; sub: EstimateTotals["lineSubtotals"][number] };
+  const billable: IndexedLine[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const l = lines[i];
+    if (l.roomId && disabledRoomIds.has(l.roomId)) continue;
+    if (l.excludeFromQuote) continue;
+    const sub = totals.lineSubtotals[i];
+    if (!sub) continue;
+    if (sub.excludedFromQuote || sub.disabledByRoom) continue;
+    billable.push({ line: l, sub });
+  }
+
+  const invoiceLineItems = billable.map(({ line, sub }) => {
+    // Per-line invoice math: show what the customer sees (finished qty +
+    // marked-up unit price). When qty is 0 we collapse to a single-unit
+    // line so the dollar math still reconciles.
+    const safeQty = line.qty > 0 ? line.qty : 1;
+    const lineUnitPrice = sub.price / safeQty;
+    return {
+      description: [
+        line.item || line.description || "Line item",
+        maybeRoomLabel(line, rooms),
+      ]
+        .filter(Boolean)
+        .join(" — "),
+      qty: safeQty,
+      unitPrice: round2(lineUnitPrice),
+    };
+  });
+
+  // Append overhead + contingency as their own invoice lines so the
+  // printed invoice's line-item sum matches totals.quoted (which is what
+  // we store as job.revenue). Without these the client sees less than
+  // the agreed quote.
+  if (totals.overhead > 0) {
+    invoiceLineItems.push({
+      description: `Workshop overhead (${overheadPct}%)`,
+      qty: 1,
+      unitPrice: round2(totals.overhead),
+    });
+  }
+  if (totals.contingency > 0) {
+    invoiceLineItems.push({
+      description: `Contingency`,
+      qty: 1,
+      unitPrice: round2(totals.contingency),
+    });
+  }
 
   const roomsNote =
     rooms && rooms.length > 0
@@ -137,19 +189,7 @@ export function createJobFromEstimate(input: Input): Job {
       number: `INV-${code.slice(3)}`,
       issuedDate: issued.toISOString().slice(0, 10),
       dueDate: due.toISOString().slice(0, 10),
-      lineItems: billableLines.map((l) => {
-        // Find this line's subtotal in totals — they share order with
-        // the input lines array.
-        const idx = lines.indexOf(l);
-        const sub = totals.lineSubtotals[idx];
-        return {
-          description: [l.item || l.description || "Line item", maybeRoomLabel(l, rooms)]
-            .filter(Boolean)
-            .join(" — "),
-          qty: l.qty,
-          unitPrice: sub ? sub.price / Math.max(1, l.qty) : l.unitPrice,
-        };
-      }),
+      lineItems: invoiceLineItems,
     },
   };
 }

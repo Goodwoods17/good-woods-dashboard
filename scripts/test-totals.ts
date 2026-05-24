@@ -12,6 +12,7 @@ import {
   computeDeficienciesCost,
   computePreWorkCost,
   deriveLabourHoursFromCabinets,
+  partitionCabinetSummaryByRoom,
 } from "../features/estimator/lib/totals";
 import {
   emptyCabinetSummary,
@@ -23,6 +24,7 @@ import {
   type LineItem,
   type Room,
 } from "../features/estimator/lib/types";
+import { createJobFromEstimate } from "../features/estimator/lib/createJobFromEstimate";
 
 let failed = 0;
 let passed = 0;
@@ -140,7 +142,8 @@ console.log("\nTest 3: Pre-work lines excluded from quoted price");
   eq(totals.costs.direct, 1000, "direct excludes prework");
   eq(totals.overhead, 80, "overhead on direct (not prework)");
   eq(totals.quoted, 1350 + 80, "quoted excludes prework");
-  eq(totals.internalCost, 1000 + 340 + 80, "internalCost = direct + prework + overhead");
+  // internalCost = direct + prework + overhead + contingency (here contingency = 0)
+  eq(totals.internalCost, 1000 + 340 + 80 + 0, "internalCost = direct + prework + overhead + contingency");
   ok(
     totals.internalCost > totals.totalCost,
     "internalCost > totalCost (prework eats into margin)",
@@ -362,6 +365,189 @@ console.log("\nTest 11: Zero-line edge cases");
   const lines = [newLine({ roomId: "r1", qty: 5, unitPrice: 100, markupPct: 35 })];
   const t2 = computeTotals(lines, { overheadPct: 8, rooms });
   eq(t2.quoted, 0, "all rooms off → quoted 0");
+}
+
+// ─── Test 12: Contingency is treated as expected labour, not pure margin ─
+// Regression: code review flagged that effectiveMarginPct was inflating
+// with contingencyPct because (quoted - totalCost) treated the buffer as
+// profit. Margin should be roughly flat or slightly decreasing as
+// contingency goes up.
+console.log("\nTest 12: Contingency does NOT inflate margin %");
+{
+  const lines = [
+    newLine({ qty: 10, unitPrice: 100, markupPct: 35 }), // 1000 direct, 1350 marked-up
+  ];
+  const m0 = computeTotals(lines, { overheadPct: 8 });
+  const m5 = computeTotals(lines, { overheadPct: 8, contingencyPct: 5 });
+  const m10 = computeTotals(lines, { overheadPct: 8, contingencyPct: 10 });
+  ok(
+    m5.effectiveMarginPct <= m0.effectiveMarginPct,
+    `margin 5% (${m5.effectiveMarginPct.toFixed(2)}) <= margin 0% (${m0.effectiveMarginPct.toFixed(2)})`,
+  );
+  ok(
+    m10.effectiveMarginPct <= m5.effectiveMarginPct,
+    `margin 10% (${m10.effectiveMarginPct.toFixed(2)}) <= margin 5% (${m5.effectiveMarginPct.toFixed(2)})`,
+  );
+  eq(
+    m10.internalCost,
+    m10.costs.direct + m10.costs.prework + m10.overhead + m10.contingency,
+    "internalCost includes contingency",
+  );
+}
+
+// ─── Test 13: Invoice reconciliation — Σ line items = revenue ───────────
+// Regression: code review C1+C2. The printed invoice lines must sum to
+// the same number as the saved Job.revenue, otherwise clients see a
+// number that doesn't match the quote we committed to.
+console.log("\nTest 13: Invoice line items sum to job.revenue");
+{
+  const lines = [
+    newLine({
+      category: "Casework",
+      qty: 3,
+      unitPrice: 80,
+      markupPct: 35,
+    }), // 240 direct, 324 line price
+    newLine({
+      category: "Install",
+      qty: 0.5,
+      unit: "hr",
+      unitPrice: 95,
+      markupPct: 35,
+    }), // 47.50 direct, 64.125 line price (the qty<1 case from C2)
+  ];
+  const totals = computeTotals(lines, { overheadPct: 8, contingencyPct: 3 });
+  const job = createJobFromEstimate({
+    client: "Test",
+    project: "Test",
+    lines,
+    overheadPct: 8,
+    totals,
+    existingJobs: [],
+    cabinetSummary: emptyCabinetSummary(),
+  });
+  const invSum = job.invoice!.lineItems.reduce(
+    (acc, li) => acc + li.qty * li.unitPrice,
+    0,
+  );
+  eq(invSum, job.revenue, "invoice sum reconciles to revenue", 0.05);
+
+  // The qty < 1 line should print at its full marked-up price, not half.
+  const installLi = job.invoice!.lineItems.find((li) =>
+    li.description.includes("Line item") || li.description.includes("Install"),
+  );
+  // Find the install-priced line (it's the second invoice line, since
+  // the first is casework and the third+ are overhead/contingency).
+  const installLine = job.invoice!.lineItems[1];
+  eq(
+    installLine.qty * installLine.unitPrice,
+    totals.lineSubtotals[1].price,
+    "qty<1 install line preserved through invoice",
+  );
+  void installLi;
+
+  // Overhead + contingency present as invoice lines
+  ok(
+    job.invoice!.lineItems.some((li) => li.description.startsWith("Workshop overhead")),
+    "invoice has an overhead line",
+  );
+  ok(
+    job.invoice!.lineItems.some((li) => li.description === "Contingency"),
+    "invoice has a contingency line",
+  );
+}
+
+// ─── Test 14: Saved-job costs reconcile to revenue ──────────────────────
+// Regression: code review C3. The saved Job's revenue minus sum of cost
+// lines (excluding prework which isn't billed) should equal the
+// estimator's effective profit. Without this, the dashboard's margin
+// reports would diverge from what the estimator UI shows.
+console.log("\nTest 14: Saved Job cost-revenue reconciliation");
+{
+  const lines = [
+    newLine({
+      category: "Casework",
+      qty: 5,
+      unitPrice: 100,
+      markupPct: 35,
+    }),
+    newLine({
+      category: "Pre-work",
+      qty: 4,
+      unit: "hr",
+      unitPrice: 85,
+      markupPct: 0,
+      excludeFromQuote: true,
+    }),
+  ];
+  const totals = computeTotals(lines, { overheadPct: 8, contingencyPct: 5 });
+  const job = createJobFromEstimate({
+    client: "Test",
+    project: "Test",
+    lines,
+    overheadPct: 8,
+    totals,
+    existingJobs: [],
+    cabinetSummary: emptyCabinetSummary(),
+  });
+  const billedCosts = job.costs
+    .filter((c) => c.id !== "c-prework") // prework isn't billed
+    .reduce((acc, c) => acc + c.amount, 0);
+  const reportedProfit = job.revenue - billedCosts;
+  const estimatorProfit = totals.quoted - totals.totalCost - totals.contingency;
+  eq(reportedProfit, estimatorProfit, "saved job profit = estimator profit", 0.05);
+}
+
+// ─── Test 15: Per-room cabinet partitioning ─────────────────────────────
+// Regression: code review C4. Auto-derived assembly + install lines must
+// be tagged with the room they came from so that toggling a room off
+// drops its labour contribution.
+console.log("\nTest 15: Cabinet partitioning by room");
+{
+  const summary = {
+    ...emptyCabinetSummary(),
+    base: { count: 4, linearFt: 8, roomId: "r-kitchen" },
+    wall: { count: 4, linearFt: 8, roomId: "r-bath" },
+    tall: { count: 0, linearFt: 0 }, // unassigned, no count → skipped
+  };
+  const parts = partitionCabinetSummaryByRoom(summary);
+  ok(parts.has("r-kitchen"), "partition contains kitchen");
+  ok(parts.has("r-bath"), "partition contains bath");
+  ok(!parts.has(undefined), "partition skips empty unassigned types");
+
+  const kitchenHrs = deriveLabourHoursFromCabinets(
+    parts.get("r-kitchen")!,
+    DEFAULT_ASSEMBLY_MINUTES,
+  );
+  const bathHrs = deriveLabourHoursFromCabinets(
+    parts.get("r-bath")!,
+    DEFAULT_ASSEMBLY_MINUTES,
+  );
+  eq(kitchenHrs, (4 * 60) / 60, "kitchen assembly hours (4 base × 60)");
+  eq(bathHrs, (4 * 45) / 60, "bath assembly hours (4 wall × 45)");
+}
+
+// ─── Test 16: Negative input clamping ───────────────────────────────────
+// Regression: code review I4. Negative qty / unitPrice / markup / waste
+// should clamp to 0 rather than silently invert costs.
+console.log("\nTest 16: Negative inputs clamp to 0");
+{
+  const lines = [
+    newLine({ qty: -3, unitPrice: 100, markupPct: 35 }), // qty clamp
+    newLine({ qty: 10, unitPrice: -100, markupPct: 35 }), // price clamp
+    newLine({ qty: 10, unitPrice: 100, markupPct: -50 }), // markup clamp
+    newLine({ qty: 10, unitPrice: 100, markupPct: 35, wastePct: -20 }), // waste clamp
+  ];
+  const totals = computeTotals(lines, { overheadPct: 8 });
+  eq(totals.lineSubtotals[0].cost, 0, "negative qty → 0 cost");
+  eq(totals.lineSubtotals[1].cost, 0, "negative unitPrice → 0 cost");
+  eq(totals.lineSubtotals[2].markupAmount, 0, "negative markup → 0 markup");
+  // Negative waste: clamped, so cost = 10 × 100 × 1.0 = 1000
+  eq(totals.lineSubtotals[3].cost, 1000, "negative waste → 0 waste");
+  ok(
+    totals.quoted >= 0,
+    `quoted never goes negative even with garbage inputs (got ${totals.quoted.toFixed(2)})`,
+  );
 }
 
 // ─── Summary ────────────────────────────────────────────────────────────

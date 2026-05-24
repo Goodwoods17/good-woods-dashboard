@@ -26,7 +26,9 @@ import {
   computePreWorkCost,
   computeTotals,
   deriveLabourHoursFromCabinets,
+  partitionCabinetSummaryByRoom,
 } from "@features/estimator/lib/totals";
+import { logPricesFromEstimate } from "@features/catalog/lib/priceHistory";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
 import {
   QUOTE_SECTIONS,
@@ -123,62 +125,73 @@ export function EstimatorView() {
     setLines((prev) => prev.filter((l) => l.id !== id));
   }
 
-  // ─── Auto-derived Assembly + Install lines ───────────────────────────
-  // These are SYNTHESISED into the lines list for the totals math but
-  // never set into setLines() — they regenerate from cabinet counts on
-  // every render. User can manually add additional assembly/install
-  // lines in the table for one-offs.
+  // ─── Auto-derived Assembly + Install lines (per room) ────────────────
+  // SYNTHESISED into the lines list each render. Partitioned by Cabinet
+  // Summary roomId so the auto-derived labour respects room toggles —
+  // a client saying "drop the bathroom" zeroes its assembly + install
+  // hours along with the rest.
   const autoLines = useMemo<LineItem[]>(() => {
+    if (totalCabinetCount(cabinetSummary) === 0) return [];
     const out: LineItem[] = [];
+    const partitions = partitionCabinetSummaryByRoom(cabinetSummary);
+    const assemblyOn = isSectionActive(activeTemplate, "assembly");
+    const installOn = isSectionActive(activeTemplate, "install");
+    const roomNameFor = (roomId: string | undefined) =>
+      roomId
+        ? (rooms.find((r) => r.id === roomId)?.name ?? "")
+        : "";
 
-    if (
-      isSectionActive(activeTemplate, "assembly") &&
-      totalCabinetCount(cabinetSummary) > 0
-    ) {
-      const hours = deriveLabourHoursFromCabinets(
-        cabinetSummary,
-        DEFAULT_ASSEMBLY_MINUTES,
-      );
-      if (hours > 0) {
-        out.push({
-          id: "auto-assembly",
-          category: "Assembly",
-          item: "Cabinet assembly (auto from cabinet counts)",
-          description: assemblyBreakdownLabel(cabinetSummary),
-          qty: round2(hours),
-          unit: "hr",
-          unitPrice: settings.labourRates.shopRate,
-          wastePct: 0,
-          markupPct: settings.defaultMarkupPct,
-        });
+    for (const [roomId, sub] of Array.from(partitions.entries())) {
+      const roomKey = roomId ?? "all";
+      const roomSuffix = roomId
+        ? ` — ${roomNameFor(roomId) || "Room"}`
+        : "";
+
+      if (assemblyOn) {
+        const hours = deriveLabourHoursFromCabinets(
+          sub,
+          DEFAULT_ASSEMBLY_MINUTES,
+        );
+        if (hours > 0) {
+          out.push({
+            id: `auto-assembly-${roomKey}`,
+            category: "Assembly",
+            item: `Cabinet assembly (auto)${roomSuffix}`,
+            description: assemblyBreakdownLabel(sub),
+            qty: round2(hours),
+            unit: "hr",
+            unitPrice: settings.labourRates.shopRate,
+            wastePct: 0,
+            markupPct: settings.defaultMarkupPct,
+            roomId,
+          });
+        }
       }
-    }
 
-    if (
-      isSectionActive(activeTemplate, "install") &&
-      totalCabinetCount(cabinetSummary) > 0
-    ) {
-      const hours = deriveLabourHoursFromCabinets(
-        cabinetSummary,
-        DEFAULT_INSTALL_MINUTES,
-      );
-      if (hours > 0) {
-        out.push({
-          id: "auto-install",
-          category: "Install",
-          item: "On-site install (auto from cabinet counts)",
-          description: assemblyBreakdownLabel(cabinetSummary),
-          qty: round2(hours),
-          unit: "hr",
-          unitPrice: settings.labourRates.installRate,
-          wastePct: 0,
-          markupPct: settings.defaultMarkupPct,
-        });
+      if (installOn) {
+        const hours = deriveLabourHoursFromCabinets(
+          sub,
+          DEFAULT_INSTALL_MINUTES,
+        );
+        if (hours > 0) {
+          out.push({
+            id: `auto-install-${roomKey}`,
+            category: "Install",
+            item: `On-site install (auto)${roomSuffix}`,
+            description: assemblyBreakdownLabel(sub),
+            qty: round2(hours),
+            unit: "hr",
+            unitPrice: settings.labourRates.installRate,
+            wastePct: 0,
+            markupPct: settings.defaultMarkupPct,
+            roomId,
+          });
+        }
       }
     }
 
     return out;
-  }, [activeTemplate, cabinetSummary, settings]);
+  }, [activeTemplate, cabinetSummary, rooms, settings]);
 
   // ─── Synthesised lines for the structured sections ───────────────────
   // Pre-work, Delivery, Deficiencies are entered via structured blocks
@@ -396,6 +409,23 @@ export function EstimatorView() {
       template: activeTemplate,
     });
     await createJob(job);
+    // Append a price-history row for every catalogId-tagged line. Builds
+    // the dataset behind the "Last bid: $X on Job #N" tooltip + 90-day
+    // average comparisons. Failures are non-critical to job creation.
+    try {
+      logPricesFromEstimate(
+        allLines
+          .filter((l) => l.catalogId)
+          .map((l) => ({
+            catalogId: l.catalogId,
+            supplier: l.supplierSnapshot,
+            unitPrice: l.unitPrice,
+          })),
+        job.id,
+      );
+    } catch {
+      /* silent — history is non-critical */
+    }
     router.push(`/jobs/${job.id}`);
   }
 

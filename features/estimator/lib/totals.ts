@@ -56,23 +56,36 @@ export type ComputeTotalsOptions = {
 //   lineCost  = buyingQty × unitPrice
 //   linePrice = lineCost × (1 + markup%/100)
 //   quoted    = Σ(linePrice of enabled, non-prework lines) + overhead + contingency
-//   internalCost = direct + prework + overhead (what the job REALLY costs Andrew)
+//   internalCost = direct + prework + overhead + contingency (the true cost
+//                  reality if the unknown labour materialises)
+//   totalCost = direct + overhead (firm cost — what you definitely owe)
+//   effectiveMarginPct = (quoted - totalCost - contingency) / quoted × 100
+//                  i.e. contingency is treated as expected labour, so it
+//                  doesn't inflate the margin number Andrew uses to bid.
 //
 // Rooms: lines whose roomId points at a disabled room contribute nothing.
 // Pre-work: lines in the prework bucket are counted in internalCost only.
+// Negative inputs (qty/unitPrice/markup/waste) are clamped to 0 — they
+// would otherwise silently invert costs and quietly tank a quote.
 export function computeTotals(
   lines: LineItem[],
   options: ComputeTotalsOptions,
 ): EstimateTotals {
-  const { overheadPct, rooms, contingencyPct = 0 } = options;
+  const overheadPct = nonNeg(options.overheadPct);
+  const rooms = options.rooms;
+  const contingencyPct = nonNeg(options.contingencyPct ?? 0);
   const disabledRoomIds = new Set(
     (rooms ?? []).filter((r) => !r.enabled).map((r) => r.id),
   );
 
   const lineSubtotals: LineSubtotal[] = lines.map((l) => {
-    const buyingQty = l.qty * (1 + l.wastePct / 100);
-    const cost = buyingQty * l.unitPrice;
-    const markupAmount = cost * (l.markupPct / 100);
+    const qty = nonNeg(l.qty);
+    const unitPrice = nonNeg(l.unitPrice);
+    const wastePct = nonNeg(l.wastePct);
+    const markupPct = nonNeg(l.markupPct);
+    const buyingQty = qty * (1 + wastePct / 100);
+    const cost = buyingQty * unitPrice;
+    const markupAmount = cost * (markupPct / 100);
     const price = cost + markupAmount;
     return {
       id: l.id,
@@ -123,13 +136,17 @@ export function computeTotals(
   const contingency = quotedBeforeContingency * (contingencyPct / 100);
   const quoted = quotedBeforeContingency + contingency;
 
-  // True cost reality = direct + prework + overhead. Quoted price needs to
-  // beat this for the job to be net positive after the unbilled work.
-  const internalCost = costs.direct + costs.prework + overhead;
+  // Firm cost (what Andrew definitely owes): direct + overhead.
+  // True cost if contingency materialises: direct + prework + overhead + contingency.
+  // Margin treats contingency as expected labour — i.e. it doesn't pretend
+  // the buffer is profit (which would let optimistic margins drive bad bids).
   const totalCost = costs.direct + overhead;
+  const internalCost = costs.direct + costs.prework + overhead + contingency;
 
   const effectiveMarginPct =
-    quoted > 0 ? ((quoted - totalCost) / quoted) * 100 : 0;
+    quoted > 0
+      ? ((quoted - totalCost - contingency) / quoted) * 100
+      : 0;
 
   // Per-section breakdown for headers.
   const perSection: Record<
@@ -189,9 +206,53 @@ export function deriveLabourHoursFromCabinets(
 ): number {
   let totalMinutes = 0;
   for (const type of CABINET_TYPES) {
-    totalMinutes += summary[type].count * (minutesPerType[type] ?? 0);
+    totalMinutes += nonNeg(summary[type].count) * nonNeg(minutesPerType[type] ?? 0);
   }
   return totalMinutes / 60;
+}
+
+// Partition a CabinetSummary into one-summary-per-roomId so auto-derived
+// Assembly/Install lines can be tagged with the correct room and honour
+// room toggles. Cabinets without a roomId roll into the "_no_room"
+// partition (key = undefined) → produces a job-wide line.
+//
+// Note: each cabinet TYPE owns a single roomId today (e.g. all base
+// cabinets in one room). Mixed-room assignment within a type would
+// need a list-of-entries data shape — out of scope for this slice.
+
+export type CabinetPartition = Map<string | undefined, CabinetSummary>;
+
+export function partitionCabinetSummaryByRoom(
+  summary: CabinetSummary,
+): CabinetPartition {
+  const out: CabinetPartition = new Map();
+  function ensure(key: string | undefined): CabinetSummary {
+    let v = out.get(key);
+    if (!v) {
+      v = {
+        base: { count: 0, linearFt: 0 },
+        wall: { count: 0, linearFt: 0 },
+        tall: { count: 0, linearFt: 0 },
+        island: { count: 0, linearFt: 0 },
+        pulls: 0,
+      };
+      out.set(key, v);
+    }
+    return v;
+  }
+  for (const type of CABINET_TYPES) {
+    const cab = summary[type];
+    if (cab.count === 0 && cab.linearFt === 0) continue;
+    const part = ensure(cab.roomId);
+    part[type] = { count: cab.count, linearFt: cab.linearFt, roomId: cab.roomId };
+  }
+  return out;
+}
+
+// Clamp helper — refuses negative inputs so a stray "-4" in an hours field
+// never silently subtracts from a quote.
+function nonNeg(n: number): number {
+  return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
 // ─── Delivery calculator ────────────────────────────────────────────────

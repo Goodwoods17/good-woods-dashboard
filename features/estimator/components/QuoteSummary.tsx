@@ -73,24 +73,26 @@ export function QuoteSummary({
             {formatCAD(totals.quoted)}
           </span>
         </div>
-        {preworkCost > 0 && (
+        {(preworkCost > 0 || contingencyPct > 0) && (
           <div className="mt-3 pt-3 border-t border-border space-y-1">
+            {preworkCost > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-text-tertiary">
+                  Pre-work (internal — not on quote)
+                </span>
+                <span className="tabular-nums text-text-secondary">
+                  {preworkHours.toFixed(2)}h · {formatCAD(preworkCost)}
+                </span>
+              </div>
+            )}
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-tertiary">
-                Pre-work (internal — not on quote)
-              </span>
-              <span className="tabular-nums text-text-secondary">
-                {preworkHours.toFixed(2)}h · {formatCAD(preworkCost)}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-xs">
-              <span className="text-text-tertiary">True cost incl. pre-work</span>
+              <span className="text-text-tertiary">True cost (incl. pre-work + contingency)</span>
               <span className="tabular-nums text-text-secondary font-medium">
                 {formatCAD(totals.internalCost)}
               </span>
             </div>
             <div className="flex items-center justify-between text-xs">
-              <span className="text-text-tertiary">Net after pre-work</span>
+              <span className="text-text-tertiary">Net (contingency consumed)</span>
               <span
                 className={cn(
                   "tabular-nums font-medium",
@@ -102,6 +104,14 @@ export function QuoteSummary({
                 {formatCAD(totals.quoted - totals.internalCost)}
               </span>
             </div>
+            {contingencyPct > 0 && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-text-tertiary">Net (contingency unused — upside)</span>
+                <span className="tabular-nums text-status-success">
+                  {formatCAD(totals.quoted - totals.internalCost + totals.contingency)}
+                </span>
+              </div>
+            )}
           </div>
         )}
       </div>
