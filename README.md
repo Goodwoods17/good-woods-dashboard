@@ -96,11 +96,38 @@ Common operations (slash-command shorthand, see ADR 0003):
 For new features: always run `/plan-feature` first. The spec lives at
 `features/<name>/CLAUDE.md` and is the source of truth from then on.
 
-## Design tokens
+## Design Context
 
-All visual tokens live in `src/app/globals.css` (CSS variables) and
-`tailwind.config.ts`. **Locked decision (Spec L2)** — these are the
-canonical Good Woods brand. Don't invent new tokens.
+Two strategic docs sit at the project root:
+
+- [`PRODUCT.md`](PRODUCT.md) — register, users, JTBD, brand personality,
+  anti-references, design principles, accessibility. The strategic
+  source of truth. Read this before any UX/UI work.
+- [`DESIGN.md`](DESIGN.md) — visual system in [Google Stitch DESIGN.md
+  format](https://stitch.withgoogle.com/docs/design-md/format/): YAML
+  frontmatter with the full token set + six markdown sections (Overview,
+  Colors, Typography, Elevation, Components, Do's and Don'ts). Read
+  this before any visual change.
+- [`.impeccable/design.json`](.impeccable/design.json) — machine-readable
+  sidecar: tonal ramps, shadow/motion tokens, breakpoints, drop-in
+  HTML/CSS for ten signature components, narrative.
+
+**Locked direction (2026-05-24):** *"Sharp, quiet, focused."* North Star:
+**The Quiet Foreman.** Visual register: bone-white canvas with a
+whisper-warm foot-glow, no-border cards on soft shadow, Cormorant
+Garamond serif display + Inter body, dark ink-pill CTAs, clay accent
+used sparingly as gradient stops and soft pills (≤5% of any surface).
+The Lean status palette (sage / amber / dusty-red / moss / paused /
+andon) is held semantic-only.
+
+Tokens live in `src/app/globals.css` (CSS variables) and
+`tailwind.config.ts`. **Don't invent new tokens** — update DESIGN.md,
+then update the tokens to match.
+
+Background reading: [`docs/build-direction-spec.md`](docs/build-direction-spec.md)
+is the original Spec v0.2 (the 12 module wireframes + state-handling
+rules). On tone/brand it's superseded by PRODUCT.md (sharp, not soft).
+On wireframes and module behaviour, the spec still wins.
 
 ## What's still on the shelf
 

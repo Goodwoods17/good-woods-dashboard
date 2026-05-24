@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-05-24T16:30:00Z",
+  "title": "Design System: Good Woods Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "background": {
+        "role": "neutral",
+        "displayName": "Canvas",
+        "canonical": "oklch(98.3% 0.002 80)",
+        "purpose": "Page background. Near-white with a faint warm cast. Reads as premium paper, not OS desktop white.",
+        "tonalRamp": ["#1A1916", "#3F3D3A", "#6C6962", "#8B8782", "#C4BFB6", "#E2DFD9", "#F4F2EE", "#FAFAF9"]
+      },
+      "canvas-top": {
+        "role": "neutral",
+        "displayName": "Canvas Top",
+        "canonical": "oklch(100% 0 0)",
+        "purpose": "Pure white. Used for cards floating on the canvas and as the top stop of the foot-glow gradient."
+      },
+      "canvas-foot-tint": {
+        "role": "neutral-tint",
+        "displayName": "Canvas Foot Tint",
+        "canonical": "oklch(94.5% 0.013 50)",
+        "purpose": "Warm-tinted base of the foot-glow gradient. Never a solid fill — only the bottom stop."
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(100% 0 0)",
+        "purpose": "Card and modal background. Pure white earns its place because elevation says this content is the focus."
+      },
+      "surface-muted": {
+        "role": "neutral",
+        "displayName": "Surface Muted",
+        "canonical": "oklch(95.5% 0.005 70)",
+        "purpose": "Subtle inset fills, hover affordances, table header rows."
+      },
+      "surface-sunken": {
+        "role": "neutral",
+        "displayName": "Surface Sunken",
+        "canonical": "oklch(92% 0.007 65)",
+        "purpose": "Nested panels and demo-data flag chips. The lowest neutral allowed on a surface."
+      },
+      "text-primary": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(15% 0.005 50)",
+        "purpose": "Body and headings. Warm graphite, never pure black."
+      },
+      "text-secondary": {
+        "role": "neutral",
+        "displayName": "Smoke",
+        "canonical": "oklch(32% 0.005 50)",
+        "purpose": "Supporting text, table cells."
+      },
+      "text-tertiary": {
+        "role": "neutral",
+        "displayName": "Ash",
+        "canonical": "oklch(56% 0.005 50)",
+        "purpose": "Metadata, captions, table micro-labels."
+      },
+      "accent": {
+        "role": "primary",
+        "displayName": "Muted Clay",
+        "canonical": "oklch(55% 0.10 40)",
+        "purpose": "Brand accent. Used at full saturation only on small surfaces — dots, gradient top-stops, soft-fill pills. NOT on CTA buttons (those use ink-pill).",
+        "tonalRamp": ["#3D2418", "#5C3826", "#7A4A33", "#8F4F36", "#A45F44", "#B86F52", "#CE8B6F", "#F2E4DC"]
+      },
+      "accent-hover": {
+        "role": "primary-state",
+        "displayName": "Clay Hover",
+        "canonical": "oklch(48% 0.10 40)"
+      },
+      "accent-active": {
+        "role": "primary-state",
+        "displayName": "Clay Active",
+        "canonical": "oklch(42% 0.10 40)",
+        "purpose": "The only place clay shows up on a button — as the hover state of the ink-pill primary CTA."
+      },
+      "accent-soft": {
+        "role": "primary-tint",
+        "displayName": "Clay Soft",
+        "canonical": "oklch(93% 0.025 40)",
+        "purpose": "Tinted background for selected pills and chart soft fills."
+      },
+      "ink-pill": {
+        "role": "primary-cta",
+        "displayName": "Ink Pill",
+        "canonical": "oklch(15% 0.005 50)",
+        "purpose": "Primary CTA background. Semantically distinct from text-primary (it's a surface, not text). Hover deepens to accent-active (clay)."
+      },
+      "secondary": {
+        "role": "secondary",
+        "displayName": "Warm Taupe",
+        "canonical": "oklch(50% 0.04 65)",
+        "purpose": "Second-string neutral. Pipeline-stage badges for human-touch states (sold, installing)."
+      },
+      "status-on-track": {
+        "role": "status-success",
+        "displayName": "Muted Sage",
+        "canonical": "oklch(58% 0.10 130)",
+        "purpose": "Health: on-track. Lean semantic; never used for non-status purposes."
+      },
+      "status-at-risk": {
+        "role": "status-warning",
+        "displayName": "Warm Amber",
+        "canonical": "oklch(70% 0.13 70)",
+        "purpose": "Health: at-risk. Warm amber, not safety-yellow."
+      },
+      "status-blocked": {
+        "role": "status-error",
+        "displayName": "Dusty Red",
+        "canonical": "oklch(54% 0.13 25)",
+        "purpose": "Health: blocked. Dusty red, not alarm-red."
+      },
+      "status-complete": {
+        "role": "status-success-quiet",
+        "displayName": "Soft Moss",
+        "canonical": "oklch(60% 0.04 130)",
+        "purpose": "Done and stowed, not a victory."
+      },
+      "status-paused": {
+        "role": "status-neutral",
+        "displayName": "Soft Gray",
+        "canonical": "oklch(64% 0.005 50)",
+        "purpose": "Deliberately paused work."
+      },
+      "status-andon": {
+        "role": "status-critical",
+        "displayName": "Andon Red",
+        "canonical": "oklch(58% 0.18 25)",
+        "purpose": "The ONLY loud color in the system. Reserved for active andon alerts and critical safety. Pulses at 1200ms."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Greeting Serif",
+        "purpose": "Cormorant Garamond 500. The morning Good morning, Andrew line and any single-statement hero copy. Italic available for in-line emphasis on 1-2 words."
+      },
+      "headline": {
+        "displayName": "Page Headline",
+        "purpose": "Cormorant Garamond 500 at 24-28px. Used by PageHeader on every route. Replaces the previous Inter 24px heading."
+      },
+      "title": {
+        "displayName": "Card Title",
+        "purpose": "Cormorant Garamond 500 at 18px. Section heads inside a page, card heads. Examples: This week's hitlist, Shop capacity this week."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Inter 400 at 14px. Default body and table cells. Slightly tighter letter-spacing than web norm."
+      },
+      "body-emphasis": {
+        "displayName": "Body Emphasis",
+        "purpose": "Inter 500 at 14px. Hitlist row next-step sentence; primary text in interactive list rows."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Inter 500 at 11px uppercase +0.06em. Section dividers, eyebrow text, demo tags."
+      },
+      "mono": {
+        "displayName": "Mono",
+        "purpose": "JetBrains Mono at 13px for prices, percentages, job codes. Tabular-nums applied via utility class."
+      }
+    },
+    "shadows": [
+      {
+        "name": "resting",
+        "value": "0 8px 22px -14px rgba(26,25,22,0.10)",
+        "purpose": "Default soft lift on cards at rest. Subtle but present. Cards never use borders to separate from canvas; this shadow does the work."
+      },
+      {
+        "name": "hover",
+        "value": "0 12px 30px -18px rgba(26,25,22,0.18)",
+        "purpose": "Draggable cards, focused cards, Hitlist hero. Deepens by ~80% from resting. Don't introduce color on hover — introduce lift."
+      },
+      {
+        "name": "floating",
+        "value": "0 1px 2px rgba(26,25,22,0.04), 0 6px 18px -10px rgba(26,25,22,0.10)",
+        "purpose": "Segmented pill, command palette base. Multi-layered soft shadow that signals 'persistently afloat'."
+      },
+      {
+        "name": "modal",
+        "value": "0 12px 32px -8px rgba(26,25,22,0.10), 0 4px 8px -4px rgba(26,25,22,0.06)",
+        "purpose": "Modals, dropdowns, andon banners. Reserved for true elevation; cards don't get to use this."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.2, 0, 0, 1)",
+        "purpose": "Default easing for state transitions. Short, eased, physical — Apple/Claude-feel."
+      },
+      {
+        "name": "ease-emphasized",
+        "value": "cubic-bezier(0.3, 0, 0, 1)",
+        "purpose": "Larger entrances (modal, drawer, page transitions). Slightly more pronounced curve."
+      },
+      {
+        "name": "duration-fast",
+        "value": "120ms",
+        "purpose": "Hover and focus state transitions."
+      },
+      {
+        "name": "duration-base",
+        "value": "200ms",
+        "purpose": "Modal enter, drawer slide, page fade."
+      },
+      {
+        "name": "duration-slow",
+        "value": "320ms",
+        "purpose": "Reserved for transitions that need to land deliberately (e.g., view-switch flourish if introduced)."
+      },
+      {
+        "name": "andon-pulse",
+        "value": "1200ms infinite",
+        "purpose": "The ONE sustained animation in the entire product. Used only on active andon alerts. Never on decorative elements."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px", "purpose": "Phone landscape." },
+      { "name": "md", "value": "768px", "purpose": "Tablet." },
+      { "name": "lg", "value": "1024px", "purpose": "Small laptop. Sidebar expands from icon rail to full." },
+      { "name": "xl", "value": "1280px", "purpose": "Desktop. Default content max-width." },
+      { "name": "2xl", "value": "1536px", "purpose": "Large desktop." },
+      { "name": "tv", "value": "1920px", "purpose": "Shop-floor wall display. Full-bleed mode, +1 type size, no sidebar." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary CTA — Ink Pill",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The dark ink-pill primary affordance. Hover deepens to clay-active. The brand's most-used button.",
+      "html": "<button class=\"ds-btn-primary\">+ New Job</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; gap: 6px; background: var(--ink-pill, #1A1916); color: #FFFFFF; border: 0; padding: 8px 16px; border-radius: 999px; font: 500 14px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: -0.005em; cursor: pointer; transition: background 120ms cubic-bezier(0.2, 0, 0, 1); } .ds-btn-primary:hover { background: var(--accent-active, #8F4F36); } .ds-btn-primary:focus-visible { outline: 2px solid var(--accent, #B86F52); outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "White, no border, soft floating shadow. Used for Cancel / Back / secondary actions next to a primary CTA.",
+      "html": "<button class=\"ds-btn-secondary\">Cancel</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; gap: 6px; background: #FFFFFF; color: var(--text-primary, #1A1916); border: 0; padding: 8px 16px; border-radius: 999px; font: 500 14px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: -0.005em; cursor: pointer; box-shadow: 0 1px 2px rgba(26,25,22,0.04), 0 6px 18px -10px rgba(26,25,22,0.10); transition: box-shadow 120ms cubic-bezier(0.2, 0, 0, 1); } .ds-btn-secondary:hover { box-shadow: 0 1px 2px rgba(26,25,22,0.04), 0 8px 22px -14px rgba(26,25,22,0.18); }"
+    },
+    {
+      "name": "Segmented Pill (ViewToggle)",
+      "kind": "nav",
+      "refersTo": "segmented-pill",
+      "description": "Translucent white container with backdrop-blur, holding 2-4 mutually-exclusive options. Active option becomes a small dark ink-pill.",
+      "html": "<div class=\"ds-segmented\" role=\"tablist\"><button class=\"ds-seg-btn ds-seg-active\" aria-pressed=\"true\">Hitlist</button><button class=\"ds-seg-btn\" aria-pressed=\"false\">Schedule</button><button class=\"ds-seg-btn\" aria-pressed=\"false\">List</button><button class=\"ds-seg-btn\" aria-pressed=\"false\">Kanban</button></div>",
+      "css": ".ds-segmented { display: inline-flex; align-items: center; gap: 2px; background: rgba(255,255,255,0.7); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-radius: 999px; padding: 4px; box-shadow: 0 1px 2px rgba(26,25,22,0.04), 0 6px 18px -10px rgba(26,25,22,0.10); } .ds-seg-btn { background: transparent; border: 0; padding: 6px 12px; border-radius: 999px; font: 500 12px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-secondary, #4F4D49); cursor: pointer; transition: color 120ms cubic-bezier(0.2, 0, 0, 1); } .ds-seg-btn:hover { color: var(--text-primary, #1A1916); } .ds-seg-active, .ds-seg-active:hover { background: var(--ink-pill, #1A1916); color: #FFFFFF; }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "White surface, no border, soft resting shadow. Cards earn separation through tonal step against the canvas plus the shadow.",
+      "html": "<article class=\"ds-card\"><h3 class=\"ds-card-title\">This week's hitlist</h3><p class=\"ds-card-body\">8 jobs need you. Two are blocked.</p></article>",
+      "css": ".ds-card { background: #FFFFFF; border-radius: 14px; padding: 20px; box-shadow: 0 8px 22px -14px rgba(26,25,22,0.10); border: 0; } .ds-card-title { margin: 0 0 6px; font: 500 18px/1.3 var(--font-cormorant, 'Cormorant Garamond', Georgia, serif); letter-spacing: -0.01em; color: var(--text-primary, #1A1916); } .ds-card-body { margin: 0; font: 400 14px/1.55 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-secondary, #4F4D49); letter-spacing: -0.01em; }"
+    },
+    {
+      "name": "Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Solid background, 1px border, soft focus ring. The one place borders survive the no-line doctrine.",
+      "html": "<label class=\"ds-input-row\"><span class=\"ds-input-label\">Client name</span><input class=\"ds-input\" type=\"text\" placeholder=\"Jessica Henderson\" /></label>",
+      "css": ".ds-input-row { display: block; } .ds-input-label { display: block; margin-bottom: 4px; font: 500 12px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-secondary, #4F4D49); } .ds-input { display: block; width: 100%; background: #FFFFFF; color: var(--text-primary, #1A1916); border: 1px solid var(--border, #E2DFD9); border-radius: 6px; padding: 8px 12px; font: 400 14px/1.55 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: -0.01em; transition: border-color 120ms, box-shadow 120ms; } .ds-input:focus { outline: 0; border-color: var(--border-strong, #CDC9C1); box-shadow: 0 0 0 2px var(--accent-soft, #F2E4DC); } .ds-input::placeholder { color: var(--text-tertiary, #8B8782); }"
+    },
+    {
+      "name": "Health Pill — At Risk",
+      "kind": "chip",
+      "refersTo": "health-pill-at-risk",
+      "description": "Dot + label + soft-fill pill. The eight-feet-glance affordance. Color is semantic; soft fill is the Lean palette tinted background.",
+      "html": "<span class=\"ds-health ds-health-at-risk\"><span class=\"ds-health-dot\"></span>At Risk</span>",
+      "css": ".ds-health { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font: 500 11px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: -0.005em; } .ds-health-dot { display: inline-block; width: 5px; height: 5px; border-radius: 999px; } .ds-health-at-risk { background: #F7EBD5; color: #C99846; } .ds-health-at-risk .ds-health-dot { background: #C99846; }"
+    },
+    {
+      "name": "Pipeline Status Badge — Clay",
+      "kind": "chip",
+      "refersTo": "status-badge-clay",
+      "description": "The pipeline status chip for active making stages (in_design, in_production, in_finishing). Uses the accent ramp to live parallel to — not on top of — health's green/amber/red.",
+      "html": "<span class=\"ds-status ds-status-clay\"><span class=\"ds-status-dot\"></span>In Production</span>",
+      "css": ".ds-status { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font: 500 11px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: -0.005em; } .ds-status-dot { display: inline-block; width: 5px; height: 5px; border-radius: 999px; } .ds-status-clay { background: #F2E4DC; color: #B86F52; } .ds-status-clay .ds-status-dot { background: #B86F52; }"
+    },
+    {
+      "name": "Status Dot (primitive)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "Standalone semantic colored dot. Spec §4.1 list-row leading affordance. Lives at shared/components/ui/StatusDot.tsx. Sizes sm/md/lg.",
+      "html": "<span class=\"ds-dot ds-dot-md ds-dot-at-risk\" aria-label=\"At Risk\"></span>",
+      "css": ".ds-dot { display: inline-block; border-radius: 999px; vertical-align: middle; } .ds-dot-sm { width: 6px; height: 6px; } .ds-dot-md { width: 8px; height: 8px; } .ds-dot-lg { width: 10px; height: 10px; } .ds-dot-on-track { background: #6B8E5C; } .ds-dot-at-risk { background: #C99846; } .ds-dot-blocked { background: #B5544C; } .ds-dot-complete { background: #7A8B6F; } .ds-dot-paused { background: #9A968D; }"
+    },
+    {
+      "name": "Hitlist Row (signature)",
+      "kind": "custom",
+      "refersTo": null,
+      "description": "The default homepage row. Index + step text + blocker chip + sub-meta + dot + price + health pill. Reads from across the room.",
+      "html": "<a class=\"ds-hitlist-row\" href=\"#\"><span class=\"ds-hr-idx\">01</span><div class=\"ds-hr-main\"><div class=\"ds-hr-step\">Slot on Toolpath CNC queue <span class=\"ds-status ds-status-amber\"><span class=\"ds-status-dot\"></span>Toolpath<span class=\"ds-hr-demo\">demo</span></span></div><div class=\"ds-hr-sub\">Henderson Kitchen · Jessica Henderson · 3d to install</div></div><span class=\"ds-dot ds-dot-md ds-dot-at-risk\"></span><div class=\"ds-hr-price\">$42,800<small>At risk</small></div><span class=\"ds-health ds-health-at-risk\"><span class=\"ds-health-dot\"></span>At Risk</span></a>",
+      "css": ".ds-hitlist-row { display: grid; grid-template-columns: 28px 1fr auto auto auto; align-items: center; gap: 14px; padding: 12px 22px; text-decoration: none; color: inherit; border-top: 1px solid rgba(26,25,22,0.06); transition: background 120ms cubic-bezier(0.2, 0, 0, 1); } .ds-hitlist-row:hover { background: rgba(184,111,82,0.04); } .ds-hr-idx { font: 400 11px/1 'JetBrains Mono', ui-monospace, monospace; color: var(--text-tertiary, #8B8782); text-align: center; font-variant-numeric: tabular-nums; } .ds-hr-step { font: 500 13.5px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-primary, #1A1916); letter-spacing: -0.005em; display: flex; align-items: baseline; gap: 8px; } .ds-hr-sub { margin-top: 2px; font: 400 11.5px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-tertiary, #8B8782); letter-spacing: -0.005em; } .ds-hr-price { font: 500 13px/1.2 'JetBrains Mono', ui-monospace, monospace; color: var(--text-primary, #1A1916); text-align: right; font-variant-numeric: tabular-nums; } .ds-hr-price small { display: block; font: 500 10px/1.2 var(--font-inter, 'Inter', system-ui, sans-serif); color: var(--text-tertiary, #8B8782); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; } .ds-status-amber { background: #F7EBD5; color: #C99846; } .ds-status-amber .ds-status-dot { background: #C99846; } .ds-hr-demo { display: inline-block; padding: 0 4px; margin-left: 4px; border-radius: 3px; background: rgba(26,25,22,0.08); color: var(--text-tertiary, #8B8782); font-size: 8.5px; letter-spacing: 0.04em; text-transform: uppercase; }"
+    },
+    {
+      "name": "Demo Tag",
+      "kind": "chip",
+      "refersTo": null,
+      "description": "Tiny chip beside a synthetic-data label. When BLOCKER_IS_SYNTHETIC is true, every blocker chip renders this. Drop the flag when real blocker fields land on Job.",
+      "html": "<span class=\"ds-demo-tag\" aria-label=\"demo data\">demo</span>",
+      "css": ".ds-demo-tag { display: inline-block; padding: 0 4px; border-radius: 3px; background: var(--surface-sunken, #ECE9E4); color: var(--text-tertiary, #8B8782); font: 600 9px/1.4 var(--font-inter, 'Inter', system-ui, sans-serif); letter-spacing: 0.04em; text-transform: uppercase; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Foreman",
+    "overview": "A workshop foreman who never raises his voice. He knows every job's state before you ask, points at what needs you today, and stays out of the way when nothing's wrong. The dashboard inherits that posture: a near-white canvas with a barely-there warm glow at the foot, cards that float on soft shadow with no visible borders, serif display type for character, the Lean status palette held in the warm corner of the wheel. The Lit Workshop, lighter register: pure white where it counts, a hint of clay warmth at the edges to anchor the brand, sharp typographic precision throughout. The system rejects the SaaS-dashboard reflex (data-table-with-coloured-pills, gradient KPI cards, identical card grids, sidebar-icon-and-chart admin shell). It also rejects the construction-trade safety palette (yellow/orange/alarm-red), cabinet-incumbent gray density (Mozaik, ProKitchen, Cabinet Vision), and Bootstrap admin-template anonymity. The two reference systems that ARE allowed to influence this one: Claude desktop app and Apple Settings / iA Writer. Sharp, native-feel software, with a single warm clay accent that says workshop without saying hard-hat.",
+    "keyCharacteristics": [
+      "Pure-white canvas (#FAFAF9) with a whisper-warm glow at the foot",
+      "No card borders by default; surfaces separate via shadow + tonal step",
+      "Serif display (Cormorant Garamond) for headings, italic for emphasis; Inter for body and data",
+      "Single clay accent (#B86F52), used as gradient fills more than as surface fills",
+      "Lean status palette held: muted sage, warm amber, dusty red, soft moss, gray-paused, andon-red",
+      "Dark pill CTAs (#1A1916), translucent segmented pills with backdrop-blur",
+      "Vertical-fade alpha gradients carry the transparent energy purposefully",
+      "Status visible at a glance from eight feet (spec §4.1 contract)"
+    ],
+    "rules": [
+      {
+        "name": "The Foot-Glow Rule",
+        "body": "The canvas carries a vertical gradient: #FFFFFF at top, #FAFAF9 at 60%, rgba(184,111,82,0.04) at the foot. The glow is invisible at first glance and only registers as warmth on second look. If it reads as orange tint at first look, it's too strong. Tune until ambiguous.",
+        "section": "colors"
+      },
+      {
+        "name": "The Rare-Accent Rule",
+        "body": "Clay (#B86F52) appears at full saturation on ≤5% of any visible surface. It carries dots, gradient top-stops, and soft-fill pills. It does NOT carry buttons, surfaces, or large fills. The rarity is the point.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Loud Red Rule",
+        "body": "Only --status-andon is allowed to be saturated. Every other status color is muted on purpose. If a screen needs an alert red, ask whether it's actually an andon. If not, use --status-blocked and a soft background.",
+        "section": "colors"
+      },
+      {
+        "name": "The Warm-Neutral Rule",
+        "body": "Every neutral tints warm (yellow/brown), never blue/gray. If a designer-tool default would push the neutral toward #F5F5F5 cool, that's wrong; the warm canvas tokens are the source of truth.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif-Italic Rule",
+        "body": "Italic Cormorant carries emphasis on 1-2 words inside a greeting or section title. Never on whole headings, never on body, never on UI labels. The italic is a brushstroke, not a default.",
+        "section": "typography"
+      },
+      {
+        "name": "The Tabular Number Rule",
+        "body": "Every numeric value that aligns in a column (currency, percentages, dates, job codes) gets font-variant-numeric: tabular-nums via the .tabular-nums utility class. Proportional figures only on running prose.",
+        "section": "typography"
+      },
+      {
+        "name": "The Never-700 Rule",
+        "body": "Heading weight is 500 in the serif, 600 in the sans for table-headers/eyebrows. Anything heavier reads as shout. The system is quiet by design.",
+        "section": "typography"
+      },
+      {
+        "name": "The Ghost-Border Rule",
+        "body": "Surfaces don't get borders. They earn separation through tonal step (the canvas is #FAFAF9, the card is #FFFFFF) plus a soft shadow at rest. If a designer asks should this card have a border, the answer is no.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Hover-Earns-Lift Rule",
+        "body": "Resting shadows are soft. Hover, drag, and focus deepen the shadow by ~80% (resting 0.10 → hover 0.18 on the same offset). Don't introduce color on hover; introduce lift.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Modal-Only-True-Elevation Rule",
+        "body": "The Modal / Drawer shadow vocabulary is reserved for genuinely lifted elements (modals, dropdowns, the andon banner). Cards don't get to use it; they stay at Resting or Hover.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the foot-glow on every page-level canvas (linear-gradient(180deg, #FFFFFF 0%, #FAFAF9 60%, rgba(184,111,82,0.04) 100%)). It's the brand signature.",
+      "Do float cards on shadow with no borders. Pure white cards on the #FAFAF9 canvas; resting shadow carries the lift.",
+      "Do use Cormorant Garamond 500 for all headings and the greeting. Italic only on 1-2 emphasis words inside a heading.",
+      "Do use dark ink pills (#1A1916) for primary CTAs. Clay accent is reserved for hover state, dots, gradient stops, and soft-fill pills.",
+      "Do put a colored status dot at the left edge of every list-view row (spec §4.1). The eight-feet glance test is the design contract.",
+      "Do render charts with vertical-fade alpha gradient fills (clay → transparent). It's the brand's transparency vocabulary, used purposefully.",
+      "Do render capacity / progress bars with horizontal gradient fills (clay(0.35) → clay(0.95)). Same vocabulary, different axis.",
+      "Do use tabular-nums on every numeric value that aligns in a column.",
+      "Do ensure 44×44px touch targets on shop-floor and install screens.",
+      "Do flag synthetic data with the demo tag. When real data lands, the flag goes away.",
+      "Do keep heading weight at 500 (Cormorant) / 600 (Inter all-caps labels). Never 700+."
+    ],
+    "donts": [
+      "Don't add borders to cards. The Ghost-Border Rule applies system-wide. Borders are reserved for inputs, the rare emphasized divider, and inside-card row dividers at rgba(26,25,22,0.05).",
+      "Don't use the warm clay accent at full saturation on a surface (button background, card fill, banner). Clay shows up at full saturation only on small surfaces — dots, gradient top-stops, soft-fill pills. The Rare-Accent Rule.",
+      "Don't turn the foot-glow into an obvious orange band. If it reads as orange tint at first glance, it's too strong. Tune until ambiguous.",
+      "Don't use Cormorant Garamond for body, labels, buttons, table cells, or anything that isn't a heading or greeting.",
+      "Don't use italic Cormorant on whole headings. Italic is for 1-2 emphasis words inside a heading.",
+      "Don't use bright safety-green / safety-yellow / alarm-red. The status palette is muted sage / warm amber / dusty red on purpose. Only --status-andon is allowed to be loud, and only during active andon alerts. (Anti-reference: construction-trade safety palette.)",
+      "Don't use border-left or border-right greater than 1px as a coloured stripe. Use full borders, background tints, leading dots, or nothing.",
+      "Don't use gradient text. Use a solid color and weight.",
+      "Don't ship glassmorphism as default — purposeful translucency (the segmented pill, ambient glows) only. The remaining surfaces are solid.",
+      "Don't stack two information architectures on the same view (e.g., AI briefing card AND flat data list competing for the same eye). Pick one focal point.",
+      "Don't use display fonts for UI labels, buttons, or data. Cormorant is for headings only; Inter does everything else.",
+      "Don't reinvent standard affordances for flavor (custom scrollbars, weird form controls, non-standard modals).",
+      "Don't ship a Salesforce/NetSuite/ServiceNow data-table-with-pills aesthetic. (Anti-reference: generic enterprise SaaS.)",
+      "Don't ship a Mozaik/Cabinet Vision/ProKitchen gray slab UI. (Anti-reference: cabinet-industry incumbents.)",
+      "Don't ship a Procore/BuilderTrend safety-coloured construction-trade aesthetic. (Anti-reference: construction-trade apps.)",
+      "Don't ship a Bootstrap-admin / AdminLTE off-the-shelf shell. (Anti-reference: bootstrap admin templates.)",
+      "Don't show a hero-metric KPI card. KPIs live as header subtitles or as compact stats inside a card, not as big-number-with-gradient blocks.",
+      "Don't reach for a modal as the first answer. Exhaust inline / progressive disclosure first.",
+      "Don't introduce new tokens. DESIGN.md is canonical. New requirements update DESIGN.md; DESIGN.md updates the tokens."
+    ]
+  }
+}
