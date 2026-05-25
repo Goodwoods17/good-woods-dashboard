@@ -57,7 +57,7 @@ export function TasksTab({ job }: { job: Job }) {
                   className={cn(
                     "h-6 w-6 rounded-full grid place-items-center shrink-0 mt-0.5 transition-colors duration-fast",
                     isPast && "bg-status-on-track text-white",
-                    isCurrent && "bg-accent text-white",
+                    isCurrent && "bg-white text-text-primary ring-2 ring-accent",
                     isFuture && "bg-surface border border-border text-text-tertiary"
                   )}
                 >
@@ -82,12 +82,12 @@ export function TasksTab({ job }: { job: Job }) {
                       {idx + 1}. {stage.label}
                     </span>
                     {isCurrent && (
-                      <span className="text-[10px] uppercase tracking-wider text-accent font-semibold">
+                      <span className="text-micro uppercase tracking-wider text-accent font-semibold">
                         Active
                       </span>
                     )}
                     {isPast && (
-                      <span className="text-[10px] uppercase tracking-wider text-status-on-track">
+                      <span className="text-micro uppercase tracking-wider text-status-on-track">
                         Done
                       </span>
                     )}

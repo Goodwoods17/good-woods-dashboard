@@ -2,16 +2,15 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Calendar as CalendarIcon, CalendarPlus } from "lucide-react";
+import { ArrowLeft, MapPin, Calendar as CalendarIcon, CalendarPlus, Pause, Play } from "lucide-react";
 import { downloadJobICS } from "@features/jobs/lib/ics";
 import {
   computeMargin,
   PIPELINE_LABELS,
-  HEALTH_LABELS,
   type PipelineStatus,
-  type HealthStatus,
 } from "@shared/lib/types";
 import { useJob, useJobs } from "@features/jobs/lib/jobsStore";
+import { deriveHealth } from "@features/jobs/lib/health";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
@@ -33,14 +32,6 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-const HEALTH_OPTIONS: HealthStatus[] = [
-  "on_track",
-  "at_risk",
-  "blocked",
-  "complete",
-  "paused",
-];
-
 type TabKey = "overview" | "tasks" | "files" | "costs" | "activity";
 
 const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
@@ -54,7 +45,7 @@ const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
 export function JobDetail({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   const { updateJob } = useJobs();
-  const [activeTab, setActiveTab] = useState<TabKey>("costs");
+  const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   if (!job) return null;
   const margin = computeMargin(job);
@@ -64,6 +55,8 @@ export function JobDetail({ jobId }: { jobId: string }) {
       : margin.band === "at_risk"
         ? "text-status-at-risk"
         : "text-status-blocked";
+  const derivedHealth = deriveHealth(job);
+  const isPaused = job.healthStatus === "paused";
 
   return (
     <div className="flex flex-col">
@@ -93,19 +86,40 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 }
                 trigger={<StatusBadge status={job.pipelineStatus} />}
               />
-              <StatusEditor
-                value={job.healthStatus}
-                options={HEALTH_OPTIONS.map((s) => ({
-                  value: s,
-                  label: HEALTH_LABELS[s],
-                }))}
-                onChange={(next) =>
-                  updateJob(job.id, { healthStatus: next })
+              <HealthPill status={derivedHealth} />
+              <button
+                type="button"
+                onClick={() =>
+                  updateJob(job.id, {
+                    healthStatus: isPaused ? "on_track" : "paused",
+                  })
                 }
-                trigger={<HealthPill status={job.healthStatus} />}
-              />
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-label font-medium",
+                  "border border-border text-text-secondary hover:text-text-primary hover:border-border-strong",
+                  "transition-colors duration-fast"
+                )}
+                title={
+                  isPaused
+                    ? "Resume — health goes back to deriving from schedule"
+                    : "Pause — health stays paused regardless of schedule"
+                }
+                aria-pressed={isPaused}
+              >
+                {isPaused ? (
+                  <>
+                    <Play className="h-3 w-3" strokeWidth={1.75} />
+                    Resume
+                  </>
+                ) : (
+                  <>
+                    <Pause className="h-3 w-3" strokeWidth={1.75} />
+                    Pause
+                  </>
+                )}
+              </button>
             </div>
-            <h1 className="font-serif text-[28px] leading-[34px] font-medium text-text-primary tracking-[-0.02em]">
+            <h1 className="font-serif text-headline font-medium text-text-primary">
               {job.name}
             </h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary flex-wrap">
@@ -129,15 +143,18 @@ export function JobDetail({ jobId }: { jobId: string }) {
             </div>
           </div>
 
-          <div className="shrink-0 text-right border-l border-border pl-6">
-            <div className="text-[11px] uppercase tracking-[0.06em] text-text-tertiary mb-1">
-              Gross margin
+          <div className="shrink-0 text-right border-l border-border pl-6 self-center">
+            <div className="text-sm text-text-secondary tabular-nums">
+              Revenue {formatCAD(job.revenue)}
+              <span className="text-text-tertiary"> · </span>
+              Cost {formatCAD(margin.costsTotal)}
+              <span className="text-text-tertiary"> · </span>
+              <span className={cn("font-medium", marginToneText)}>
+                GM {formatPct(margin.marginPct)}
+              </span>
             </div>
-            <div className={cn("text-2xl font-semibold tabular-nums", marginToneText)}>
-              {formatPct(margin.marginPct)}
-            </div>
-            <div className="text-xs text-text-tertiary tabular-nums mt-0.5">
-              {formatCAD(margin.marginAmount)} on {formatCAD(job.revenue)}
+            <div className="text-xs text-text-tertiary tabular-nums mt-1">
+              {formatCAD(margin.marginAmount)} gross margin
             </div>
           </div>
         </div>
@@ -164,13 +181,9 @@ export function JobDetail({ jobId }: { jobId: string }) {
                     : "border-transparent text-text-disabled cursor-not-allowed"
               )}
               aria-current={activeTab === tab.key ? "page" : undefined}
+              title={!tab.enabled ? "Coming soon" : undefined}
             >
               {tab.label}
-              {!tab.enabled && (
-                <span className="ml-1.5 text-[10px] uppercase tracking-wider text-text-tertiary">
-                  M3
-                </span>
-              )}
             </button>
           ))}
         </div>

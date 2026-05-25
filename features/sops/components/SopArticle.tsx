@@ -7,11 +7,11 @@ export function SopArticle({ sop }: { sop: SOP }) {
   return (
     <article className="bg-surface border border-border rounded-lg p-6 lg:p-8 max-w-3xl">
       <div className="flex items-center gap-2 mb-3">
-        <span className="text-[11px] uppercase tracking-[0.06em] text-text-tertiary">
+        <span className="text-label uppercase text-text-tertiary">
           {CATEGORY_LABEL[sop.category]}
         </span>
         <span className="text-text-disabled">·</span>
-        <span className="text-[11px] uppercase tracking-[0.06em] text-text-tertiary">
+        <span className="text-label uppercase text-text-tertiary">
           {sop.estTime}
         </span>
       </div>
@@ -29,7 +29,7 @@ export function SopArticle({ sop }: { sop: SOP }) {
             key={idx}
             className="flex items-start gap-3 text-sm text-text-primary leading-relaxed"
           >
-            <span className="h-5 w-5 rounded-full bg-accent-soft text-accent grid place-items-center text-[11px] font-semibold tabular-nums shrink-0 mt-0.5">
+            <span className="h-5 w-5 rounded-full bg-accent-soft text-accent grid place-items-center text-caption font-semibold tabular-nums shrink-0 mt-0.5">
               {idx + 1}
             </span>
             <span>{step}</span>

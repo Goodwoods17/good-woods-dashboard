@@ -18,6 +18,7 @@ import { PALETTE } from "@shared/lib/chartPalette";
 const COLORS = {
   bg: PALETTE.background,
   surface: PALETTE.surface,
+  surfaceMuted: PALETTE.surfaceMuted,
   border: PALETTE.border,
   borderStrong: PALETTE.borderStrong,
   textPrimary: PALETTE.textPrimary,
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
   },
   tableHead: {
     flexDirection: "row",
-    backgroundColor: "#F4F2EE",
+    backgroundColor: COLORS.surfaceMuted,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     paddingVertical: 7,

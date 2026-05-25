@@ -20,6 +20,7 @@ import {
 import { formatCAD, formatPct } from "@shared/lib/format";
 import { MarginCell } from "@shared/components/ui/MarginCell";
 import { HealthPill } from "@shared/components/ui/HealthPill";
+import { deriveHealth } from "@features/jobs/lib/health";
 import { cn } from "@shared/lib/utils";
 
 import { PALETTE as TOKEN } from "@shared/lib/chartPalette";
@@ -103,7 +104,7 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
         <KpiTile
           label="Total jobs"
           value={String(jobs.length)}
-          sub="All time (M2 will window to trailing 90 days)"
+          sub="All time"
           valueClass="text-text-primary"
         />
       </section>
@@ -234,7 +235,7 @@ export function ReportsView({ jobs }: { jobs: Job[] }) {
                   </Link>
                 </td>
                 <td className="px-4 py-3">
-                  <HealthPill status={job.healthStatus} />
+                  <HealthPill status={deriveHealth(job)} />
                 </td>
                 <td className={cn("px-4 py-3 text-right tabular-nums text-text-primary")}>
                   {formatCAD(job.revenue)}

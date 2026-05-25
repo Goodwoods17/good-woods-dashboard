@@ -68,7 +68,7 @@ export function TemplatePicker({
                         {tpl.description}
                       </div>
                     )}
-                    <div className="text-[11px] text-text-tertiary mt-2 leading-snug">
+                    <div className="text-caption text-text-tertiary mt-2 leading-snug">
                       <span className="font-medium text-text-secondary">Sections:</span>{" "}
                       {visibleLabels}
                     </div>

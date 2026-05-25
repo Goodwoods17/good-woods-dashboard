@@ -39,7 +39,7 @@ export function WorkUnitCard({
       {...listeners}
     >
       <div className="flex items-start justify-between gap-2 mb-1">
-        <span className="text-[10px] uppercase tracking-wider tabular-nums text-text-tertiary">
+        <span className="text-micro uppercase tracking-wider tabular-nums text-text-tertiary">
           {unit.jobCode}
         </span>
         <button
@@ -56,7 +56,7 @@ export function WorkUnitCard({
       <div className="text-sm text-text-primary leading-snug mb-1.5">
         {unit.description}
       </div>
-      <div className="text-[10px] tabular-nums text-text-tertiary">
+      <div className="text-micro tabular-nums text-text-tertiary">
         {hoursAgo(unit.startedAt)} on station
       </div>
     </div>

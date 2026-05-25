@@ -62,7 +62,7 @@ export function RoomsPanel({
                 onChange={(e) => updateRoom(room.id, { name: e.target.value })}
                 className="text-sm bg-transparent border-0 px-1 py-0.5 focus:outline-none focus:bg-surface focus:border focus:border-border focus:rounded"
               />
-              <span className="text-[11px] text-text-tertiary tabular-nums">
+              <span className="text-caption text-text-tertiary tabular-nums">
                 {stats.lineCount} line{stats.lineCount === 1 ? "" : "s"}
               </span>
               <span className="text-sm tabular-nums text-text-secondary font-medium min-w-[5.5rem] text-right">

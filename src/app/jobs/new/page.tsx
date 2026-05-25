@@ -272,7 +272,7 @@ export default function NewJobPage() {
           <div className="flex items-center justify-end gap-2 pt-2">
             <Link
               href="/"
-              className="px-4 py-2 text-sm rounded-md border border-border bg-surface text-text-secondary hover:text-text-primary transition-colors duration-fast"
+              className="rounded-full px-4 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-muted transition-colors duration-fast"
             >
               Cancel
             </Link>
@@ -280,8 +280,7 @@ export default function NewJobPage() {
               type="submit"
               disabled={!canSubmit || submitting}
               className={cn(
-                "px-4 py-2 text-sm font-medium rounded-md text-white transition-colors duration-fast",
-                "bg-accent hover:bg-accent-hover active:bg-accent-active",
+                "rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast",
                 "disabled:bg-text-disabled disabled:cursor-not-allowed"
               )}
             >

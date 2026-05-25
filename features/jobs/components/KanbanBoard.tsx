@@ -121,11 +121,11 @@ function Column({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex flex-col rounded-lg border bg-surface-muted/40 transition-colors duration-fast min-h-[300px]",
-        isOver ? "border-accent bg-accent-soft/30" : "border-border"
+        "flex flex-col rounded-lg bg-surface-muted/40 transition-shadow duration-fast min-h-[300px]",
+        isOver && "ring-2 ring-inset ring-accent-soft"
       )}
     >
-      <div className="px-3 py-2.5 flex items-center justify-between border-b border-border">
+      <div className="px-3 py-2.5 flex items-center justify-between border-b border-border-faint">
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
             {PIPELINE_LABELS[status]}
@@ -135,7 +135,7 @@ function Column({
           </span>
         </div>
         {totalValue > 0 && (
-          <span className="text-[11px] text-text-tertiary tabular-nums">
+          <span className="text-caption text-text-tertiary tabular-nums">
             {formatCAD(totalValue)}
           </span>
         )}
@@ -189,10 +189,10 @@ function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
         if (dragging) e.preventDefault();
       }}
       className={cn(
-        "block bg-surface border rounded-md p-3 text-left transition-shadow duration-fast",
+        "block bg-surface rounded-lg p-3 text-left transition-shadow duration-fast",
         dragging
-          ? "border-accent shadow-md cursor-grabbing"
-          : "border-border hover:border-border-strong hover:shadow-sm cursor-grab"
+          ? "shadow-modal cursor-grabbing"
+          : "shadow-resting hover:shadow-hover cursor-grab"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -211,7 +211,7 @@ function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
         </span>
         <MarginCell margin={margin} />
       </div>
-      <div className="text-[11px] text-text-tertiary tabular-nums mt-1.5 pt-1.5 border-t border-border">
+      <div className="text-caption text-text-tertiary tabular-nums mt-1.5 pt-1.5 border-t border-border-faint">
         Install {formatDate(job.installDate)}
       </div>
     </Link>

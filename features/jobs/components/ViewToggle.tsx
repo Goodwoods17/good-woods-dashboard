@@ -20,7 +20,7 @@ export function ViewToggle({
   onChange: (v: JobsView) => void;
 }) {
   return (
-    <div className="inline-flex items-center gap-0.5 bg-surface/70 backdrop-blur-md rounded-full p-1 shadow-floating">
+    <div className="inline-flex items-center gap-0.5 bg-white/60 backdrop-blur-md rounded-full p-1 shadow-floating">
       {VIEWS.map(({ key, label, icon: Icon }) => (
         <button
           key={key}

@@ -21,7 +21,7 @@ export function DeliveryCalculator({
 
   return (
     <div className="px-4 py-3 bg-surface space-y-3">
-      <p className="text-[11px] text-text-tertiary">
+      <p className="text-caption text-text-tertiary">
         Gas + travel time + loading time. Travel runs at install rate
         ({formatCAD(settings.labourRates.installRate)}/hr), loading at shop rate
         ({formatCAD(settings.labourRates.shopRate)}/hr).
@@ -39,7 +39,7 @@ export function DeliveryCalculator({
             }
             className="w-full text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
           />
-          <div className="text-[10px] text-text-tertiary mt-0.5">
+          <div className="text-micro text-text-tertiary mt-0.5">
             Round trip = {(delivery.miles * 2).toFixed(1)} mi · gas ${" "}
             {breakdown.gasCost.toFixed(2)}
           </div>
@@ -57,9 +57,9 @@ export function DeliveryCalculator({
               }
               className="w-full text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
             />
-            <span className="text-[11px] text-text-tertiary">hrs</span>
+            <span className="text-caption text-text-tertiary">hrs</span>
           </div>
-          <div className="text-[10px] text-text-tertiary mt-0.5">
+          <div className="text-micro text-text-tertiary mt-0.5">
             Travel labour {formatCAD(breakdown.travelCost)}
           </div>
         </Field>
@@ -78,9 +78,9 @@ export function DeliveryCalculator({
               }
               className="w-full text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
             />
-            <span className="text-[11px] text-text-tertiary">min/cab</span>
+            <span className="text-caption text-text-tertiary">min/cab</span>
           </div>
-          <div className="text-[10px] text-text-tertiary mt-0.5">
+          <div className="text-micro text-text-tertiary mt-0.5">
             {breakdown.loadingHours.toFixed(2)} hrs ·{" "}
             {formatCAD(breakdown.loadingCost)}
           </div>
@@ -89,7 +89,7 @@ export function DeliveryCalculator({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 pt-2 border-t border-border/40 items-end">
         <Field label="Gas rate (override)">
           <div className="flex items-center gap-1">
-            <span className="text-[11px] text-text-tertiary">$</span>
+            <span className="text-caption text-text-tertiary">$</span>
             <input
               type="number"
               inputMode="decimal"
@@ -103,11 +103,11 @@ export function DeliveryCalculator({
               }
               className="w-full text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
             />
-            <span className="text-[11px] text-text-tertiary">/ mile</span>
+            <span className="text-caption text-text-tertiary">/ mile</span>
           </div>
         </Field>
         <div className="text-right">
-          <div className="text-[10px] uppercase tracking-wider text-text-tertiary">
+          <div className="text-micro uppercase tracking-wider text-text-tertiary">
             Delivery total
           </div>
           <div className="text-lg font-semibold tabular-nums text-accent">
@@ -128,7 +128,7 @@ function Field({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+      <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
         {label}
       </div>
       {children}

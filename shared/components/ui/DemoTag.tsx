@@ -11,6 +11,7 @@ export function DemoTag({ inline = false }: { inline?: boolean }) {
     <span
       className={cn(
         "inline-flex items-center rounded-sm px-1 text-[9px] font-semibold uppercase tracking-[0.06em]",
+        // 9px sits below our token scale; keep arbitrary value
         "bg-surface-sunken text-text-tertiary",
         inline && "mx-1 align-middle"
       )}

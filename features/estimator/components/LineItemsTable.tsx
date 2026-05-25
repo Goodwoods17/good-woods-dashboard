@@ -67,7 +67,7 @@ export function LineItemsTable({
         <div className="min-w-[68rem]">
           {/* Column header — shown once at the top, only for "lines" sections */}
           <div
-            className="grid items-end gap-2 px-3 py-2 bg-surface-muted/40 text-[10px] uppercase tracking-wider text-text-tertiary font-semibold"
+            className="grid items-end gap-2 px-3 py-2 bg-surface-muted/40 text-micro uppercase tracking-wider text-text-tertiary font-semibold"
             style={{ gridTemplateColumns: LINE_GRID_TEMPLATE }}
           >
             <span>Category</span>

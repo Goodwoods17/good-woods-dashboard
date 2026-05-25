@@ -91,7 +91,7 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
       {rest.length > 0 && (
         <section className="bg-surface rounded-xl shadow-resting overflow-hidden">
           <header className="px-5 py-3 border-b border-border-faint">
-            <h3 className="text-[11px] font-semibold uppercase tracking-[0.06em] text-text-tertiary">
+            <h3 className="text-label font-semibold uppercase text-text-tertiary">
               Rest of pipeline · {rest.length}
             </h3>
           </header>
@@ -176,7 +176,7 @@ function HitlistRow({
             <div className="text-sm text-text-primary font-medium">
               {formatCAD(job.revenue)}
             </div>
-            <div className="text-[11px] text-text-tertiary">at risk</div>
+            <div className="text-caption text-text-tertiary">at risk</div>
           </div>
           <HealthPill status={health} />
           <ArrowRight

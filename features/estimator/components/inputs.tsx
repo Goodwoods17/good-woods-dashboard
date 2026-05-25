@@ -65,7 +65,7 @@ export function Sub({
 }) {
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+      <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
         {label}
       </div>
       {children}

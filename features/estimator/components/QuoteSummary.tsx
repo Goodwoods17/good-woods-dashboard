@@ -151,7 +151,7 @@ export function QuoteSummary({
         <ArrowRight className="h-4 w-4" strokeWidth={1.75} />
       </button>
 
-      <p className="text-[11px] text-text-tertiary leading-relaxed px-1">
+      <p className="text-caption text-text-tertiary leading-relaxed px-1">
         Saving creates a job in pipeline stage Sold with these costs and the
         quoted price as revenue. Pre-work is stored as a separate cost bucket
         so margin reports can show true profit.

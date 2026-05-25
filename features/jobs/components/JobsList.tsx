@@ -216,25 +216,25 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
             <thead>
               <tr className="border-b border-border-faint bg-surface-muted/60">
                 <th className="w-3 pl-4 pr-0 py-2.5" aria-label="Health" />
-                <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Job
                 </th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Client
                 </th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Pipeline
                 </th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Health
                 </th>
-                <th className="text-right px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Revenue
                 </th>
-                <th className="text-right px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-right px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   GM%
                 </th>
-                <th className="text-left px-4 py-2.5 text-xs font-medium uppercase tracking-[0.06em] text-text-tertiary">
+                <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   <button
                     onClick={toggleInstallSort}
                     className="inline-flex items-center gap-1 hover:text-text-secondary transition-colors duration-fast"
@@ -270,7 +270,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
                         href={`/jobs/${job.id}`}
                         className="block group"
                       >
-                        <div className="text-sm font-medium text-text-primary group-hover:text-accent transition-colors duration-fast">
+                        <div className="text-sm font-normal text-text-primary group-hover:text-accent transition-colors duration-fast">
                           {job.name}
                         </div>
                         <div className="text-xs text-text-tertiary tabular-nums mt-0.5">

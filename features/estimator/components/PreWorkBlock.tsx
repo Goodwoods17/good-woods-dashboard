@@ -30,7 +30,7 @@ export function PreWorkBlock({
 
   return (
     <div className="px-4 py-3 bg-surface space-y-2">
-      <p className="text-[11px] text-text-tertiary">
+      <p className="text-caption text-text-tertiary">
         Time spent before the build starts. Tracked internally for margin
         awareness — does <strong>not</strong> appear on the client quote. Priced
         at the workspace design rate ({formatCAD(settings.labourRates.designRate)}/hr).
@@ -62,7 +62,7 @@ export function PreWorkBlock({
                   }
                   className="w-full text-sm tabular-nums bg-surface-muted border border-border rounded-md px-1.5 py-1 text-right focus:outline-none focus:border-border-strong"
                 />
-                <span className="text-[11px] text-text-tertiary">hrs</span>
+                <span className="text-caption text-text-tertiary">hrs</span>
               </div>
               <input
                 type="text"

@@ -51,7 +51,7 @@ export function SectionBlock({
             {section.label}
           </span>
           {section.description && (
-            <span className="text-[11px] text-text-tertiary truncate">
+            <span className="text-caption text-text-tertiary truncate">
               {section.description}
             </span>
           )}
@@ -114,7 +114,7 @@ export function SectionBlock({
 
       {/* Cost subtotal underline (only when there's content beyond zero) */}
       {(showRows || isStructured) && subtotalCost > 0 && !customHeaderRight && (
-        <div className="px-4 py-1.5 border-t border-border/40 flex justify-end items-center gap-3 text-[11px] text-text-tertiary">
+        <div className="px-4 py-1.5 border-t border-border/40 flex justify-end items-center gap-3 text-caption text-text-tertiary">
           <span>Cost {formatCAD(subtotalCost)}</span>
         </div>
       )}

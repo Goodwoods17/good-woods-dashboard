@@ -14,7 +14,7 @@ export function FinishesTable() {
         <h3 className="text-xs uppercase tracking-[0.08em] font-semibold text-text-primary">
           Finishes (legacy)
         </h3>
-        <p className="text-[11px] text-text-tertiary mt-0.5">
+        <p className="text-caption text-text-tertiary mt-0.5">
           New finishing items now live in the Finishing section of Materials
           above. This table is kept during the transition.
         </p>

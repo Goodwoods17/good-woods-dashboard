@@ -13,11 +13,11 @@ export function PageHeader({
     <header className="px-8 pt-7 pb-5 flex items-end justify-between gap-6">
       <div className="min-w-0">
         {eyebrow && (
-          <div className="text-[11px] uppercase tracking-[0.06em] text-text-tertiary mb-2">
+          <div className="text-label uppercase text-text-tertiary mb-2">
             {eyebrow}
           </div>
         )}
-        <h1 className="font-serif text-[28px] leading-[34px] font-medium text-text-primary truncate tracking-[-0.02em]">
+        <h1 className="font-serif text-headline font-medium text-text-primary truncate">
           {title}
         </h1>
         {subtitle && (

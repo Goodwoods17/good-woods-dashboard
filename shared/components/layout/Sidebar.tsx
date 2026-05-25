@@ -77,7 +77,7 @@ export function Sidebar() {
     <aside className="w-56 shrink-0 border-r border-border bg-surface flex flex-col">
       <div className="px-5 py-5 border-b border-border">
         <Link href="/" className="flex items-center gap-2.5 group">
-          <div className="h-7 w-7 rounded-md bg-accent grid place-items-center">
+          <div className="h-7 w-7 rounded-md bg-text-primary grid place-items-center">
             <span className="text-white text-xs font-semibold tracking-tight">
               GW
             </span>
@@ -95,7 +95,7 @@ export function Sidebar() {
         {NAV.map((section, idx) => (
           <div key={idx} className={cn(idx > 0 && "mt-4")}>
             {section.label && (
-              <div className="px-2.5 mb-1 text-[10px] uppercase tracking-[0.08em] text-text-tertiary font-semibold">
+              <div className="px-2.5 mb-1 text-micro uppercase tracking-[0.08em] text-text-tertiary font-semibold">
                 {section.label}
               </div>
             )}
@@ -135,7 +135,7 @@ export function Sidebar() {
               <div className="text-xs font-medium text-text-primary truncate">
                 {user.email}
               </div>
-              <div className="text-[10px] uppercase tracking-wider text-text-tertiary">
+              <div className="text-micro uppercase tracking-wider text-text-tertiary">
                 Signed in
               </div>
             </div>
@@ -148,16 +148,13 @@ export function Sidebar() {
             </button>
           </div>
         )}
-        <div className="text-[11px] text-text-tertiary flex items-center gap-2">
-          <kbd className="font-mono text-[10px] border border-border bg-surface-muted rounded px-1 py-0.5">
+        <div className="text-caption text-text-tertiary flex items-center gap-2">
+          <kbd className="font-mono text-micro border border-border bg-surface-muted rounded px-1 py-0.5">
             ⌘K
           </kbd>
           jump anywhere
         </div>
-        <div className="text-xs text-text-secondary">
-          M1–M7 · all modules
-          <span className="text-text-tertiary"> · v0.7.0</span>
-        </div>
+        <div className="text-xs text-text-tertiary">v0.7.0</div>
       </div>
     </aside>
   );

@@ -20,13 +20,13 @@ export function DeficienciesBlock({
 
   return (
     <div className="px-4 py-3 bg-surface space-y-3">
-      <p className="text-[11px] text-text-tertiary">
+      <p className="text-caption text-text-tertiary">
         Keep this small. A predictable hours budget for typical touch-ups plus
         a contingency % on top of the quote for true unknowns.
       </p>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+          <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
             Touch-up hours budget
           </div>
           <div className="flex items-center gap-1">
@@ -41,8 +41,8 @@ export function DeficienciesBlock({
               }
               className="w-24 text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
             />
-            <span className="text-[11px] text-text-tertiary">hrs</span>
-            <span className="text-[11px] text-text-tertiary ml-2">
+            <span className="text-caption text-text-tertiary">hrs</span>
+            <span className="text-caption text-text-tertiary ml-2">
               @ install rate ({formatCAD(settings.labourRates.installRate)}/hr)
             </span>
           </div>
@@ -51,7 +51,7 @@ export function DeficienciesBlock({
           </div>
         </div>
         <div>
-          <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+          <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
             Contingency % (on quoted total)
           </div>
           <div className="flex items-center gap-1">
@@ -67,8 +67,8 @@ export function DeficienciesBlock({
               }
               className="w-24 text-sm tabular-nums bg-surface-muted border border-border rounded-md px-2 py-1 text-right focus:outline-none focus:border-border-strong"
             />
-            <span className="text-[11px] text-text-tertiary">%</span>
-            <span className="text-[11px] text-text-tertiary ml-2">
+            <span className="text-caption text-text-tertiary">%</span>
+            <span className="text-caption text-text-tertiary ml-2">
               of {formatCAD(quotedTotal)} pre-contingency
             </span>
           </div>

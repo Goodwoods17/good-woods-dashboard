@@ -204,7 +204,7 @@ export function CommandPalette() {
             aria-controls="cmdk-list"
             aria-activedescendant={items[activeIdx]?.id}
           />
-          <kbd className="text-[10px] font-mono text-text-tertiary border border-border bg-surface-muted rounded px-1.5 py-0.5">
+          <kbd className="text-micro font-mono text-text-tertiary border border-border bg-surface-muted rounded px-1.5 py-0.5">
             ESC
           </kbd>
         </div>
@@ -243,7 +243,7 @@ export function CommandPalette() {
             })
           )}
         </ul>
-        <div className="px-4 py-2 border-t border-border-faint bg-surface-muted text-[11px] text-text-tertiary flex items-center justify-between">
+        <div className="px-4 py-2 border-t border-border-faint bg-surface-muted text-caption text-text-tertiary flex items-center justify-between">
           <span>↑ ↓ navigate · ↵ open · ⌘1–5 jump</span>
           <span>
             <kbd className="font-mono">⌘K</kbd> toggles this palette
@@ -256,7 +256,7 @@ export function CommandPalette() {
 
 function HotkeyBadge({ n }: { n: number }) {
   return (
-    <kbd className="text-[10px] font-mono text-text-tertiary border border-border-faint bg-surface-muted rounded px-1 py-0.5 shrink-0">
+    <kbd className="text-micro font-mono text-text-tertiary border border-border-faint bg-surface-muted rounded px-1 py-0.5 shrink-0">
       ⌘{n}
     </kbd>
   );

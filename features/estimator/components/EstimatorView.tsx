@@ -443,7 +443,7 @@ export function EstimatorView() {
               template={activeTemplate}
               onClickChange={() => setTemplatePickerOpen(true)}
             />
-            <span className="text-[11px] text-text-tertiary">
+            <span className="text-caption text-text-tertiary">
               {activeTemplate.activeSections.length} section(s) active. Hidden
               sections won&apos;t price into this quote.
             </span>

@@ -136,7 +136,7 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
           {WEEKDAY_LABELS.map((d) => (
             <div
               key={d}
-              className="px-2 py-2 text-[11px] font-medium uppercase tracking-wider text-text-tertiary text-center"
+              className="px-2 py-2 text-label font-medium uppercase text-text-tertiary text-center"
             >
               {d}
             </div>
@@ -166,7 +166,7 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
                       !inMonth && "text-text-disabled",
                       inMonth && !isToday && "text-text-secondary",
                       isToday &&
-                        "h-5 w-5 rounded-full bg-accent text-white grid place-items-center text-[11px] font-semibold"
+                        "h-5 w-5 rounded-full bg-accent text-white grid place-items-center text-caption font-semibold"
                     )}
                   >
                     {d.getDate()}
@@ -177,7 +177,7 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
                     <Link
                       key={job.id}
                       href={`/jobs/${job.id}`}
-                      className="block text-[11px] rounded px-1.5 py-1 bg-accent-soft text-accent hover:bg-accent hover:text-white transition-colors duration-fast truncate"
+                      className="block text-caption rounded px-1.5 py-1 bg-accent-soft text-accent hover:bg-accent hover:text-white transition-colors duration-fast truncate"
                       title={`${job.name} — ${job.client}`}
                     >
                       <span
@@ -190,7 +190,7 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
                     </Link>
                   ))}
                   {dayJobs.length > 3 && (
-                    <div className="text-[10px] text-text-tertiary px-1.5">
+                    <div className="text-micro text-text-tertiary px-1.5">
                       +{dayJobs.length - 3} more
                     </div>
                   )}

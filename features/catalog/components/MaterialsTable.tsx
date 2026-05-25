@@ -43,18 +43,18 @@ export function MaterialsTable() {
                   {section.label}
                 </h3>
                 {section.description && (
-                  <p className="text-[11px] text-text-tertiary mt-0.5">
+                  <p className="text-caption text-text-tertiary mt-0.5">
                     {section.description}
                   </p>
                 )}
               </div>
-              <span className="text-[11px] text-text-tertiary">
+              <span className="text-caption text-text-tertiary">
                 {rows.length} item{rows.length === 1 ? "" : "s"}
               </span>
             </div>
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-border bg-surface-muted/30 text-[10px] uppercase tracking-wider text-text-tertiary">
+                <tr className="border-b border-border bg-surface-muted/30 text-micro uppercase tracking-wider text-text-tertiary">
                   <Th>Name</Th>
                   <Th>Supplier</Th>
                   <Th align="center">Unit</Th>
@@ -209,7 +209,7 @@ function StaleChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center px-1.5 py-0.5 rounded-full border text-[10px] tabular-nums",
+        "inline-flex items-center px-1.5 py-0.5 rounded-full border text-micro tabular-nums",
         tone,
       )}
     >

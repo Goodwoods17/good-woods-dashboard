@@ -113,7 +113,7 @@ function Link({ logo }: { logo?: boolean }) {
   if (!logo) return null;
   return (
     <div className="inline-flex items-center gap-2.5">
-      <div className="h-8 w-8 rounded-md bg-accent grid place-items-center">
+      <div className="h-8 w-8 rounded-md bg-text-primary grid place-items-center">
         <span className="text-white text-sm font-semibold tracking-tight">
           GW
         </span>

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkles } from "lucide-react";
+import { ArrowRight, Sparkles, Sunrise } from "lucide-react";
 import { getSupabase, hasSupabase } from "@shared/lib/supabase";
 import type { Briefing, BriefingRow } from "@features/briefing/lib/types";
 
@@ -37,7 +37,21 @@ export function BriefingCard() {
   }, []);
 
   if (!loaded) return null;
-  if (!briefing) return null;
+  if (!briefing) {
+    return (
+      <div className="bg-surface rounded-lg shadow-resting p-6 text-center mb-2">
+        <div className="inline-flex items-center justify-center h-10 w-10 rounded-full bg-surface-muted mb-3">
+          <Sunrise className="h-5 w-5 text-text-tertiary" strokeWidth={1.75} />
+        </div>
+        <div className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em] mb-1">
+          The shop is quiet
+        </div>
+        <p className="text-sm text-text-secondary max-w-md mx-auto leading-relaxed">
+          The morning briefing arrives at 9am each day.
+        </p>
+      </div>
+    );
+  }
 
   const itemCount = briefing.items.length;
   // Use the summary if present, otherwise lean on the count.
@@ -60,7 +74,7 @@ export function BriefingCard() {
         Today
       </span>
       <span className="text-text-tertiary shrink-0">·</span>
-      <span className="truncate min-w-0 italic font-serif text-base text-text-secondary group-hover:text-text-primary transition-colors duration-fast">
+      <span className="truncate min-w-0 font-serif text-base text-text-secondary group-hover:text-text-primary transition-colors duration-fast">
         {teaser}
       </span>
       <ArrowRight

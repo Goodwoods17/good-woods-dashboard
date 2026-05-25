@@ -41,7 +41,7 @@ export function BlockerChip({
   const sizeClass =
     size === "sm"
       ? "px-1.5 py-0.5 text-[9px] gap-1"
-      : "px-2 py-0.5 text-[10px] gap-1";
+      : "px-2 py-0.5 text-micro gap-1";
 
   return (
     <span

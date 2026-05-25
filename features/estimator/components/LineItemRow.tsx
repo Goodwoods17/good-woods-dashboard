@@ -72,7 +72,7 @@ export function LineItemRow({
             value={line.description ?? ""}
             onChange={(e) => onUpdate({ description: e.target.value })}
             placeholder="(description, optional)"
-            className="flex-1 text-[11px] italic bg-transparent border-0 px-2 py-0 text-text-tertiary placeholder:text-text-tertiary/60 focus:outline-none focus:bg-surface-muted focus:rounded"
+            className="flex-1 text-caption italic bg-transparent border-0 px-2 py-0 text-text-tertiary placeholder:text-text-tertiary/60 focus:outline-none focus:bg-surface-muted focus:rounded"
           />
           {showRoomPicker && (
             <RoomBadge
@@ -117,7 +117,7 @@ export function LineItemRow({
       {/* Cost (calculated) */}
       <CalcCell value={formatCAD(subtotal.cost)}>
         {hasWaste && (
-          <span className="text-[10px] text-text-tertiary leading-tight">
+          <span className="text-micro text-text-tertiary leading-tight">
             {line.qty} × {(1 + line.wastePct / 100).toFixed(2)} ={" "}
             {subtotal.buyingQty.toFixed(2)} {UNIT_LABELS[line.unit]}
           </span>
@@ -175,7 +175,7 @@ function RoomBadge({
       value={roomId ?? ""}
       onChange={(e) => onChange(e.target.value || undefined)}
       className={cn(
-        "text-[10px] px-1.5 py-0.5 rounded-full border focus:outline-none focus:ring-1 focus:ring-accent transition-colors",
+        "text-micro px-1.5 py-0.5 rounded-full border focus:outline-none focus:ring-1 focus:ring-accent transition-colors",
         roomId
           ? "bg-accent-soft/40 border-accent-soft text-accent"
           : "bg-surface-muted border-border text-text-tertiary",

@@ -83,7 +83,7 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
                 className="absolute top-0 bottom-0 flex flex-col items-center justify-center"
                 style={{ left: `${t.offsetPct}%` }}
               >
-                <span className="text-[10px] tabular-nums text-text-tertiary leading-none">
+                <span className="text-micro tabular-nums text-text-tertiary leading-none">
                   {t.label}
                 </span>
               </div>
@@ -206,14 +206,14 @@ function Lane({
         )}
         {isPast && (
           <div className="absolute top-1/2 -translate-y-1/2 left-3 flex items-center gap-2">
-            <span className="text-[10px] text-text-tertiary uppercase tracking-wider">
+            <span className="text-micro text-text-tertiary uppercase tracking-wider">
               Installed {formatDate(job.installDate)}
             </span>
           </div>
         )}
         {isFuture && (
           <div className="absolute top-1/2 -translate-y-1/2 right-3 flex items-center gap-2">
-            <span className="text-[10px] text-text-tertiary uppercase tracking-wider">
+            <span className="text-micro text-text-tertiary uppercase tracking-wider">
               Future — {formatDate(job.installDate)}
             </span>
           </div>
@@ -221,10 +221,10 @@ function Lane({
         {hovered && (
           <div className="absolute top-1 right-2 flex items-center gap-2 pointer-events-none">
             <HealthPill status={health} />
-            <span className="text-[11px] tabular-nums text-text-secondary">
+            <span className="text-caption tabular-nums text-text-secondary">
               {formatCAD(job.revenue)} · {margin.marginPct.toFixed(0)}%
             </span>
-            <span className="text-[10px] text-text-tertiary uppercase tracking-[0.04em]">
+            <span className="text-micro text-text-tertiary uppercase tracking-[0.04em]">
               {PIPELINE_LABELS[job.pipelineStatus]}
             </span>
           </div>

@@ -58,7 +58,7 @@ export function SopLibrary({
                 />
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{sop.title}</div>
-                  <div className="text-[11px] text-text-tertiary uppercase tracking-wider mt-0.5">
+                  <div className="text-label text-text-tertiary uppercase mt-0.5">
                     {CATEGORY_LABEL[sop.category]}
                   </div>
                 </div>

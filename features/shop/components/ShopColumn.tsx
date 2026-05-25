@@ -56,7 +56,7 @@ export function ShopColumn({
           </span>
         </div>
         {overLimit && (
-          <span className="text-[10px] uppercase tracking-wider text-status-blocked font-semibold">
+          <span className="text-micro uppercase tracking-wider text-status-blocked font-semibold">
             Over WIP
           </span>
         )}

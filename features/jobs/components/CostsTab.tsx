@@ -178,7 +178,7 @@ export function CostsTab({
             </div>
           </div>
           <div className="mt-4 pt-4 border-t border-border">
-            <div className="text-[11px] text-text-tertiary leading-relaxed">
+            <div className="text-caption text-text-tertiary leading-relaxed">
               Bands:{" "}
               <span className="text-status-on-track">≥30% healthy</span> ·{" "}
               <span className="text-status-at-risk">20–30% tight</span> ·{" "}
@@ -200,7 +200,7 @@ export function CostsTab({
           {exporting ? "Generating PDF…" : "Export Invoice PDF"}
         </button>
 
-        <div className="text-[11px] text-text-tertiary leading-relaxed px-1">
+        <div className="text-caption text-text-tertiary leading-relaxed px-1">
           Invoice {job.invoice.number} · {job.invoice.lineItems.length} line
           item{job.invoice.lineItems.length === 1 ? "" : "s"}
         </div>

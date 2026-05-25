@@ -41,7 +41,7 @@ export function MilestonesStrip({
                   isPast &&
                     "bg-status-on-track border-status-on-track text-white",
                   isCurrent &&
-                    "bg-accent border-accent text-white shadow-sm",
+                    "bg-white text-text-primary ring-2 ring-accent border-transparent",
                   !isPast &&
                     !isCurrent &&
                     "bg-surface border-border text-text-tertiary",

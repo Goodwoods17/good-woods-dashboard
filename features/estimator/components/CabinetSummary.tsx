@@ -69,7 +69,7 @@ export function CabinetSummary({
           />
         </Sub>
         <div className="self-end">
-          <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+          <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
             Total cabinet Ft
           </div>
           <div className="text-lg font-semibold tabular-nums text-text-primary">
@@ -105,17 +105,17 @@ function CabinetRow({
 }) {
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] uppercase tracking-wider text-text-tertiary">
+      <div className="text-micro uppercase tracking-wider text-text-tertiary">
         {label}
       </div>
       <div className="grid grid-cols-2 gap-1.5">
         <div>
           <NumberInput value={count} step="1" onChange={onCount} />
-          <div className="text-[10px] text-text-tertiary mt-0.5">cabs</div>
+          <div className="text-micro text-text-tertiary mt-0.5">cabs</div>
         </div>
         <div>
           <NumberInput value={linearFt} onChange={onLinearFt} />
-          <div className="text-[10px] text-text-tertiary mt-0.5">Ft</div>
+          <div className="text-micro text-text-tertiary mt-0.5">Ft</div>
         </div>
       </div>
       {rooms.length > 0 && (
@@ -123,7 +123,7 @@ function CabinetRow({
           <select
             value={roomId ?? ""}
             onChange={(e) => onRoom(e.target.value || undefined)}
-            className="w-full text-[11px] px-1.5 py-1 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
+            className="w-full text-caption px-1.5 py-1 border border-border rounded bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent"
           >
             <option value="">— whole job —</option>
             {rooms.map((r) => (

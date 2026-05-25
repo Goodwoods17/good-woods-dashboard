@@ -4,9 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import type { Job } from "@shared/lib/types";
-import { computeMargin } from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
-import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
+import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
 const TEMPLATE_LABELS: Record<Job["template"], string> = {
@@ -17,7 +16,6 @@ const TEMPLATE_LABELS: Record<Job["template"], string> = {
 };
 
 export function OverviewTab({ job }: { job: Job }) {
-  const margin = computeMargin(job);
   const { deleteJob, updateJob } = useJobs();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -54,32 +52,10 @@ export function OverviewTab({ job }: { job: Job }) {
     updateJob(job.id, { nextStep: next });
   }
 
-  const matCost = job.costs
-    .filter((c) => c.category === "materials")
-    .reduce((s, c) => s + c.amount, 0);
-  const labCost = job.costs
-    .filter((c) => c.category === "labour")
-    .reduce((s, c) => s + c.amount, 0);
-  const ovrCost = job.costs
-    .filter((c) => c.category === "overhead")
-    .reduce((s, c) => s + c.amount, 0);
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 max-w-6xl">
-      <KpiCard label="Revenue" value={formatCAD(job.revenue)} />
-      <KpiCard
-        label="Total cost"
-        value={formatCAD(margin.costsTotal)}
-        sub={`${formatCAD(matCost)} mat · ${formatCAD(labCost)} lab · ${formatCAD(ovrCost)} oh`}
-      />
-      <KpiCard
-        label="Gross margin"
-        value={formatPct(margin.marginPct)}
-        sub={formatCAD(margin.marginAmount)}
-        tone={margin.band}
-      />
-
-      <section className="lg:col-span-3 bg-surface rounded-xl shadow-resting p-6">
+    <div className="flex flex-col gap-4 max-w-6xl">
+      {/* Lead section: the reason a user clicked into this job from the Hitlist. */}
+      <section className="bg-surface rounded-xl shadow-resting p-6">
         <h3 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em] mb-4">
           What's blocking this
         </h3>
@@ -96,7 +72,7 @@ export function OverviewTab({ job }: { job: Job }) {
               rows={2}
               className="w-full px-3 py-2 text-sm bg-surface border border-border rounded-md placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast resize-y leading-relaxed"
             />
-            <div className="text-[11px] text-text-tertiary mt-1">
+            <div className="text-caption text-text-tertiary mt-1">
               Empty falls back to the synthetic heuristic with a{" "}
               <span className="inline-block rounded-sm bg-surface-sunken px-1 text-[9px] uppercase tracking-[0.04em] text-text-tertiary">demo</span>{" "}
               tag.
@@ -114,14 +90,14 @@ export function OverviewTab({ job }: { job: Job }) {
               rows={2}
               className="w-full px-3 py-2 text-sm bg-surface border border-border rounded-md placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast resize-y leading-relaxed"
             />
-            <div className="text-[11px] text-text-tertiary mt-1">
+            <div className="text-caption text-text-tertiary mt-1">
               Shows up as the lead text in the Hitlist row.
             </div>
           </label>
         </div>
       </section>
 
-      <section className="lg:col-span-3 bg-surface rounded-xl shadow-resting p-6">
+      <section className="bg-surface rounded-xl shadow-resting p-6">
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
           Job details
         </h3>
@@ -143,11 +119,12 @@ export function OverviewTab({ job }: { job: Job }) {
         )}
       </section>
 
-      <section className="lg:col-span-3 bg-surface rounded-xl shadow-resting p-6">
+      {/* Danger zone — Ghost-Border Rule: no panel framing, ink-pill destructive. */}
+      <section className="pt-6">
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-2">
           Danger zone
         </h3>
-        <p className="text-sm text-text-secondary mb-4 leading-relaxed">
+        <p className="text-sm text-text-secondary mb-4 leading-relaxed max-w-2xl">
           Deleting this job removes it from the database and erases its costs,
           activity log, and invoice. Cannot be undone.
         </p>
@@ -155,68 +132,39 @@ export function OverviewTab({ job }: { job: Job }) {
           <button
             onClick={() => setConfirming(true)}
             className={cn(
-              "inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium",
-              "text-text-secondary hover:border-status-blocked hover:text-status-blocked transition-colors duration-fast"
+              "inline-flex items-center gap-2 rounded-full bg-text-primary text-white px-4 py-1.5 text-sm font-medium",
+              "hover:bg-status-blocked-soft hover:text-status-blocked transition-colors duration-fast"
             )}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
             Delete this job
           </button>
         ) : (
-          <div className="flex flex-wrap items-center gap-2 bg-status-blocked-soft border border-status-blocked/30 rounded-md p-3">
-            <span className="text-sm text-status-blocked flex-1 min-w-[200px]">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-text-primary flex-1 min-w-[200px]">
               Permanently delete <strong>{job.name}</strong>?
             </span>
             <button
               onClick={() => setConfirming(false)}
               disabled={deleting}
-              className="px-3 py-1.5 text-sm rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors duration-fast"
+              className="rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors duration-fast"
             >
               Cancel
             </button>
             <button
               onClick={handleDelete}
               disabled={deleting}
-              className="px-3 py-1.5 text-sm rounded-md bg-status-blocked text-white hover:opacity-90 transition-opacity duration-fast disabled:opacity-50"
+              className={cn(
+                "rounded-full bg-text-primary text-white px-4 py-1.5 text-sm font-medium",
+                "hover:bg-status-blocked-soft hover:text-status-blocked transition-colors duration-fast",
+                "disabled:opacity-50"
+              )}
             >
               {deleting ? "Deleting…" : "Delete"}
             </button>
           </div>
         )}
       </section>
-    </div>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  tone,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  tone?: "on_track" | "at_risk" | "blocked";
-}) {
-  const toneClass = tone
-    ? tone === "on_track"
-      ? "text-status-on-track"
-      : tone === "at_risk"
-        ? "text-status-at-risk"
-        : "text-status-blocked"
-    : "text-text-primary";
-  return (
-    <div className="bg-surface rounded-xl shadow-resting p-5">
-      <div className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-2">
-        {label}
-      </div>
-      <div className={cn("text-2xl font-semibold tabular-nums", toneClass)}>
-        {value}
-      </div>
-      {sub && (
-        <div className="text-xs text-text-tertiary tabular-nums mt-1.5">{sub}</div>
-      )}
     </div>
   );
 }

@@ -12,7 +12,7 @@ export function BriefingFull({ briefing }: { briefing: Briefing }) {
   return (
     <div className="space-y-6">
       <div className="bg-surface border border-border rounded-lg px-5 py-4">
-        <div className="text-[10px] uppercase tracking-wider text-text-tertiary mb-1">
+        <div className="text-micro uppercase tracking-wider text-text-tertiary mb-1">
           Summary · {formatTime(briefing.generated_at)}
         </div>
         <p className="text-sm text-text-primary leading-relaxed whitespace-pre-line">

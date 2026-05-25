@@ -19,9 +19,9 @@ export function StorageSection() {
       <Field label="Jobs loaded" value={String(jobs.length)} />
       {backend === "localStorage" && (
         <p className="text-xs text-text-tertiary col-span-2 mt-1 leading-relaxed">
-          Set <code className="font-mono text-[11px]">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
+          Set <code className="font-mono text-caption">NEXT_PUBLIC_SUPABASE_URL</code>{" "}
           and{" "}
-          <code className="font-mono text-[11px]">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
+          <code className="font-mono text-caption">NEXT_PUBLIC_SUPABASE_ANON_KEY</code>{" "}
           to switch this surface to Supabase. Each device currently has its own
           copy.
         </p>

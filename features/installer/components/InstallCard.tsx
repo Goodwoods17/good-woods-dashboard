@@ -29,7 +29,7 @@ export function InstallCard({
           </div>
         </div>
         <div className="text-right shrink-0">
-          <div className="text-[10px] uppercase tracking-wider text-text-tertiary">
+          <div className="text-micro uppercase tracking-wider text-text-tertiary">
             Install
           </div>
           <div className="text-sm font-medium text-text-primary tabular-nums">
