@@ -1,46 +1,31 @@
 # CRM
 
-Client list derived from jobs — no separate clients table.
+Thin shell around `features/contacts/`. The `/crm` route renders the
+real Contacts table; the heavy lifting (store, list, detail, form,
+combobox, warmth, role pills, aggregates) lives one folder over.
 
-## What it does
+See `features/contacts/CLAUDE.md` for everything that matters.
 
-Single page (`/crm`) listing every distinct `client` string seen across
-jobs. For each client it shows:
-
-- Number of jobs (active + completed)
-- Lifetime revenue
-- Lifetime margin
-- Most recent install date
-
-Click a client → links to a filtered jobs view for that client.
-
-## Where things live
+## What's still here
 
 ```
 features/crm/
-├── lib/
-│   └── aggregate.ts        ClientRow type + computeClients(jobs)
+├── CLAUDE.md
 └── components/
-    ├── CrmView.tsx         top-level: header + table or empty state
-    ├── ClientsTable.tsx    the lifetime-revenue table
-    └── EmptyState.tsx      shown when there are no jobs yet
+    ├── CrmView.tsx        (thin: renders <ContactsList /> from features/contacts)
+    └── EmptyState.tsx     (the "No contacts yet" empty state)
 ```
 
-`src/app/crm/page.tsx` is a 4-line shell. Pure derivation from
-`useJobs()` — no separate clients store.
+`CrmView` is the entry point for `src/app/crm/page.tsx`. It composes
+`useJobs()` + `useContacts()`, computes contact rollups via
+`features/contacts/lib/aggregate.ts`, and feeds them into
+`ContactsList`. EmptyState is used when there are zero active contacts.
 
-## Domain notes
+## What used to be here (removed 2026-05-25)
 
-- A "client" is identified by exact string match on `job.client`. There's
-  no fuzzy matching, no aliasing — "Raubyn Studio" and "Raubyn studio"
-  would split. If that becomes a problem, normalise on save.
-- "Lifetime margin" uses `computeMargin` (revenue − cost) summed across
-  all the client's jobs.
+- `ClientsTable.tsx` — pre-CRM-feature derived-from-jobs table; replaced by
+  `features/contacts/components/ContactsList.tsx`.
+- `lib/aggregate.ts` — `ClientRow` + `computeClients`; replaced by
+  `features/contacts/lib/aggregate.ts` (`ContactRollup` + `rollupContacts`).
 
-## When to revisit
-
-- A real contacts schema is needed (multiple contacts per client, phone,
-  email, address book) → `client` becomes a foreign key to a real
-  `clients` table; this page becomes a list view of that table.
-- Per-client communication history (calls, emails, notes) → that's
-  proper CRM territory, plan it as a real feature.
+The `/crm` URL is stable; only the implementation changed.

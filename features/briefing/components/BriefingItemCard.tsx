@@ -16,9 +16,14 @@ const SEVERITY_TO_STATUS: Record<BriefingSeverity, HealthStatus> = {
 };
 
 export function BriefingItemCard({ item }: { item: BriefingItem }) {
+  const isRelationship = item.kind === "relationship";
+  const href = isRelationship
+    ? `/crm/${item.contact_id ?? item.job_id}`
+    : `/jobs/${item.job_id}`;
+
   return (
     <Link
-      href={`/jobs/${item.job_id}`}
+      href={href}
       className="block rounded-lg bg-surface p-4 shadow-resting hover:shadow-hover transition-shadow duration-fast"
     >
       <div className="flex items-baseline justify-between gap-3">
@@ -33,11 +38,23 @@ export function BriefingItemCard({ item }: { item: BriefingItem }) {
         </div>
       </div>
       <div className="mt-1 text-xs text-text-secondary">
-        <span className="font-mono">{item.job_code}</span>
-        <span className="mx-1.5 text-text-tertiary">·</span>
-        <span>{item.job_name}</span>
-        <span className="mx-1.5 text-text-tertiary">·</span>
-        <span>{item.client}</span>
+        {isRelationship ? (
+          <>
+            <span className="text-text-tertiary uppercase tracking-wider text-[10px] font-medium">
+              Relationship
+            </span>
+            <span className="mx-1.5 text-text-tertiary">·</span>
+            <span>{item.contact_name ?? item.client}</span>
+          </>
+        ) : (
+          <>
+            <span className="font-mono">{item.job_code}</span>
+            <span className="mx-1.5 text-text-tertiary">·</span>
+            <span>{item.job_name}</span>
+            <span className="mx-1.5 text-text-tertiary">·</span>
+            <span>{item.client}</span>
+          </>
+        )}
       </div>
       <div className="mt-2 text-sm text-text-secondary leading-relaxed">
         {item.reason}

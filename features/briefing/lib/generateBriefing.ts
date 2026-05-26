@@ -1,12 +1,19 @@
 import Anthropic from "@anthropic-ai/sdk";
-import { JOBS_TABLE } from "@shared/lib/supabase";
+import { CONTACTS_TABLE, JOBS_TABLE } from "@shared/lib/supabase";
 import { rowToJob, type JobRow } from "@features/jobs/lib/jobsRowMap";
+import {
+  rowToContact,
+  type ContactRow,
+} from "@features/contacts/lib/contactsRowMap";
+import { daysSince } from "@features/contacts/lib/aggregate";
+import { STALE_THRESHOLD_DAYS } from "@features/contacts/components/WarmthChip";
 import {
   BRIEFING_MODEL,
   BRIEFING_TOOL,
   SYSTEM_PROMPT,
   buildUserMessage,
   jobsToInput,
+  type StaleAnchorInput,
 } from "./prompt";
 import { getServerSupabase, BRIEFINGS_TABLE } from "./serverSupabase";
 import type { Briefing, BriefingItem, BriefingRow } from "./types";
@@ -22,15 +29,36 @@ export async function generateBriefing(
   const today = opts.today ?? new Date();
   const supabase = getServerSupabase();
 
-  const { data: rows, error: jobsErr } = await supabase
-    .from(JOBS_TABLE)
-    .select("*");
+  const [
+    { data: jobRows, error: jobsErr },
+    { data: contactRows, error: contactsErr },
+  ] = await Promise.all([
+    supabase.from(JOBS_TABLE).select("*"),
+    supabase.from(CONTACTS_TABLE).select("*"),
+  ]);
   if (jobsErr) {
     throw new Error(`Failed to read jobs: ${jobsErr.message}`);
   }
-  const jobs = ((rows as JobRow[] | null) ?? []).map(rowToJob);
+  if (contactsErr) {
+    throw new Error(`Failed to read contacts: ${contactsErr.message}`);
+  }
+  const jobs = ((jobRows as JobRow[] | null) ?? []).map(rowToJob);
   const openJobs = jobs.filter((j) => j.pipelineStatus !== "complete");
   const jobsInput = jobsToInput(openJobs, today);
+
+  const contacts = ((contactRows as ContactRow[] | null) ?? []).map(rowToContact);
+  const staleAnchors: StaleAnchorInput[] = contacts
+    .filter((c) => c.isAnchor && !c.archivedAt)
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      kind: c.kind,
+      roleTags: c.roleTags,
+      lastTouchedAt: c.lastTouchedAt ?? null,
+      daysSinceTouch: daysSince(c.lastTouchedAt, today),
+    }))
+    .filter((a) => a.daysSinceTouch === null || a.daysSinceTouch >= STALE_THRESHOLD_DAYS)
+    .sort((a, b) => (b.daysSinceTouch ?? 9999) - (a.daysSinceTouch ?? 9999));
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) throw new Error("ANTHROPIC_API_KEY missing.");
@@ -42,7 +70,9 @@ export async function generateBriefing(
     system: SYSTEM_PROMPT,
     tools: [BRIEFING_TOOL],
     tool_choice: { type: "tool", name: BRIEFING_TOOL.name },
-    messages: [{ role: "user", content: buildUserMessage(jobsInput, today) }],
+    messages: [
+      { role: "user", content: buildUserMessage(jobsInput, staleAnchors, today) },
+    ],
   });
 
   const toolUse = response.content.find((b) => b.type === "tool_use");

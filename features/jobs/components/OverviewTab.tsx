@@ -2,11 +2,22 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Trash2, ArrowUpRight } from "lucide-react";
 import type { Job } from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useContacts } from "@features/contacts/lib/contactsStore";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
+
+type SlotKey = "payer" | "designer" | "gc" | "architect" | "homeowner";
+const SLOT_LABELS: Record<SlotKey, string> = {
+  payer: "Payer",
+  designer: "Designer",
+  gc: "GC",
+  architect: "Architect",
+  homeowner: "Homeowner",
+};
 
 const TEMPLATE_LABELS: Record<Job["template"], string> = {
   refacing: "Refacing",
@@ -17,9 +28,24 @@ const TEMPLATE_LABELS: Record<Job["template"], string> = {
 
 export function OverviewTab({ job }: { job: Job }) {
   const { deleteJob, updateJob } = useJobs();
+  const { contacts } = useContacts();
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const parties: { key: SlotKey; id: string | null | undefined }[] = [
+    { key: "payer", id: job.payerId },
+    { key: "designer", id: job.designerId },
+    { key: "gc", id: job.gcId },
+    { key: "architect", id: job.architectId },
+    { key: "homeowner", id: job.homeownerId },
+  ];
+  const populated = parties
+    .map(({ key, id }) => ({ key, contact: id ? contacts.find((c) => c.id === id) : null }))
+    .filter((p) => p.contact !== null && p.contact !== undefined) as {
+      key: SlotKey;
+      contact: NonNullable<ReturnType<typeof contacts.find>>;
+    }[];
 
   async function handleDelete() {
     setDeleting(true);
@@ -97,13 +123,41 @@ export function OverviewTab({ job }: { job: Job }) {
         </div>
       </section>
 
+      {populated.length > 0 && (
+        <section className="bg-surface rounded-xl shadow-resting p-6">
+          <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
+            Parties
+          </h3>
+          <ul className="divide-y divide-[rgba(26,25,22,0.05)]">
+            {populated.map(({ key, contact }) => (
+              <li key={key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <span className="text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium w-24 shrink-0">
+                  {SLOT_LABELS[key]}
+                </span>
+                <Link
+                  href={`/crm/${contact.id}`}
+                  className="flex-1 min-w-0 flex items-center justify-between gap-2 text-text-primary hover:text-accent transition-colors duration-fast"
+                >
+                  <span className="inline-flex items-center gap-2 min-w-0">
+                    {contact.isAnchor && (
+                      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
+                    )}
+                    <span className="text-sm font-medium truncate">{contact.name}</span>
+                  </span>
+                  <ArrowUpRight className="h-3.5 w-3.5 text-text-tertiary shrink-0" strokeWidth={1.75} />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       <section className="bg-surface rounded-xl shadow-resting p-6">
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
           Job details
         </h3>
         <dl className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           <Field label="Template" value={TEMPLATE_LABELS[job.template]} />
-          <Field label="Client" value={job.client} />
           <Field label="Address" value={job.address} />
           <Field label="Install date" value={formatDate(job.installDate)} />
           <Field label="Job code" value={job.code} mono />

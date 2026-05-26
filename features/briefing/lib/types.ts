@@ -1,6 +1,14 @@
 export type BriefingSeverity = "red" | "yellow" | "green";
 
+export type BriefingItemKind = "job" | "relationship";
+
 export type BriefingItem = {
+  /**
+   * Discriminator. "job" items link to /jobs/[id]; "relationship" items
+   * link to /crm/[id]. Optional for backward compatibility with rows
+   * generated before the contacts feature shipped (treat as "job").
+   */
+  kind?: BriefingItemKind;
   job_id: string;
   job_code: string;
   job_name: string;
@@ -9,6 +17,9 @@ export type BriefingItem = {
   headline: string;
   reason: string;
   suggested_action: string;
+  /** Set when kind === "relationship". */
+  contact_id?: string;
+  contact_name?: string;
 };
 
 export type Briefing = {
