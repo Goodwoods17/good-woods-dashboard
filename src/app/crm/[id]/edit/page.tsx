@@ -1,6 +1,5 @@
 "use client";
 
-import { use } from "react";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { ContactForm } from "@features/contacts/components/ContactForm";
@@ -9,11 +8,10 @@ import { useContact, useContacts } from "@features/contacts/lib/contactsStore";
 export default function EditContactPage({
   params,
 }: {
-  params: Promise<{ id: string }>;
+  params: { id: string };
 }) {
-  const { id } = use(params);
   const { loading } = useContacts();
-  const contact = useContact(id);
+  const contact = useContact(params.id);
 
   if (loading) {
     return (

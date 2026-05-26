@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ChevronsUpDown, Plus, X } from "lucide-react";
+import { Check, ChevronsUpDown, ExternalLink, Plus, X } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useContacts } from "../lib/contactsStore";
 import {
@@ -124,8 +124,8 @@ export function ContactCombobox({
       </button>
 
       {open && (
-        <div className="absolute z-10 mt-1 w-full bg-white rounded-lg shadow-floating overflow-hidden">
-          <div className="border-b border-[rgba(26,25,22,0.05)] px-3 py-2">
+        <div className="absolute z-10 mt-1 w-full bg-white rounded-lg shadow-floating overflow-hidden max-h-[80vh] flex flex-col">
+          <div className="border-b border-[rgba(26,25,22,0.05)] px-3 py-2 shrink-0">
             <input
               autoFocus
               type="text"
@@ -258,7 +258,7 @@ function InlineCreate({
   }
 
   return (
-    <form onSubmit={submit} className="p-3 space-y-2 bg-surface-muted/40">
+    <form onSubmit={submit} className="p-3 space-y-2 bg-surface-muted/40 overflow-y-auto">
       <div className="text-xs uppercase tracking-[0.06em] text-text-tertiary">
         New contact{defaultRole ? ` . ${ROLE_TAG_LABELS[defaultRole]}` : ""}
       </div>
@@ -295,24 +295,36 @@ function InlineCreate({
         className="w-full text-sm bg-white border border-border rounded-md px-2.5 py-1.5 focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft"
       />
       {err && <div className="text-xs text-status-blocked">{err}</div>}
-      <div className="flex items-center justify-end gap-1.5">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-xs text-text-tertiary hover:text-text-secondary px-2 py-1"
+      <div className="flex items-center justify-between gap-1.5 pt-1">
+        <a
+          href="/crm/new"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1 text-xs text-text-tertiary hover:text-accent transition-colors duration-fast"
+          title="Opens in a new tab so this job form is preserved"
         >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          disabled={name.trim().length === 0 || submitting}
-          className={cn(
-            "rounded-full bg-ink-pill text-white px-3 py-1 text-xs font-medium hover:bg-accent-active transition-colors duration-fast",
-            "disabled:bg-text-disabled disabled:cursor-not-allowed"
-          )}
-        >
-          {submitting ? "Creating" : "Create"}
-        </button>
+          Open full editor
+          <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
+        </a>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="text-xs text-text-tertiary hover:text-text-secondary px-2 py-1"
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={name.trim().length === 0 || submitting}
+            className={cn(
+              "rounded-full bg-ink-pill text-white px-3 py-1 text-xs font-medium hover:bg-accent-active transition-colors duration-fast",
+              "disabled:bg-text-disabled disabled:cursor-not-allowed"
+            )}
+          >
+            {submitting ? "Creating" : "Create"}
+          </button>
+        </div>
       </div>
     </form>
   );
