@@ -27,6 +27,8 @@ export type JobRow = {
   gc_id: string | null;
   homeowner_id: string | null;
   site_access: SiteAccess;
+  source: string | null;
+  estimated_revenue: number | null;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -54,6 +56,8 @@ export function rowToJob(row: JobRow): Job {
     gcId: row.gc_id,
     homeownerId: row.homeowner_id,
     siteAccess: row.site_access ?? {},
+    source: row.source,
+    estimatedRevenue: row.estimated_revenue != null ? Number(row.estimated_revenue) : null,
   };
 }
 
@@ -82,5 +86,7 @@ export function jobToRow(job: Job): JobRow {
     gc_id: job.gcId ?? null,
     homeowner_id: job.homeownerId ?? null,
     site_access: job.siteAccess ?? {},
+    source: job.source ?? null,
+    estimated_revenue: job.estimatedRevenue ?? null,
   };
 }

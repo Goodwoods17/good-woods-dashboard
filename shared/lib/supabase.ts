@@ -25,3 +25,4 @@ export function getSupabase(): SupabaseClient {
 
 export const JOBS_TABLE = "jobs";
 export const CONTACTS_TABLE = "contacts";
+export const DOCUMENTS_TABLE = "documents";

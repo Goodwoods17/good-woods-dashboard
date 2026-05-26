@@ -56,6 +56,67 @@ export type Activity = {
   message: string;
 };
 
+export type DocumentKind =
+  | "designer"
+  | "toolpath_cnc"
+  | "shop"
+  | "architect"
+  | "appliance"
+  | "permit"
+  | "photo"
+  | "other";
+
+export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
+  designer: "Designer",
+  toolpath_cnc: "Toolpath CNC",
+  shop: "Shop",
+  architect: "Architect",
+  appliance: "Appliance",
+  permit: "Permit",
+  photo: "Photo",
+  other: "Other",
+};
+
+export const DOCUMENT_KIND_ORDER: DocumentKind[] = [
+  "designer",
+  "shop",
+  "toolpath_cnc",
+  "architect",
+  "appliance",
+  "permit",
+  "photo",
+  "other",
+];
+
+export type ProjectDocument = {
+  id: string;
+  projectId: string;
+  kind: DocumentKind;
+  label: string;
+  driveUrl: string;
+  version?: string | null;
+  isCurrent: boolean;
+  notes?: string | null;
+  uploadedBy?: string | null;
+  createdAt: string;
+};
+
+/**
+ * Where the client came from. Used to attribute revenue to anchor
+ * relationships and channels.
+ */
+export const JOB_SOURCE_PRESETS = [
+  "Raubyn Design Studio",
+  "SayWell Developments",
+  "Repeat client",
+  "Referral",
+  "Google",
+  "Walk-in",
+  "Instagram",
+  "Other",
+] as const;
+export type JobSourcePreset = (typeof JOB_SOURCE_PRESETS)[number];
+
 export type PetType = "dog" | "cat" | "other";
 
 export type SiteContactRole =
@@ -199,6 +260,10 @@ export type Job = {
   };
   /** Install-day intel. See SiteAccess type. */
   siteAccess?: SiteAccess;
+  /** How the client found us. Free-text but UI suggests from JOB_SOURCE_PRESETS. */
+  source?: string | null;
+  /** Original quote, kept separate from `revenue` (which trends toward final). */
+  estimatedRevenue?: number | null;
 };
 
 export type Margin = {

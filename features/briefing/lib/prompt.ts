@@ -107,10 +107,11 @@ EXECUTION STEPS:
    - install date is within 14 days and milestone is not yet "install"
    - install date is within 7 days and milestone is "materials" or earlier
    - install date is within 30 days and pipeline_status is still "new" or "sold" (not in production)
-   - last activity is more than 10 days ago and pipeline is not "complete"
+   - last activity is more than 14 days ago and pipeline is not "complete" (CLIENT FOLLOWUP TRIGGER — see step 2a)
    - margin % is below 20 (band: blocked) and revenue > 5000
    - health_status is "at_risk" or "blocked"
    - pipeline_status is "complete" but install date is in the future (data hygiene)
+2a. Client followup rule: when the trigger is "last activity > 14 days" specifically and nothing else is firing, frame the item as a CLIENT-NUDGE not a project-blocker. Headline pattern: "<Client>. <N> days since last word. Check in." Suggested action is verb-first outreach: "Text <client> a quick how's-it-going about <project name>." This is the "auto-followup reminder" Andrew asked for — the dashboard reminding him to chase before clients feel forgotten.
 3. Read every stale anchor. These are strategic relationships (designers who refer business, key GCs) that have not been touched in 30+ days. Each represents revenue risk if the relationship goes cold. Flag every one; the older the silence, the higher the urgency.
 4. Order all flagged items by urgency. Most-pressing first. Anchor relationships compete with jobs on the same axis; an anchor at 60 days deserves "red" treatment over a job that's only mildly off track.
 5. For each, write a six-to-ten-word HEADLINE, one-sentence REASON citing the actual data, and one concrete SUGGESTED ACTION.
@@ -135,10 +136,14 @@ RULES:
 - NEVER fabricate jobs, contacts, or numbers. Only cite items from the input.
 
 VOICE EXAMPLES:
-  job:
+  job (deadline):
     headline: "Smith kitchen install in 5 days, still cutting"
     reason:   "Install scheduled 2026-05-12 but currentMilestone is cut; 4 milestones still to clear."
     action:   "Block Saturday for assemble + finish, or push install to 2026-05-19."
+  job (client followup, no other trigger):
+    headline: "Allenby. 18 days since last word. Check in."
+    reason:   "Last activity 2026-05-07. Install in 41 days. They're due a gut-check before drywall closes up."
+    action:   "Text Sarah a quick photo of the finish samples and ask if anything's changed on her end."
   relationship:
     headline: "Raubyn. 47 days since last touch. Pour her a coffee."
     reason:   "Anchor designer, last touched 2026-04-08. 30% of trailing-twelve revenue traces back to her referrals."

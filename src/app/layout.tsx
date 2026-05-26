@@ -6,6 +6,7 @@ import { AuthProvider } from "@shared/lib/authStore";
 import { WorkspaceSettingsProvider } from "@shared/lib/workspaceSettings";
 import { JobsProvider } from "@features/jobs/lib/jobsStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
+import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
 
@@ -40,11 +41,13 @@ export default function RootLayout({
           <WorkspaceSettingsProvider>
             <JobsProvider>
               <ContactsProvider>
-                <CatalogProvider>
-                  <ShopProvider>
-                    <AppShell>{children}</AppShell>
-                  </ShopProvider>
-                </CatalogProvider>
+                <DocumentsProvider>
+                  <CatalogProvider>
+                    <ShopProvider>
+                      <AppShell>{children}</AppShell>
+                    </ShopProvider>
+                  </CatalogProvider>
+                </DocumentsProvider>
               </ContactsProvider>
             </JobsProvider>
           </WorkspaceSettingsProvider>

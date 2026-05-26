@@ -8,6 +8,7 @@ import type { Job, SiteAccess } from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
+import { DocumentsCard } from "@features/documents/components/DocumentsCard";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
@@ -170,6 +171,8 @@ export function OverviewTab({ job }: { job: Job }) {
           </ul>
         </section>
       )}
+
+      <DocumentsCard projectId={job.id} />
 
       <section className="bg-surface rounded-xl shadow-resting p-6">
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
