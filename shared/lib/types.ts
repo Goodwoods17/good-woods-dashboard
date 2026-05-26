@@ -56,11 +56,61 @@ export type Activity = {
   message: string;
 };
 
+export type ContactKind = "person" | "org";
+
+export type RoleTag = "designer" | "architect" | "gc" | "homeowner";
+
+export const ROLE_TAGS: RoleTag[] = ["designer", "architect", "gc", "homeowner"];
+
+export const ROLE_TAG_LABELS: Record<RoleTag, string> = {
+  designer: "Designer",
+  architect: "Architect",
+  gc: "GC",
+  homeowner: "Homeowner",
+};
+
+export type EmailEntry = { label: string; value: string };
+export type PhoneEntry = { label: string; value: string };
+
+export type Contact = {
+  id: string;
+  kind: ContactKind;
+  parentId?: string | null;
+  name: string;
+  roleTags: RoleTag[];
+  emails: EmailEntry[];
+  phones: PhoneEntry[];
+  address?: string | null;
+  website?: string | null;
+  notes?: string | null;
+  introducedById?: string | null;
+  isAnchor: boolean;
+  lastTouchedAt?: string | null;
+  followUpAt?: string | null;
+  archivedAt?: string | null;
+  createdAt: string;
+};
+
 export type Job = {
   id: string;
   code: string;
   name: string;
+  /**
+   * Legacy display fallback. Kept for one release while UI migrates to
+   * payerId-based rendering via the contacts store. Drop in a follow-up
+   * migration once every read path uses payer/designer/etc. lookups.
+   */
   client: string;
+  /**
+   * Billable party. NOT NULL in the DB after the 2026-05-25 backfill, but
+   * typed optional here until commit #2 updates jobsRowMap + /jobs/new to
+   * write it. Tighten to required once the UI path is complete.
+   */
+  payerId?: string | null;
+  designerId?: string | null;
+  architectId?: string | null;
+  gcId?: string | null;
+  homeownerId?: string | null;
   address: string;
   template: "refacing" | "spray_finishing" | "install_only" | "full_project";
   pipelineStatus: PipelineStatus;
