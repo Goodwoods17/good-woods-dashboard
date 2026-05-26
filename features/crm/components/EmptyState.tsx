@@ -1,24 +1,33 @@
 "use client";
 
 import Link from "next/link";
-import { Briefcase, ArrowUpRight } from "lucide-react";
+import { Users, Plus } from "lucide-react";
 
+/**
+ * Locked from /impeccable craft review P1 #10: teach the next action.
+ * Serif headline + body + ink-pill CTA. Not a dead "no data" placeholder.
+ */
 export function EmptyState() {
   return (
-    <div className="bg-surface border border-border border-dashed rounded-lg p-10 text-center">
-      <Briefcase
-        className="h-6 w-6 text-text-tertiary mx-auto mb-3"
+    <div className="bg-white rounded-xl shadow-resting p-10 text-center">
+      <Users
+        className="h-7 w-7 text-text-tertiary mx-auto mb-4"
         strokeWidth={1.5}
       />
-      <p className="text-sm text-text-secondary">
-        No clients yet. Once you create jobs, they&apos;ll group here by client.
+      <h2 className="font-serif text-title font-medium text-text-primary">
+        No contacts yet
+      </h2>
+      <p className="text-sm text-text-secondary mt-2 max-w-md mx-auto">
+        Track a designer, GC, or homeowner before the next job lands. Anchor
+        relationships get pinned to the top and surface in the daily briefing
+        when they go quiet.
       </p>
       <Link
-        href="/jobs/new"
-        className="inline-flex items-center gap-1 mt-4 text-sm font-medium text-accent hover:text-accent-hover"
+        href="/crm/new"
+        className="inline-flex items-center gap-1.5 mt-6 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
       >
-        Create your first job
-        <ArrowUpRight className="h-3.5 w-3.5" strokeWidth={1.75} />
+        <Plus className="h-4 w-4" strokeWidth={2} />
+        Create contact
       </Link>
     </div>
   );

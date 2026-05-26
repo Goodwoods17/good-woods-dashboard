@@ -5,6 +5,7 @@ import { AppShell } from "@shared/components/layout/AppShell";
 import { AuthProvider } from "@shared/lib/authStore";
 import { WorkspaceSettingsProvider } from "@shared/lib/workspaceSettings";
 import { JobsProvider } from "@features/jobs/lib/jobsStore";
+import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
 
@@ -38,11 +39,13 @@ export default function RootLayout({
         <AuthProvider>
           <WorkspaceSettingsProvider>
             <JobsProvider>
-              <CatalogProvider>
-                <ShopProvider>
-                  <AppShell>{children}</AppShell>
-                </ShopProvider>
-              </CatalogProvider>
+              <ContactsProvider>
+                <CatalogProvider>
+                  <ShopProvider>
+                    <AppShell>{children}</AppShell>
+                  </ShopProvider>
+                </CatalogProvider>
+              </ContactsProvider>
             </JobsProvider>
           </WorkspaceSettingsProvider>
         </AuthProvider>

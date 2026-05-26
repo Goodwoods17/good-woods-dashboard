@@ -1,39 +1,49 @@
 "use client";
 
 import { useMemo } from "react";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useContacts } from "@features/contacts/lib/contactsStore";
+import { rollupContacts } from "@features/contacts/lib/aggregate";
+import { ContactsList } from "@features/contacts/components/ContactsList";
 import { formatCAD } from "@shared/lib/format";
-import { computeClients } from "@features/crm/lib/aggregate";
-import { ClientsTable } from "./ClientsTable";
 import { EmptyState } from "./EmptyState";
 
 export function CrmView() {
-  const { jobs, loading } = useJobs();
+  const { jobs, loading: jobsLoading } = useJobs();
+  const { contacts, loading: contactsLoading } = useContacts();
 
-  const clients = useMemo(() => computeClients(jobs), [jobs]);
-  const totalRevenue = clients.reduce((s, c) => s + c.totalRevenue, 0);
+  const loading = jobsLoading || contactsLoading;
+  const rollups = useMemo(() => rollupContacts(contacts, jobs), [contacts, jobs]);
+  const totalRevenue = rollups.reduce((s, r) => s + r.lifetimeRevenue, 0);
+  const anchorCount = rollups.filter((r) => r.contact.isAnchor).length;
 
   return (
     <>
       <PageHeader
         eyebrow="CRM"
-        title="Clients"
-        subtitle={`${clients.length} unique client${clients.length === 1 ? "" : "s"} · ${formatCAD(totalRevenue)} total billed`}
+        title="Contacts"
+        subtitle={`${rollups.length} active . ${anchorCount} anchor${anchorCount === 1 ? "" : "s"} . ${formatCAD(totalRevenue)} lifetime billed`}
+        actions={
+          <Link
+            href="/crm/new"
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            New contact
+          </Link>
+        }
       />
       <div className="px-8 py-6 max-w-6xl">
         {loading ? (
-          <div className="bg-surface border border-border rounded-lg h-48 animate-pulse" />
-        ) : clients.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-resting h-48 animate-pulse" />
+        ) : rollups.length === 0 ? (
           <EmptyState />
         ) : (
-          <ClientsTable clients={clients} />
+          <ContactsList rollups={rollups} />
         )}
-
-        <p className="text-xs text-text-tertiary mt-4 px-1">
-          Derived from job records. Standalone client / contact CRUD lands when
-          the first business-development hire arrives.
-        </p>
       </div>
     </>
   );
