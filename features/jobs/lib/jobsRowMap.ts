@@ -1,8 +1,8 @@
 import type { Job } from "@shared/lib/types";
 
 // Database row shape (snake_case, mirrors public.jobs).
-// blocker + next_step columns added 2026-05-24 — apply migration in
-// supabase/migrations/0006_jobs_blocker_nextstep.sql before deploying.
+// 5 typed contact FK slots added 2026-05-25 — see
+// supabase/migrations/20260525_contacts_and_job_slots.sql.
 export type JobRow = {
   id: string;
   code: string;
@@ -21,6 +21,11 @@ export type JobRow = {
   notes: string | null;
   blocker: string | null;
   next_step: string | null;
+  payer_id: string | null;
+  designer_id: string | null;
+  architect_id: string | null;
+  gc_id: string | null;
+  homeowner_id: string | null;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -42,6 +47,11 @@ export function rowToJob(row: JobRow): Job {
     notes: row.notes ?? undefined,
     blocker: row.blocker ?? undefined,
     nextStep: row.next_step ?? undefined,
+    payerId: row.payer_id,
+    designerId: row.designer_id,
+    architectId: row.architect_id,
+    gcId: row.gc_id,
+    homeownerId: row.homeowner_id,
   };
 }
 
@@ -64,5 +74,10 @@ export function jobToRow(job: Job): JobRow {
     notes: job.notes ?? null,
     blocker: job.blocker ?? null,
     next_step: job.nextStep ?? null,
+    payer_id: job.payerId ?? null,
+    designer_id: job.designerId ?? null,
+    architect_id: job.architectId ?? null,
+    gc_id: job.gcId ?? null,
+    homeowner_id: job.homeownerId ?? null,
   };
 }

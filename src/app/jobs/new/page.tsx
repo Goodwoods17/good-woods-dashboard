@@ -3,18 +3,29 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useContacts } from "@features/contacts/lib/contactsStore";
+import { ContactCombobox } from "@features/contacts/components/ContactCombobox";
 import {
   type Job,
   type PipelineStatus,
   type HealthStatus,
+  type RoleTag,
   PIPELINE_LABELS,
   HEALTH_LABELS,
 } from "@shared/lib/types";
 import { newActivity } from "@features/jobs/lib/activity";
 import { cn } from "@shared/lib/utils";
+
+type OptionalSlot = "designer" | "architect" | "gc" | "homeowner";
+const OPTIONAL_SLOTS: { key: OptionalSlot; label: string; role: RoleTag }[] = [
+  { key: "designer", label: "Designer", role: "designer" },
+  { key: "gc", label: "GC", role: "gc" },
+  { key: "architect", label: "Architect", role: "architect" },
+  { key: "homeowner", label: "Homeowner", role: "homeowner" },
+];
 
 const TEMPLATE_OPTIONS: { value: Job["template"]; label: string; hint: string }[] = [
   {
@@ -70,10 +81,18 @@ function nextJobCode(existing: Job[]): string {
 
 export default function NewJobPage() {
   const { jobs, createJob, backend } = useJobs();
+  const { contacts } = useContacts();
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [client, setClient] = useState("");
+  const [payerId, setPayerId] = useState<string | null>(null);
+  // Optional slots — visible only after the user opens them. P0 #1
+  // contract: PRODUCT.md max-4-primary-options.
+  const [openSlots, setOpenSlots] = useState<Set<OptionalSlot>>(new Set());
+  const [designerId, setDesignerId] = useState<string | null>(null);
+  const [architectId, setArchitectId] = useState<string | null>(null);
+  const [gcId, setGcId] = useState<string | null>(null);
+  const [homeownerId, setHomeownerId] = useState<string | null>(null);
   const [address, setAddress] = useState("");
   const [template, setTemplate] = useState<Job["template"]>("full_project");
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus>("sold");
@@ -89,7 +108,24 @@ export default function NewJobPage() {
   const [submitError, setSubmitError] = useState<string | null>(null);
 
   const code = useMemo(() => nextJobCode(jobs), [jobs]);
-  const canSubmit = name.trim().length > 0 && client.trim().length > 0;
+  const canSubmit = name.trim().length > 0 && payerId !== null;
+  const payerName = useMemo(
+    () => contacts.find((c) => c.id === payerId)?.name ?? "",
+    [contacts, payerId]
+  );
+  const slotIdFor = (slot: OptionalSlot): string | null => {
+    if (slot === "designer") return designerId;
+    if (slot === "architect") return architectId;
+    if (slot === "gc") return gcId;
+    return homeownerId;
+  };
+  const setSlotId = (slot: OptionalSlot, id: string | null) => {
+    if (slot === "designer") setDesignerId(id);
+    else if (slot === "architect") setArchitectId(id);
+    else if (slot === "gc") setGcId(id);
+    else setHomeownerId(id);
+  };
+  const availableSlots = OPTIONAL_SLOTS.filter((s) => !openSlots.has(s.key));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +138,15 @@ export default function NewJobPage() {
       id,
       code,
       name: name.trim(),
-      client: client.trim(),
+      // `client` text column kept as the legacy display fallback. Mirrors
+      // the payer's name. Will be dropped in a follow-up migration once
+      // every read path uses payerId lookups.
+      client: payerName,
+      payerId,
+      designerId: designerId ?? null,
+      architectId: architectId ?? null,
+      gcId: gcId ?? null,
+      homeownerId: homeownerId ?? null,
       address: address.trim(),
       template,
       pipelineStatus,
@@ -112,7 +156,7 @@ export default function NewJobPage() {
       revenue: parseFloat(revenue) || 0,
       costs: [],
       activity: [
-        newActivity("note", `Job created — ${name.trim()}`),
+        newActivity("note", `Job created. ${name.trim()}`),
       ],
       notes: notes.trim() || undefined,
       invoice: {
@@ -168,22 +212,58 @@ export default function NewJobPage() {
               <Input
                 value={name}
                 onChange={setName}
-                placeholder="e.g. SayWell — Phase 3 Suite Kitchens"
+                placeholder="SayWell Phase 3 Suite Kitchens"
                 autoFocus
               />
             </Field>
-            <Field label="Client" required>
-              <Input
-                value={client}
-                onChange={setClient}
-                placeholder="e.g. SayWell Developments"
+            <Field label="Payer" required>
+              <ContactCombobox
+                value={payerId}
+                onChange={setPayerId}
+                placeholder="Who pays for this job"
               />
             </Field>
+
+            {/* P0 #1: optional contact slots live behind progressive disclosure. */}
+            {OPTIONAL_SLOTS.filter((s) => openSlots.has(s.key)).map((s) => (
+              <Field key={s.key} label={s.label}>
+                <ContactCombobox
+                  value={slotIdFor(s.key)}
+                  onChange={(id) => setSlotId(s.key, id)}
+                  rolePreference={[s.role]}
+                  defaultCreateRole={s.role}
+                  placeholder={`Search ${s.label.toLowerCase()}s`}
+                />
+              </Field>
+            ))}
+
+            {availableSlots.length > 0 && (
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                {availableSlots.map((s) => (
+                  <button
+                    type="button"
+                    key={s.key}
+                    onClick={() =>
+                      setOpenSlots((prev) => {
+                        const next = new Set(prev);
+                        next.add(s.key);
+                        return next;
+                      })
+                    }
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted text-text-secondary hover:bg-surface-sunken hover:text-text-primary px-3 py-1 text-xs font-medium transition-colors duration-fast"
+                  >
+                    <Plus className="h-3 w-3" strokeWidth={2} />
+                    Add {s.label.toLowerCase()}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <Field label="Address">
               <Input
                 value={address}
                 onChange={setAddress}
-                placeholder="e.g. 1042 Yates St, Victoria BC"
+                placeholder="1042 Yates St, Victoria BC"
               />
             </Field>
           </Card>
