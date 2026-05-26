@@ -78,7 +78,7 @@ export function ContactForm({
           createdAt: new Date().toISOString(),
         };
         await createContact(fresh);
-        router.push("/crm");
+        router.push(`/crm/${id}`);
       } else if (contact) {
         await updateContact(contact.id, {
           name: name.trim(),
@@ -91,7 +91,7 @@ export function ContactForm({
           website: website.trim() || null,
           notes: notes.trim() || null,
         });
-        router.push("/crm");
+        router.push(`/crm/${contact.id}`);
       }
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Could not save contact.");
