@@ -56,6 +56,62 @@ export type Activity = {
   message: string;
 };
 
+export type PetType = "dog" | "cat" | "other";
+
+export type SiteContactRole =
+  | "homeowner"
+  | "property_manager"
+  | "super"
+  | "neighbour"
+  | "other";
+
+/**
+ * Install-day intel for the crew. Mostly optional; the form leaves
+ * blanks for fields Andrew doesn't know yet. Lives as a jsonb column on
+ * public.jobs (added 2026-05-25). InstallCard surfaces a conditional
+ * pill strip from this shape so the highest-stakes items read at a
+ * glance on the install day.
+ */
+export type SiteAccess = {
+  installAddress?: string | null;
+  buzzerCode?: string | null;
+  doorCode?: string | null;
+  lockboxCode?: string | null;
+  parkingNotes?: string | null;
+  buildingAccessNotes?: string | null;
+  elevatorRequired?: boolean;
+  elevatorWindow?: string | null;
+  floorProtection?: string | null;
+  demoRequired?: boolean;
+  demoScope?: string | null;
+  pet?: {
+    type?: PetType | null;
+    name?: string | null;
+    note?: string | null;
+  };
+  siteContact?: {
+    name?: string | null;
+    phone?: string | null;
+    role?: SiteContactRole | null;
+  };
+  bestContactWindow?: string | null;
+  photosUrl?: string | null;
+};
+
+export const SITE_CONTACT_ROLE_LABELS: Record<SiteContactRole, string> = {
+  homeowner: "Homeowner",
+  property_manager: "Property manager",
+  super: "Super",
+  neighbour: "Neighbour",
+  other: "Other",
+};
+
+export const PET_TYPE_LABELS: Record<PetType, string> = {
+  dog: "Dog",
+  cat: "Cat",
+  other: "Other",
+};
+
 export type ContactKind = "person" | "org";
 
 export type RoleTag = "designer" | "architect" | "gc" | "homeowner";
@@ -141,6 +197,8 @@ export type Job = {
     dueDate: string;
     lineItems: { description: string; qty: number; unitPrice: number }[];
   };
+  /** Install-day intel. See SiteAccess type. */
+  siteAccess?: SiteAccess;
 };
 
 export type Margin = {

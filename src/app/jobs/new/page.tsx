@@ -3,16 +3,18 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, ChevronDown, ChevronRight, Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { ContactCombobox } from "@features/contacts/components/ContactCombobox";
+import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
 import {
   type Job,
   type PipelineStatus,
   type HealthStatus,
   type RoleTag,
+  type SiteAccess,
   PIPELINE_LABELS,
   HEALTH_LABELS,
 } from "@shared/lib/types";
@@ -104,6 +106,8 @@ export default function NewJobPage() {
   });
   const [revenue, setRevenue] = useState<string>("");
   const [notes, setNotes] = useState("");
+  const [siteAccess, setSiteAccess] = useState<SiteAccess>({});
+  const [siteAccessOpen, setSiteAccessOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
 
@@ -159,6 +163,7 @@ export default function NewJobPage() {
         newActivity("note", `Job created. ${name.trim()}`),
       ],
       notes: notes.trim() || undefined,
+      siteAccess,
       invoice: {
         number: `INV-${code.slice(3)}`,
         issuedDate: new Date().toISOString().slice(0, 10),
@@ -291,6 +296,15 @@ export default function NewJobPage() {
             </div>
           </Card>
 
+          <CollapsibleCard
+            title="Site & access"
+            description="Codes, parking, pet, on-site backup. Skip if you don't know it yet, fill it from the project page later."
+            open={siteAccessOpen}
+            onToggle={() => setSiteAccessOpen((p) => !p)}
+          >
+            <SiteAccessForm value={siteAccess} onChange={setSiteAccess} />
+          </CollapsibleCard>
+
           <Card title="Status & schedule">
             <Field label="Pipeline">
               <Select
@@ -386,6 +400,46 @@ function Card({
         <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       </div>
       <div className="p-5 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function CollapsibleCard({
+  title,
+  description,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  description?: string;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="bg-surface border border-border rounded-lg overflow-hidden">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="w-full flex items-center justify-between gap-3 px-5 py-3 border-b border-border bg-surface-muted hover:bg-surface-sunken transition-colors duration-fast text-left"
+      >
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-text-primary">
+            {open ? title : `${title} (optional)`}
+          </h2>
+          {description && !open && (
+            <p className="text-xs text-text-tertiary mt-0.5 truncate">{description}</p>
+          )}
+        </div>
+        {open ? (
+          <ChevronDown className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
+        ) : (
+          <ChevronRight className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
+        )}
+      </button>
+      {open && <div className="p-5">{children}</div>}
     </section>
   );
 }

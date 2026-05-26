@@ -1,4 +1,4 @@
-import type { Job } from "@shared/lib/types";
+import type { Job, SiteAccess } from "@shared/lib/types";
 
 // Database row shape (snake_case, mirrors public.jobs).
 // 5 typed contact FK slots added 2026-05-25 — see
@@ -26,6 +26,7 @@ export type JobRow = {
   architect_id: string | null;
   gc_id: string | null;
   homeowner_id: string | null;
+  site_access: SiteAccess;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -52,6 +53,7 @@ export function rowToJob(row: JobRow): Job {
     architectId: row.architect_id,
     gcId: row.gc_id,
     homeownerId: row.homeowner_id,
+    siteAccess: row.site_access ?? {},
   };
 }
 
@@ -79,5 +81,6 @@ export function jobToRow(job: Job): JobRow {
     architect_id: job.architectId ?? null,
     gc_id: job.gcId ?? null,
     homeowner_id: job.homeownerId ?? null,
+    site_access: job.siteAccess ?? {},
   };
 }

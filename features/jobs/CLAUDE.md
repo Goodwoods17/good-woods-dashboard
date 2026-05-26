@@ -32,6 +32,8 @@ features/jobs/
 │   ├── KanbanBoard.tsx          (pipeline kanban view; @dnd-kit)
 │   ├── MilestonesStrip.tsx      (the clickable progress strip)
 │   ├── OverviewTab.tsx          (key fields + dates)
+│   ├── SiteAccessForm.tsx       (install-day intel editor; shared
+│   │                             by /jobs/new collapsible + OverviewTab)
 │   ├── TasksTab.tsx             (per-job todo list)
 │   ├── ViewToggle.tsx           (list / kanban switcher)
 │   └── invoice/
@@ -67,6 +69,19 @@ features/jobs/
   BC GST+PST = 12% baked into `TAX_RATE`.
 - **ICS export** generates an all-day install event from the job's
   `installDate` and includes the client + COMPANY in the description.
+- **Site & access** (added 2026-05-25): `job.siteAccess` is a jsonb
+  shape on the `public.jobs` row (migration
+  `20260525_jobs_site_access.sql`). Holds install-day intel for the
+  crew: install address (if different from billing), buzzer/door/
+  lockbox codes, parking notes, building access notes, elevator booking
+  flag + window, pet info (type + name + note), on-site backup contact
+  (name + phone + role), best contact window, demo-required flag,
+  existing-space photos URL. The shape is defined in
+  `shared/lib/types.ts` as `SiteAccess` and lives entirely in TS — no
+  schema enforcement inside the jsonb. Edited via `SiteAccessForm`
+  from both `/jobs/new` (collapsible card, default closed) and the
+  OverviewTab (always-visible card, save-on-blur with 1.2s debounce).
+  Surfaced read-only on the InstallCard pill strip.
 
 ## When to revisit
 

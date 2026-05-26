@@ -42,8 +42,19 @@ Depends on `useJobs()` for install dates + "mark complete," and
 - "Past due" includes jobs whose installDate is in the past but
   `pipelineStatus !== "complete"`. Once marked complete, the job leaves
   this view entirely.
-- The click-to-Maps URL uses `job.address` if present, otherwise just
-  the client name as a search query.
+- The click-to-Maps URL prefers `job.siteAccess.installAddress` (the
+  install-specific address from the SiteAccess shape), falls back to
+  `job.address`, then to the client name as a search query.
+- **Site & access strip** (added 2026-05-25): InstallCard renders a
+  compact pill row from `job.siteAccess`, conditional per field. Pet
+  pill (clay-soft) only if `pet.type` is set. Code chips (mono, dense)
+  only for populated codes. Parking pill truncates with a `title` for
+  full text. Site-contact pill is a `tel:` link. Demo + elevator are
+  status flags. When `siteAccess` is empty `{}`, the strip doesn't
+  render — keeps simple jobs visually quiet.
+- The strip's full editor lives in `features/jobs/components/
+  SiteAccessForm.tsx` (used by OverviewTab + /jobs/new). The InstallCard
+  only READS — installers don't edit site/access from the truck.
 
 ## When to revisit
 
