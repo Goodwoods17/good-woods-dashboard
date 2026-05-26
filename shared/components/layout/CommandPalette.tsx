@@ -35,8 +35,9 @@ type CommandItem =
   | { kind: "job"; id: string; job: Job };
 
 const PAGES: CommandItem[] = [
-  { kind: "page", id: "page-new-job", label: "New Job", href: "/jobs/new", icon: Plus },
-  { kind: "page", id: "page-pipeline", label: "Pipeline · Jobs", href: "/", icon: LayoutGrid },
+  { kind: "page", id: "page-new-job", label: "New project", href: "/jobs/new", icon: Plus },
+  { kind: "page", id: "page-pipeline", label: "Pipeline . Active projects", href: "/", icon: LayoutGrid },
+  { kind: "page", id: "page-projects", label: "Projects . Full archive", href: "/projects", icon: Briefcase },
   { kind: "page", id: "page-estimator", label: "Estimator", href: "/estimator", icon: Calculator },
   { kind: "page", id: "page-calendar", label: "Calendar", href: "/calendar", icon: Calendar },
   { kind: "page", id: "page-crm", label: "Clients", href: "/crm", icon: Users },
@@ -199,7 +200,7 @@ export function CommandPalette() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={onInputKey}
-            placeholder="Jump to a job, code, or page (try “GW-2026-001”)…"
+            placeholder="Jump to a project, code, or page (try GW-2026-001)"
             className="flex-1 text-sm bg-transparent border-0 placeholder:text-text-tertiary focus:outline-none focus:ring-0 text-text-primary"
             aria-controls="cmdk-list"
             aria-activedescendant={items[activeIdx]?.id}

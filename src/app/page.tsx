@@ -37,7 +37,10 @@ export default function Home() {
     if (hydrated) window.localStorage.setItem(VIEW_KEY, view);
   }, [view, hydrated]);
 
-  const totals = jobs.reduce(
+  // Pipeline shows current/active work only. The full archive lives at
+  // /projects (sidebar > Sell & Plan > Projects).
+  const activeJobs = jobs.filter((j) => j.pipelineStatus !== "complete");
+  const totals = activeJobs.reduce(
     (acc, job) => {
       const m = computeMargin(job);
       acc.revenue += job.revenue;
@@ -48,16 +51,15 @@ export default function Home() {
     { revenue: 0, cost: 0, margin: 0 }
   );
   const overallPct = totals.revenue > 0 ? (totals.margin / totals.revenue) * 100 : 0;
-  const activeCount = jobs.filter((j) => j.pipelineStatus !== "complete").length;
 
   return (
     <>
       <PageHeader
-        title="Jobs"
+        title="Pipeline"
         subtitle={
           loading
-            ? "Loading…"
-            : `${activeCount} active · ${formatCAD(totals.revenue)} contracted · GM ${formatPct(overallPct)} blended`
+            ? "Loading"
+            : `${activeJobs.length} active . ${formatCAD(totals.revenue)} contracted . GM ${formatPct(overallPct)} blended`
         }
         actions={
           <>
@@ -67,7 +69,7 @@ export default function Home() {
               className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
             >
               <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              New Job
+              New project
             </Link>
           </>
         }
@@ -79,13 +81,13 @@ export default function Home() {
         {loading ? (
           <ListSkeleton />
         ) : view === "hitlist" ? (
-          <Hitlist jobs={jobs} />
+          <Hitlist jobs={activeJobs} />
         ) : view === "schedule" ? (
-          <Schedule jobs={jobs} />
+          <Schedule jobs={activeJobs} />
         ) : view === "list" ? (
-          <JobsList jobs={jobs} />
+          <JobsList jobs={activeJobs} />
         ) : (
-          <KanbanBoard jobs={jobs} />
+          <KanbanBoard jobs={activeJobs} />
         )}
       </div>
     </>

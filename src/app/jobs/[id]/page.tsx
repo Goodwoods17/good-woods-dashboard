@@ -12,7 +12,7 @@ export default function JobPage({ params }: { params: { id: string } }) {
   if (loading) {
     return (
       <>
-        <PageHeader eyebrow="Job" title="Loading…" />
+        <PageHeader eyebrow="Project" title="Loading" />
         <div className="px-8 py-6 max-w-4xl">
           <div className="h-8 w-72 rounded bg-surface-muted animate-pulse mb-4" />
           <div className="h-4 w-48 rounded bg-surface-muted animate-pulse mb-8" />
@@ -29,17 +29,17 @@ export default function JobPage({ params }: { params: { id: string } }) {
   if (!job) {
     return (
       <>
-        <PageHeader eyebrow="Jobs" title="Job not found" />
+        <PageHeader eyebrow="Projects" title="Project not found" />
         <div className="px-8 py-10">
           <div className="bg-surface border border-border border-dashed rounded-lg p-10 text-center max-w-xl">
             <p className="text-sm text-text-secondary mb-4">
-              That job ID doesn&apos;t exist.
+              That project ID doesn&apos;t exist.
             </p>
             <Link
               href="/"
               className="inline-flex items-center text-sm font-medium text-accent hover:text-accent-hover transition-colors duration-fast"
             >
-              ← Back to Jobs
+              Back to Pipeline
             </Link>
           </div>
         </div>

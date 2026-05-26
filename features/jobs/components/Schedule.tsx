@@ -98,7 +98,7 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
         <div className="relative">
           {ordered.length === 0 ? (
             <div className="px-4 py-10 text-center text-sm text-text-secondary">
-              No jobs in the pipeline.
+              No active projects in the pipeline.
             </div>
           ) : (
             ordered.map((job) => (

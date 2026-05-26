@@ -66,7 +66,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
           className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors duration-fast mb-3"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Back to Jobs
+          Back to Pipeline
         </Link>
 
         <div className="flex items-start justify-between gap-6 mb-5">

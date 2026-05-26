@@ -191,7 +191,7 @@ export function OverviewTab({ job }: { job: Job }) {
             )}
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Delete this job
+            Delete this project
           </button>
         ) : (
           <div className="flex flex-wrap items-center gap-3">

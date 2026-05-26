@@ -132,16 +132,16 @@ export function ContactDetail({ contact }: { contact: Contact }) {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Hero column: Linked Jobs (P1 #5 — the economic story leads). */}
         <div className="lg:col-span-2 space-y-6">
-          <Section title={`Linked jobs (${rollup.payerJobs.length})`}>
+          <Section title={`Linked projects (${rollup.payerJobs.length})`}>
             {rollup.payerJobs.length === 0 ? (
               <p className="text-sm text-text-tertiary px-5 pb-5">
-                No jobs yet. New jobs that list this contact as the payer will show here.
+                No projects yet. New projects that list this contact as the payer will show up here.
               </p>
             ) : (
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-surface-muted">
-                    <Th>Job</Th>
+                    <Th>Project</Th>
                     <Th>Status</Th>
                     <Th align="right">Revenue</Th>
                     <Th align="right">Install</Th>
@@ -199,7 +199,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                   <tr className="bg-surface-muted">
                     <Th>Name</Th>
                     <Th align="right">Lifetime revenue</Th>
-                    <Th align="right">Jobs</Th>
+                    <Th align="right">Projects</Th>
                   </tr>
                 </thead>
                 <tbody>

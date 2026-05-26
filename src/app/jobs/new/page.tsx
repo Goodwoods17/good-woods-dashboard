@@ -190,10 +190,10 @@ export default function NewJobPage() {
     <>
       <PageHeader
         eyebrow="Pipeline"
-        title="New job"
+        title="New project"
         subtitle={
           backend === "supabase"
-            ? "Saves to Supabase — visible on every device."
+            ? "Saves to Supabase. Visible on every device."
             : "Saves to local storage on this browser."
         }
       />
@@ -203,7 +203,7 @@ export default function NewJobPage() {
           className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors duration-fast mb-5"
         >
           <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
-          Back to Jobs
+          Back to Pipeline
         </Link>
 
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -364,7 +364,7 @@ export default function NewJobPage() {
                 "disabled:bg-text-disabled disabled:cursor-not-allowed"
               )}
             >
-              {submitting ? "Creating…" : "Create job"}
+              {submitting ? "Creating" : "Create project"}
             </button>
           </div>
         </form>

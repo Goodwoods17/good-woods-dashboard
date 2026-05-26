@@ -185,7 +185,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search jobs, clients, codes…"
+            placeholder="Search projects, clients, codes"
             className="w-full pl-9 pr-3 py-2 text-sm bg-surface border border-border rounded-md placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
           />
         </div>
@@ -217,7 +217,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
               <tr className="border-b border-border-faint bg-surface-muted/60">
                 <th className="w-3 pl-4 pr-0 py-2.5" aria-label="Health" />
                 <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
-                  Job
+                  Project
                 </th>
                 <th className="text-left px-4 py-2.5 text-xs font-semibold uppercase tracking-[0.06em] text-text-tertiary">
                   Client
@@ -334,7 +334,7 @@ function EmptyState({
       <p className="text-sm text-text-secondary mb-5 max-w-md mx-auto leading-relaxed">
         {filtersActive
           ? "Clear filters to see your full pipeline, or try a different search."
-          : "No jobs in the pipeline yet. Create the first one to get started."}
+          : "No active projects in the pipeline yet. Create the first one to get started."}
       </p>
       {filtersActive ? (
         <button
@@ -348,7 +348,7 @@ function EmptyState({
           href="/jobs/new"
           className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
         >
-          + New Job
+          + New project
         </Link>
       )}
     </div>

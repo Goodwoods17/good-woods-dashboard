@@ -17,6 +17,7 @@ import {
   FileText,
   LogOut,
   Sparkles,
+  FolderOpen,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
@@ -44,6 +45,7 @@ const NAV: NavSection[] = [
     items: [
       { href: "/estimator", label: "Estimator", icon: Calculator },
       { href: "/calendar", label: "Calendar", icon: Calendar },
+      { href: "/projects", label: "Projects", icon: FolderOpen },
       { href: "/crm", label: "Clients", icon: Users },
     ],
   },
@@ -103,8 +105,10 @@ export function Sidebar() {
               {section.items.map((item) => {
                 const active =
                   item.href === "/"
-                    ? pathname === "/" || pathname.startsWith("/jobs")
-                    : pathname.startsWith(item.href);
+                    ? pathname === "/"
+                    : item.href === "/projects"
+                      ? pathname.startsWith("/projects") || pathname.startsWith("/jobs")
+                      : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

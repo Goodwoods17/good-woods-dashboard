@@ -248,7 +248,7 @@ export function ContactForm({
             >
               {submitting
                 ? mode === "create" ? "Creating" : "Saving"
-                : mode === "create" ? "Create contact" : "Save changes"}
+                : mode === "create" ? "Create client" : "Save changes"}
             </button>
           </div>
         </div>

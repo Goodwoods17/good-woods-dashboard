@@ -6,7 +6,7 @@ export default function NewContactPage() {
     <>
       <PageHeader
         eyebrow="CRM"
-        title="New contact"
+        title="New client"
         subtitle="Add a designer, GC, architect, or homeowner. Mark as anchor if losing them would hurt."
       />
       <ContactForm mode="create" />
