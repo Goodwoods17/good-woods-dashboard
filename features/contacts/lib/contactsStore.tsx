@@ -32,6 +32,10 @@ type ContactsContextValue = {
   error: string | null;
   refresh: () => Promise<void>;
   touchContact: (id: string) => Promise<void>;
+  createContact: (contact: Contact) => Promise<void>;
+  updateContact: (id: string, patch: Partial<Contact>) => Promise<void>;
+  archiveContact: (id: string) => Promise<void>;
+  unarchiveContact: (id: string) => Promise<void>;
 };
 
 const ContactsContext = createContext<ContactsContextValue | null>(null);
@@ -134,18 +138,12 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();
-        const target = contactsRef.current.find((c) => c.id === id);
-        if (!target) return;
         const { error: upErr } = await sb
           .from(CONTACTS_TABLE)
           .update({ last_touched_at: now })
           .eq("id", id);
         if (upErr) throw upErr;
         setError(null);
-        // The DB trigger already bumps last_touched_at on job UPDATE; this
-        // call is for off-job touches (the coffee-with-Raubyn case). The
-        // contactToRow round-trip is intentional only on full writes.
-        void contactToRow(target);
       } catch (e) {
         setError(formatError(e));
         setContacts(previous);
@@ -154,9 +152,114 @@ export function ContactsProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
+  const createContact = useCallback(
+    async (contact: Contact) => {
+      setContacts((prev) => [...prev, contact]);
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: upErr } = await sb
+          .from(CONTACTS_TABLE)
+          .insert(contactToRow(contact));
+        if (upErr) throw upErr;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setContacts((prev) => prev.filter((c) => c.id !== contact.id));
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const updateContact = useCallback(
+    async (id: string, patch: Partial<Contact>) => {
+      const previous = contactsRef.current;
+      setContacts((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const merged = { ...previous.find((c) => c.id === id), ...patch } as Contact;
+        const { error: upErr } = await sb
+          .from(CONTACTS_TABLE)
+          .update(contactToRow(merged))
+          .eq("id", id);
+        if (upErr) throw upErr;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setContacts(previous);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const archiveContact = useCallback(
+    async (id: string) => {
+      const now = new Date().toISOString();
+      const previous = contactsRef.current;
+      setContacts((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, archivedAt: now } : c))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: upErr } = await sb
+          .from(CONTACTS_TABLE)
+          .update({ archived_at: now })
+          .eq("id", id);
+        if (upErr) throw upErr;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setContacts(previous);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const unarchiveContact = useCallback(
+    async (id: string) => {
+      const previous = contactsRef.current;
+      setContacts((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, archivedAt: null } : c))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: upErr } = await sb
+          .from(CONTACTS_TABLE)
+          .update({ archived_at: null })
+          .eq("id", id);
+        if (upErr) throw upErr;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setContacts(previous);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
   return (
     <ContactsContext.Provider
-      value={{ contacts, loading, backend, error, refresh, touchContact }}
+      value={{
+        contacts,
+        loading,
+        backend,
+        error,
+        refresh,
+        touchContact,
+        createContact,
+        updateContact,
+        archiveContact,
+        unarchiveContact,
+      }}
     >
       {children}
     </ContactsContext.Provider>
