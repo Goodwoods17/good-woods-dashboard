@@ -1,5 +1,6 @@
 {
-  "crons": [
+  "$comment_crons": "The daily-briefing cron was disabled 2026-05-27. A Claude Code scheduled remote agent (routine trig_01R3cjtz9H7kPdThjtGxTNHX) now generates the briefing daily at 9am PT against Andrew's Max-plan usage, removing the per-call Anthropic API cost. The /api/cron/daily-briefing endpoint stays in the codebase as a manual escape hatch but is no longer triggered automatically. To re-enable, restore the crons array below.",
+  "$disabled_crons": [
     {
       "path": "/api/cron/daily-briefing",
       "schedule": "0 16 * * *"

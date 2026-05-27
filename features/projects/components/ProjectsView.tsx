@@ -70,10 +70,12 @@ export function ProjectsView() {
     if (q.length > 0) {
       out = out.filter((j) => {
         const payer = payerName(j.payerId, j.client).toLowerCase();
+        const source = (j.source ?? "").toLowerCase();
         return (
           j.code.toLowerCase().includes(q) ||
           j.name.toLowerCase().includes(q) ||
-          payer.includes(q)
+          payer.includes(q) ||
+          source.includes(q)
         );
       });
     }
@@ -169,6 +171,7 @@ export function ProjectsView() {
                   </Th>
                   <Th>Project</Th>
                   <Th>Payer</Th>
+                  <Th>Source</Th>
                   <Th>Status</Th>
                   <Th align="right">
                     <SortButton
@@ -212,6 +215,9 @@ export function ProjectsView() {
                       </td>
                       <td className="px-4 py-3 text-text-secondary">
                         {payerName(j.payerId, j.client)}
+                      </td>
+                      <td className="px-4 py-3 text-text-tertiary text-xs">
+                        {j.source ?? ""}
                       </td>
                       <td className="px-4 py-3">
                         <StatusBadge status={j.pipelineStatus} />

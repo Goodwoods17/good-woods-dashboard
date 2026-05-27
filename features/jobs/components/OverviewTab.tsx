@@ -194,6 +194,13 @@ export function OverviewTab({ job }: { job: Job }) {
           <Field label="Install date" value={formatDate(job.installDate)} />
           <Field label="Job code" value={job.code} mono />
           <Field label="Invoice" value={job.invoice.number} mono />
+          {job.source && <Field label="Source" value={job.source} />}
+          {typeof job.estimatedRevenue === "number" && job.estimatedRevenue > 0 && (
+            <Field
+              label="Estimated revenue"
+              value={`$${job.estimatedRevenue.toLocaleString("en-CA")}`}
+            />
+          )}
         </dl>
         {job.notes && (
           <div className="mt-5 pt-4 border-t border-border">
