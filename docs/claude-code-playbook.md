@@ -13,19 +13,12 @@ drive Claude Code against the project*.
 
 ## TL;DR — One next action
 
-**Complete the Vercel MCP OAuth.** The plugin is already installed —
-it's one click to authorise. Then Claude can check deploy status, edge
-config, and env vars without us pasting the dashboard URL.
+**The error-reducing setup is complete — start building.** Tooling,
+verification, docs, and deploy visibility are all wired (see Done below).
 
-Why this one:
-- The error-reducing tooling is now all in place (Context7,
-  typescript-lsp, real `/verify`, format hook — see Done below), so the
-  last loop worth closing is deploy visibility.
-- Low effort, removes a recurring manual step.
-
-Still-open 30-second cleanup: the `deep-research` plugin is enabled but
-was never cloned (broken install). Disable it in `~/.claude/settings.json`.
-
+The only thing left is a 30-second cleanup: disable the dead-weight
+global plugins (`deep-research` broken, `imessage` macOS, `pyright-lsp`
+no Python, `bio-research`) in `~/.claude/settings.json` to trim context.
 Everything else in this doc is optional.
 
 ---
@@ -140,10 +133,10 @@ has no `phyr97` directory and `installed_plugins.json` has zero
 domain). Disable when convenient.
 
 **MCP servers active:** Gmail, Google Calendar, Google Drive, Trimble
-SketchUp, Claude in Chrome.
+SketchUp, Claude in Chrome, Supabase, Context7, Vercel.
 
-**MCP servers plugin-installed but not authenticated:** Vercel (OAuth
-ready), plus ~25 others from plugin defaults that aren't needed.
+**MCP servers plugin-installed but unused:** ~25 others from plugin
+defaults that aren't needed (see dead-plugin cleanup below).
 
 **Project `.claude/`** has 7 slash commands: `plan-feature`, `feature`,
 `work`, `verify`, `checkpoint`, `decision`, `explain`. Permissions
@@ -181,13 +174,13 @@ Empty result = plugin body isn't actually downloaded; the
   Next.js / Supabase / shadcn docs into the prompt to kill App Router
   API drift. Free tier; if rate limits bite, add a `CONTEXT7_API_KEY`
   header via `claude mcp remove`/`add`.
+- ✅ **Vercel MCP** — authenticated 2026-05-28 (OAuth). Claude can read
+  deploy status, build/runtime logs, env, and projects directly
+  (team `goodwoods17's projects`, project `good-woods-dashboard`).
 
 ## Still open (ranked, ADHD rule: max 7)
 
-1. **Complete Vercel MCP OAuth.** Plugin already installed; one click.
-   Lets Claude check deploy status, edge config, env without us
-   pasting the dashboard URL.
-2. **Disable dead-weight global plugins** — `deep-research` (broken),
+1. **Disable dead-weight global plugins** — `deep-research` (broken),
    `imessage` (macOS), `pyright-lsp` (no Python), `bio-research`. Trims
    context; flip the flags in `~/.claude/settings.json`.
 
