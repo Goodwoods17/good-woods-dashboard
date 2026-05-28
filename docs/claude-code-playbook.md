@@ -4,10 +4,8 @@ How this project uses Claude Code, what's new on the platform that
 matters here, and what to add next. Refreshed in place — not appended
 — when the platform shifts.
 
-Last refresh (2026-05-09, second pass) used four parallel research
-streams: `/last30days "claude code"`, `/last30days "claude code skills"`,
-an Anthropic-official deltas pass, and a local-inventory + ecosystem
-pass. ADRs in `docs/decisions/` remain the source of truth for
+Last refresh 2026-05-28 (tooling pass — see the dated note at the
+bottom). ADRs in `docs/decisions/` remain the source of truth for
 project-shape decisions; this file is the source of truth for *how we
 drive Claude Code against the project*.
 
@@ -15,28 +13,23 @@ drive Claude Code against the project*.
 
 ## TL;DR — One next action
 
-**Connect the Supabase MCP server, then install `supabase/agent-skills`
-in the same sitting.** ~45 minutes total, payoff visible in under a week.
-
-1. claude.ai → Settings → Connectors → Supabase → authorise the dev
-   project (`zycdmlkffbaqofaygddx`) in **read-only mode** first.
-2. Same session: `claude skill add supabase/agent-skills`.
-   ([source](https://supabase.com/blog/supabase-agent-skills))
-3. Next prompt: *"Generate RLS policies that lock `jobs` to authenticated
-   users only, then apply them."*
+**Install Context7 for live, version-pinned Next.js + Supabase + shadcn
+docs.** `/plugin marketplace add upstash/context7`. ~10 minutes, payoff
+on the very next App Router task.
 
 Why this one:
-- Directly unblocks the top item in `.remember/remember.md` (RLS
-  tightening before real client data lands).
-- Replaces the loop of pasting SQL into the Supabase web editor +
-  running `notify pgrst, 'reload schema'` by hand.
-- The skill teaches Claude correct RLS / pooling / `service_role`
-  patterns; the MCP gives it hands. First real-world test of the
-  "skills + MCP" pairing on this stack.
+- The remaining hallucination risk on this stack is **App Router /
+  Supabase API drift** — Claude confidently using an old `cookies()` or
+  `createClient` signature. Context7 pulls the *current* docs into the
+  prompt and kills that cold.
+- The big workflow gaps are now closed (see below), so this is the
+  highest-leverage thing left that directly reduces errors.
 
-While you're in there, **fix the broken `deep-research` plugin install**
-— it's listed as enabled but never actually cloned. 30 seconds. See
-the inventory section.
+Why not the old "one next action" (Supabase MCP + agent-skills): **done**
+— Supabase MCP connected 2026-05-10, scoped to this project.
+
+Still-open 30-second cleanup: the `deep-research` plugin is enabled but
+was never cloned (broken install). Disable it in `~/.claude/settings.json`.
 
 Everything else in this doc is optional.
 
@@ -53,7 +46,11 @@ Validated against Anthropic's
    `work`, `verify`, `checkpoint`, `decision`, `explain`) cover
    Anthropic's explore → plan → execute → verify → commit cycle.
    `/plan-feature` runs first for anything new; the spec lands in
-   `features/<name>/CLAUDE.md` and is canonical.
+   `features/<name>/CLAUDE.md` and is canonical. **Modernized
+   2026-05-28** for the Next.js/TS/Supabase reality — `/feature`
+   scaffolds `features/<name>/{components,lib}` TSX + a thin route
+   page (not the old `.html/.css/.js` + `index.html`), and project-wide
+   rules now live in a **root `CLAUDE.md`** that all commands reference.
 2. **Auto mode is on globally** (`defaultMode: auto`,
    `skipAutoPermissionPrompt: true`). Anthropic now restricts auto
    mode to Sonnet 4.6 / Opus 4.6 / Opus 4.7 and **excludes Pro plans
@@ -62,11 +59,14 @@ Validated against Anthropic's
    ([source](https://code.claude.com/docs/en/permission-modes))
 3. **Per-feature CLAUDE.md specs.** Canonical pattern. Don't replace
    specs with auto-memory chatter.
-4. **Verification gate before merge.** `/verify` runs the multi-phase
-   self-check on every change. **`/ultrareview`** (shipped with Opus
-   4.7 on 2026-04-16) is the heavyweight cloud version — use only on
-   merges to `main` that touch DB, auth, or money. Billed separately
-   per run; not a default.
+4. **Verification gate before merge.** `/verify` now runs the **real
+   toolchain** — `npx tsc --noEmit` + `npm run lint` + Prettier (and
+   `npm run build` on risky changes) — and auto-fixes what they flag,
+   instead of mentally tracing logic. A `PostToolUse` hook
+   (`.claude/hooks/format-on-edit.mjs`) also auto-formats every edited
+   file. **`/ultrareview`** (shipped with Opus 4.7 on 2026-04-16) is the
+   heavyweight cloud version — use only on merges to `main` that touch
+   DB, auth, or money. Billed separately per run; not a default.
    ([Opus 4.7 launch](https://www.anthropic.com/news/claude-opus-4-7))
 5. **Checkpoints.** Pre-edit checkpoints shipped May 2026; `Esc Esc`
    or `/rewind` restores code/conversation. Use this instead of
@@ -79,15 +79,16 @@ Validated against Anthropic's
 
 - **Briefing feature** (`features/briefing/lib/prompt.ts`) uses
   `claude-sonnet-4-6` via the Anthropic SDK. Don't refactor to "4-5".
-- **Editor agent** defaults to **Opus 4.7** (launched 2026-04-16) on
-  Enterprise pay-as-you-go. Sonnet 4.6 stays the speed choice for
+- **Editor agent** defaults to **Opus 4.8** (launched 2026-05-28; set
+  as Andrew's default model the same day). Same pricing as 4.7 with
+  built-in effort control. Sonnet 4.6 stays the speed choice for
   general coding.
-- **Subagents:** Sonnet 4.6 for sub-tasks, Opus 4.7 for orchestration
-  / synthesis. Both refresh runs of this playbook used four parallel
+- **Subagents:** Sonnet 4.6 for sub-tasks, Opus 4.8 for orchestration
+  / synthesis. Refresh runs of this playbook used four parallel
   general-purpose agents — works fine.
-- **`/effort` slider** (v2.1.111) dials Opus 4.7 reasoning up to
-  "xhigh" for tricky RLS / Server Actions, down for boilerplate —
-  no model rotation needed.
+- **Effort control** (4.8 built-in; `/effort` slider since v2.1.111)
+  dials Opus reasoning up to "xhigh" for tricky RLS / Server Actions,
+  down for boilerplate — no model rotation needed.
 
 ---
 
@@ -166,29 +167,30 @@ Empty result = plugin body isn't actually downloaded; the
 
 ---
 
-## What to add next (ranked, ADHD rule: max 7)
+## Done (closed 2026-05-09 → 2026-05-28)
 
-1. **Supabase MCP + `supabase/agent-skills`** — see TL;DR.
-2. **Context7** — `/plugin marketplace add upstash/context7`. Pulls
-   live, version-pinned Next.js + Supabase + shadcn docs into the
-   prompt. Kills "App Router API drift" hallucinations cold.
-   ([docs](https://context7.com/docs/clients/claude-code))
-3. **typescript-lsp** (Anthropic official) — Real-time type checking
-   and go-to-definition; ~50 ms answers vs 30–60 s grep loops.
-   `claude plugins add typescript-lsp@claude-plugins-official`.
-4. **Complete Vercel MCP OAuth.** Plugin already installed; one click.
+- ✅ **Supabase MCP** — connected 2026-05-10, scoped to this project.
+- ✅ **typescript-lsp** installed (`claude-plugins-official`) — real
+  type-checking + go-to-definition instead of grep loops.
+- ✅ **`PostToolUse` Prettier hook** — `.claude/hooks/format-on-edit.mjs`
+  auto-formats every edited file. Style nits gone.
+- ✅ **Root `CLAUDE.md`** — project-wide stack/conventions/toolchain in
+  one canonical file; documents the **Monitor** rule (run `npm run dev`
+  / `vercel logs --follow` via Monitor so errors land live).
+- ✅ **Toolchain allowlist** — `tsc`, `next`, `npm run dev/build/lint`,
+  `eslint`, `supabase`, `tsx` no longer prompt (the manual half of what
+  `/fewer-permission-prompts` would have proposed).
+- ✅ **`/verify` runs the real toolchain** (see workflow §4).
+
+## Still open (ranked, ADHD rule: max 7)
+
+1. **Context7** — see TL;DR. Highest-leverage error reducer left.
+2. **Complete Vercel MCP OAuth.** Plugin already installed; one click.
    Lets Claude check deploy status, edge config, env without us
    pasting the dashboard URL.
-5. **`PostToolUse` Edit/Write → `npx prettier --write` hook.** ~8 lines
-   in `.claude/settings.json`. Permission already allowed. Eliminates
-   style nits forever.
-6. **Document the Monitor tool in project CLAUDE.md.** Single rule:
-   *"When iterating on UI or API routes, run `npm run dev` and
-   `vercel logs --follow` via Monitor so type/runtime errors land in
-   our conversation live."*
-7. **Run `/fewer-permission-prompts`** to scan transcripts and propose
-   a project-level allowlist for `npm run dev:*`, `next *`,
-   `npx supabase:*`. Skill already installed.
+3. **Disable dead-weight global plugins** — `deep-research` (broken),
+   `imessage` (macOS), `pyright-lsp` (no Python), `bio-research`. Trims
+   context; flip the flags in `~/.claude/settings.json`.
 
 Skip until justified by a concrete pain:
 - **Routines for the briefing** — finish the in-flight Vercel Cron
@@ -249,6 +251,9 @@ Skip until justified by a concrete pain:
   so the doc stays under 250 lines).
 - Cross-reference from README workflow section as needed.
 
-Last refreshed 2026-05-09 (second pass — `/last30days` + Anthropic-
-official + ecosystem agents in parallel; `/deep-research` plugin not
-yet operational, see TL;DR cleanup item).
+Last refreshed 2026-05-28 (tooling pass — modernized the seven slash
+commands for the Next.js/TS/Supabase reality, added the root `CLAUDE.md`,
+the Prettier `PostToolUse` hook, the toolchain allowlist, and the
+`/verify` real-toolchain gate; installed `typescript-lsp`; switched the
+editor default to Opus 4.8). Prior pass 2026-05-09 (`/last30days` +
+Anthropic-official + ecosystem agents in parallel).
