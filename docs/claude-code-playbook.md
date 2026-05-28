@@ -13,20 +13,15 @@ drive Claude Code against the project*.
 
 ## TL;DR — One next action
 
-**Install Context7 for live, version-pinned Next.js + Supabase + shadcn
-docs.** `/plugin marketplace add upstash/context7`. ~10 minutes, payoff
-on the very next App Router task.
+**Complete the Vercel MCP OAuth.** The plugin is already installed —
+it's one click to authorise. Then Claude can check deploy status, edge
+config, and env vars without us pasting the dashboard URL.
 
 Why this one:
-- The remaining hallucination risk on this stack is **App Router /
-  Supabase API drift** — Claude confidently using an old `cookies()` or
-  `createClient` signature. Context7 pulls the *current* docs into the
-  prompt and kills that cold.
-- The big workflow gaps are now closed (see below), so this is the
-  highest-leverage thing left that directly reduces errors.
-
-Why not the old "one next action" (Supabase MCP + agent-skills): **done**
-— Supabase MCP connected 2026-05-10, scoped to this project.
+- The error-reducing tooling is now all in place (Context7,
+  typescript-lsp, real `/verify`, format hook — see Done below), so the
+  last loop worth closing is deploy visibility.
+- Low effort, removes a recurring manual step.
 
 Still-open 30-second cleanup: the `deep-research` plugin is enabled but
 was never cloned (broken install). Disable it in `~/.claude/settings.json`.
@@ -181,14 +176,18 @@ Empty result = plugin body isn't actually downloaded; the
   `eslint`, `supabase`, `tsx` no longer prompt (the manual half of what
   `/fewer-permission-prompts` would have proposed).
 - ✅ **`/verify` runs the real toolchain** (see workflow §4).
+- ✅ **Context7 MCP** — added 2026-05-28, user-scoped HTTP server
+  (`https://mcp.context7.com/mcp`), connected. Pulls live, version-pinned
+  Next.js / Supabase / shadcn docs into the prompt to kill App Router
+  API drift. Free tier; if rate limits bite, add a `CONTEXT7_API_KEY`
+  header via `claude mcp remove`/`add`.
 
 ## Still open (ranked, ADHD rule: max 7)
 
-1. **Context7** — see TL;DR. Highest-leverage error reducer left.
-2. **Complete Vercel MCP OAuth.** Plugin already installed; one click.
+1. **Complete Vercel MCP OAuth.** Plugin already installed; one click.
    Lets Claude check deploy status, edge config, env without us
    pasting the dashboard URL.
-3. **Disable dead-weight global plugins** — `deep-research` (broken),
+2. **Disable dead-weight global plugins** — `deep-research` (broken),
    `imessage` (macOS), `pyright-lsp` (no Python), `bio-research`. Trims
    context; flip the flags in `~/.claude/settings.json`.
 
@@ -254,6 +253,7 @@ Skip until justified by a concrete pain:
 Last refreshed 2026-05-28 (tooling pass — modernized the seven slash
 commands for the Next.js/TS/Supabase reality, added the root `CLAUDE.md`,
 the Prettier `PostToolUse` hook, the toolchain allowlist, and the
-`/verify` real-toolchain gate; installed `typescript-lsp`; switched the
-editor default to Opus 4.8). Prior pass 2026-05-09 (`/last30days` +
+`/verify` real-toolchain gate; installed `typescript-lsp` and the
+Context7 MCP; switched the editor default to Opus 4.8). Prior pass
+2026-05-09 (`/last30days` +
 Anthropic-official + ecosystem agents in parallel).
