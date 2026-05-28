@@ -177,12 +177,23 @@ Empty result = plugin body isn't actually downloaded; the
 - ✅ **Vercel MCP** — authenticated 2026-05-28 (OAuth). Claude can read
   deploy status, build/runtime logs, env, and projects directly
   (team `goodwoods17's projects`, project `good-woods-dashboard`).
+- ✅ **GitHub wired for plugin updates** (2026-05-28). Root-caused a
+  broken `deep-research` plugin: it was enabled under the wrong
+  marketplace name and its payload had never cloned because the
+  installer used SSH (no key/known_hosts). Fix was a global git rule
+  rewriting GitHub SSH URLs → HTTPS (`url.https://github.com/.insteadOf`
+  for `git@github.com:` / `ssh://git@github.com`) plus `gh auth
+  setup-git` for the credential helper. deep-research now installed
+  (`@phyr97`, v2.3.0); all 5 marketplaces update cleanly over HTTPS.
+  **Stay current:** `claude plugin marketplace update` (refresh
+  listings) then `claude plugin update <name>` (upgrade an installed
+  plugin).
 
 ## Still open (ranked, ADHD rule: max 7)
 
-1. **Disable dead-weight global plugins** — `deep-research` (broken),
-   `imessage` (macOS), `pyright-lsp` (no Python), `bio-research`. Trims
-   context; flip the flags in `~/.claude/settings.json`.
+1. **Disable remaining dead-weight global plugins** — `imessage`
+   (macOS), `pyright-lsp` (no Python), `bio-research` (unused). Trims
+   context; use `claude plugin disable <name>@<marketplace>`.
 
 Skip until justified by a concrete pain:
 - **Routines for the briefing** — finish the in-flight Vercel Cron
