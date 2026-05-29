@@ -34,8 +34,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const sb = getSupabase();
 
-    sb.auth.getUser().then(({ data }) => {
-      setUser(data.user);
+    sb.auth.getUser().then(({ data, error }) => {
+      // On error, treat as signed-out rather than leaving the spinner up forever.
+      setUser(error ? null : data.user);
       setLoading(false);
     });
 
@@ -49,11 +50,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signOut() {
-    if (hasSupabase()) {
-      await getSupabase().auth.signOut();
+    try {
+      if (hasSupabase()) {
+        await getSupabase().auth.signOut();
+      }
+    } finally {
+      // Always redirect, even if signOut throws — a stuck "Sign out" button
+      // that leaves the user on a protected page is worse than a failed call.
+      // Hard navigation so middleware sees the cleared cookie immediately.
+      window.location.href = "/login";
     }
-    // Hard navigation so middleware sees the cleared cookie immediately.
-    window.location.href = "/login";
   }
 
   return (

@@ -42,7 +42,7 @@ features/jobs/
     ├── activity.ts              (diffActivity + newActivity helpers)
     ├── ics.ts                   (calendar export — depends on invoice for COMPANY)
     ├── invoice.ts               (COMPANY, TAX_RATE, computeInvoiceTotals, generateInvoicePdf)
-    ├── jobs.ts                  (SEED_JOBS, nextJobCode, etc.)
+    ├── jobs.ts                  (SEED_JOBS, getJob, etc.)
     ├── jobsRowMap.ts            (Supabase row ↔ Job conversion; internal to jobsStore)
     └── jobsStore.tsx            (JobsProvider, useJobs, useJob)
 ```
@@ -50,8 +50,9 @@ features/jobs/
 ## Domain notes
 
 - **Job code** is human-facing (`GW-2026-001`, `GW-2026-002`). Generated
-  sequentially by `nextJobCode` from `lib/jobs.ts`. Job rows in
-  Supabase use a UUID `id` separately.
+  sequentially by `nextJobCode`, defined inline in
+  `src/app/jobs/new/page.tsx`. Job rows in Supabase use a UUID `id`
+  separately.
 - **Pipeline status** vs. **health status** are independent: pipeline
   is "where it is in the funnel" (`new → sold → in_design → ...`),
   health is "is this on track" (`on_track | at_risk | blocked | ...`).

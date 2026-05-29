@@ -9,7 +9,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
 import { DocumentsCard } from "@features/documents/components/DocumentsCard";
-import { formatDate } from "@shared/lib/format";
+import { formatCAD, formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
 type SlotKey = "payer" | "designer" | "gc" | "architect" | "homeowner";
@@ -198,7 +198,7 @@ export function OverviewTab({ job }: { job: Job }) {
           {typeof job.estimatedRevenue === "number" && job.estimatedRevenue > 0 && (
             <Field
               label="Estimated revenue"
-              value={`$${job.estimatedRevenue.toLocaleString("en-CA")}`}
+              value={formatCAD(job.estimatedRevenue)}
             />
           )}
         </dl>
