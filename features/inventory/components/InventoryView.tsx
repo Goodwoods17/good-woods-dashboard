@@ -1,84 +1,118 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Package } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useCatalog } from "@features/catalog/lib/catalogStore";
+import { formatCAD } from "@shared/lib/format";
 import {
-  loadStock,
-  saveStock,
-  newStockId,
-  SEED_STOCK,
+  useInventory,
+  isLow,
   type StockEntry,
+  type NewStockEntry,
 } from "@features/inventory/lib/inventoryStore";
-import { StockTable } from "./StockTable";
-import { LowStockBanner } from "./LowStockBanner";
+import { ReorderNow } from "./LowStockBanner";
+import { StockRegister } from "./StockTable";
+import { ItemModal } from "./ItemModal";
 
 export function InventoryView() {
-  const { materials } = useCatalog();
-  const [stock, setStock] = useState<StockEntry[]>(SEED_STOCK);
+  const { stock, loading, error, addItem, updateItem, markReordered, removeItem } = useInventory();
+  const [showAdd, setShowAdd] = useState(false);
+  const [editItem, setEditItem] = useState<StockEntry | null>(null);
 
-  useEffect(() => {
-    setStock(loadStock());
-  }, []);
-
-  function update(id: string, patch: Partial<StockEntry>) {
-    setStock((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, ...patch } : s));
-      saveStock(next);
-      return next;
-    });
-  }
-
-  function add() {
-    setStock((prev) => {
-      const next = [
-        ...prev,
-        {
-          id: newStockId(),
-          materialId: materials[0]?.id ?? "",
-          qtyOnHand: 0,
-          reorderPoint: 0,
-          unit: "units",
-        },
-      ];
-      saveStock(next);
-      return next;
-    });
-  }
-
-  function remove(id: string) {
-    setStock((prev) => {
-      const next = prev.filter((s) => s.id !== id);
-      saveStock(next);
-      return next;
-    });
-  }
-
-  const lowStock = stock.filter((s) => s.qtyOnHand < s.reorderPoint);
+  const low = useMemo(() => stock.filter((s) => isLow(s) && !s.reorderedAt), [stock]);
+  const onOrder = useMemo(() => stock.filter((s) => s.reorderedAt !== null), [stock]);
+  const totalValue = useMemo(
+    () => stock.reduce((sum, s) => sum + s.unitValue * s.qtyOnHand, 0),
+    [stock]
+  );
 
   return (
     <>
       <PageHeader
         eyebrow="Inventory"
         title="Materials on hand"
-        subtitle={`${stock.length} tracked SKUs · ${lowStock.length} below reorder point`}
+        subtitle={`${stock.length} tracked · ${formatCAD(totalValue)} on the shelf`}
+        actions={
+          <button
+            type="button"
+            onClick={() => setShowAdd(true)}
+            className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full bg-ink-pill px-4 py-1.5 text-sm font-medium text-white transition-colors duration-fast hover:bg-accent-active"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            Add item
+          </button>
+        }
       />
-      <div className="px-8 py-6 max-w-5xl space-y-4">
-        <LowStockBanner lowStock={lowStock} materials={materials} />
-        <StockTable
-          stock={stock}
-          materials={materials}
-          onUpdate={update}
-          onAdd={add}
-          onRemove={remove}
-        />
-        <p className="text-xs text-text-tertiary px-1">
-          <Package className="h-3 w-3 inline mr-1" strokeWidth={1.75} />
-          Auto-decrement on job consumption arrives in M7+ alongside QuickBooks
-          purchase orders.
-        </p>
+
+      <div className="max-w-4xl space-y-4 px-4 py-6 md:px-8">
+        {error && (
+          <p className="rounded-lg bg-status-blocked-soft px-3 py-2 text-sm text-status-blocked">
+            {error}
+          </p>
+        )}
+
+        {loading ? (
+          <Skeleton />
+        ) : stock.length === 0 ? (
+          <EmptyState onAdd={() => setShowAdd(true)} />
+        ) : (
+          <>
+            <ReorderNow low={low} onOrder={onOrder} onReordered={markReordered} />
+            <StockRegister
+              stock={stock}
+              onUpdate={updateItem}
+              onEdit={setEditItem}
+              onRemove={removeItem}
+            />
+          </>
+        )}
       </div>
+
+      {showAdd && (
+        <ItemModal
+          onSubmit={(values: NewStockEntry) => void addItem(values)}
+          onClose={() => setShowAdd(false)}
+        />
+      )}
+      {editItem && (
+        <ItemModal
+          item={editItem}
+          onSubmit={(values) => {
+            updateItem(editItem.id, values);
+          }}
+          onDelete={() => void removeItem(editItem.id)}
+          onClose={() => setEditItem(null)}
+        />
+      )}
     </>
+  );
+}
+
+function Skeleton() {
+  return (
+    <div className="space-y-4" aria-hidden>
+      <div className="h-16 rounded-2xl bg-surface shadow-resting" />
+      <div className="h-64 rounded-2xl bg-surface shadow-resting" />
+    </div>
+  );
+}
+
+function EmptyState({ onAdd }: { onAdd: () => void }) {
+  return (
+    <div className="rounded-2xl bg-surface px-6 py-16 text-center shadow-resting">
+      <h2 className="font-serif text-xl font-medium text-text-primary">No stock tracked yet</h2>
+      <p className="mx-auto mt-1.5 max-w-sm text-sm text-text-secondary">
+        Add the materials you keep on hand, set a reorder point, and this page tells you what to
+        restock before a job stalls.
+      </p>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-ink-pill px-4 py-2 text-sm font-medium text-white transition-colors duration-fast hover:bg-accent-active"
+      >
+        <Plus className="h-4 w-4" strokeWidth={2} />
+        Add item
+      </button>
+    </div>
   );
 }

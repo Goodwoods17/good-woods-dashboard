@@ -1,6 +1,8 @@
 "use client";
 
+import { useId } from "react";
 import { useWorkspaceSettings } from "@shared/lib/workspaceSettings";
+import { Section } from "./Section";
 
 function NumberField({
   label,
@@ -19,13 +21,18 @@ function NumberField({
   step?: number;
   min?: number;
 }) {
+  const id = useId();
   return (
     <div>
-      <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1">
+      <label
+        htmlFor={id}
+        className="block text-label uppercase tracking-[0.06em] text-text-tertiary"
+      >
         {label}
       </label>
-      <div className="flex items-center gap-2">
+      <div className="mt-1.5 flex items-center gap-2">
         <input
+          id={id}
           type="number"
           inputMode="decimal"
           value={Number.isFinite(value) ? value : 0}
@@ -35,15 +42,11 @@ function NumberField({
             const n = Number(e.target.value);
             onChange(Number.isFinite(n) ? n : 0);
           }}
-          className="w-24 px-2 py-1 text-sm border border-border rounded-md bg-surface text-text-primary focus:outline-none focus:ring-1 focus:ring-accent focus:border-accent tabular-nums"
+          className="min-h-[40px] w-24 rounded-lg bg-surface-muted px-3 text-sm tabular-nums text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft"
         />
-        {suffix && (
-          <span className="text-xs text-text-tertiary">{suffix}</span>
-        )}
+        {suffix && <span className="text-caption text-text-tertiary">{suffix}</span>}
       </div>
-      {hint && (
-        <p className="mt-1 text-xs text-text-tertiary leading-snug">{hint}</p>
-      )}
+      {hint && <p className="mt-1.5 text-caption leading-snug text-text-tertiary">{hint}</p>}
     </div>
   );
 }
@@ -52,20 +55,14 @@ export function RatesSection() {
   const { settings, updateRates, update } = useWorkspaceSettings();
 
   return (
-    <section className="bg-surface border border-border rounded-lg overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-border bg-surface-muted">
-        <h2 className="text-sm font-semibold text-text-primary">
-          Labour rates &amp; estimate defaults
-        </h2>
-        <p className="mt-0.5 text-xs text-text-tertiary">
-          Used by the estimator. Per-line markup, overhead %, and waste % can
-          still be tweaked per quote — these are the starting points.
-        </p>
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 p-5">
+    <Section
+      title="Labour rates & estimate defaults"
+      description="Used by the estimator. Per-line markup, overhead, and waste can still be tuned per quote. These are the starting points."
+    >
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 lg:grid-cols-3">
         <NumberField
           label="Design rate"
-          hint="Pre-work — site visits, design meetings, estimating"
+          hint="Pre-work: site visits, design meetings, estimating"
           suffix="$ / hour"
           value={settings.labourRates.designRate}
           onChange={(n) => updateRates({ designRate: n })}
@@ -85,7 +82,7 @@ export function RatesSection() {
           onChange={(n) => updateRates({ installRate: n })}
         />
       </div>
-      <div className="border-t border-border grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4 p-5">
+      <div className="mt-5 grid grid-cols-1 gap-x-6 gap-y-5 border-t border-border-faint pt-5 sm:grid-cols-2 lg:grid-cols-3">
         <NumberField
           label="Default overhead %"
           hint="Applied workshop-wide on direct cost"
@@ -104,13 +101,13 @@ export function RatesSection() {
         />
         <NumberField
           label="Gas / mile"
-          hint="Delivery calculator. CRA-aligned ~$0.55"
+          hint="Delivery calculator. CRA-aligned (about $0.55)"
           suffix="$ / mile"
           step={0.05}
           value={settings.defaultGasRatePerMile}
           onChange={(n) => update({ defaultGasRatePerMile: n })}
         />
       </div>
-    </section>
+    </Section>
   );
 }

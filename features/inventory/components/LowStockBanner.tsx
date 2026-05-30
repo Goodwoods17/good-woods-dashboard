@@ -1,34 +1,85 @@
 "use client";
 
-import { AlertTriangle } from "lucide-react";
+import { PackageCheck } from "lucide-react";
+import { formatCAD } from "@shared/lib/format";
 import type { StockEntry } from "@features/inventory/lib/inventoryStore";
-import type { Material } from "@features/catalog/lib/catalogStore";
 
-export function LowStockBanner({
-  lowStock,
-  materials,
+/**
+ * "Reorder now" lead: the reason you open this page. Lists what's at or below
+ * its reorder point and not yet on order, each with a one-tap "Reordered".
+ * On-order items sit quietly below until they're restocked.
+ */
+export function ReorderNow({
+  low,
+  onOrder,
+  onReordered,
 }: {
-  lowStock: StockEntry[];
-  materials: Material[];
+  low: StockEntry[];
+  onOrder: StockEntry[];
+  onReordered: (id: string) => void;
 }) {
-  if (lowStock.length === 0) return null;
+  if (low.length === 0 && onOrder.length === 0) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-2xl bg-surface px-4 py-3 shadow-resting">
+        <PackageCheck className="h-4 w-4 text-status-on-track" strokeWidth={2} />
+        <p className="text-sm text-text-secondary">
+          Stock looks healthy. Nothing below its reorder point.
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <div className="bg-status-at-risk-soft border border-status-at-risk/30 rounded-lg p-3 flex items-start gap-3">
-      <AlertTriangle
-        className="h-4 w-4 text-status-at-risk shrink-0 mt-0.5"
-        strokeWidth={1.75}
-      />
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-status-at-risk mb-1">
-          {lowStock.length} item{lowStock.length === 1 ? "" : "s"} need reorder
+    <section className="overflow-hidden rounded-2xl bg-surface shadow-resting">
+      {low.length > 0 && (
+        <>
+          <div className="flex items-center justify-between px-4 pb-2 pt-3.5">
+            <h2 className="font-serif text-title font-medium text-text-primary">Reorder now</h2>
+            <span className="font-mono text-xs tabular-nums text-status-at-risk">
+              {low.length} low
+            </span>
+          </div>
+          <ul className="divide-y divide-border-faint">
+            {low.map((s) => (
+              <li key={s.id} className="flex items-center gap-3 px-4 py-2.5">
+                <span className="h-2 w-2 shrink-0 rounded-full bg-status-at-risk" />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium text-text-primary">{s.materialName}</p>
+                  <p className="font-mono text-xs tabular-nums text-text-tertiary">
+                    {s.qtyOnHand}/{s.reorderPoint} {s.unit}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => onReordered(s.id)}
+                  className="shrink-0 rounded-full bg-surface px-3 py-1.5 text-xs font-medium text-text-secondary shadow-floating transition-shadow duration-fast hover:shadow-hover"
+                >
+                  Reordered
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+
+      {onOrder.length > 0 && (
+        <div className="bg-surface-muted/40 px-4 py-2.5">
+          <p className="font-mono text-micro uppercase tracking-wider text-text-tertiary">
+            On order
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {onOrder.map((s) => (
+              <li key={s.id} className="text-xs text-text-secondary">
+                {s.materialName}{" "}
+                <span className="font-mono tabular-nums text-text-tertiary">
+                  ({s.qtyOnHand}/{s.reorderPoint} {s.unit} ·{" "}
+                  {formatCAD(s.unitValue * Math.max(0, s.reorderPoint - s.qtyOnHand))} to restock)
+                </span>
+              </li>
+            ))}
+          </ul>
         </div>
-        <div className="text-xs text-text-secondary">
-          {lowStock
-            .map((s) => materials.find((m) => m.id === s.materialId)?.name ?? "Unknown")
-            .join(", ")}
-        </div>
-      </div>
-    </div>
+      )}
+    </section>
   );
 }

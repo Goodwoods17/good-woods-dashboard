@@ -39,3 +39,8 @@ next-env.d.ts
 .claude/
 .remember/
 codemap.html
+
+# local dev artifacts
+dev.log
+dev-demo.log
+tsc_out.txt

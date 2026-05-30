@@ -2,11 +2,24 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  useDraggable,
+  useDroppable,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Job, HealthStatus } from "@shared/lib/types";
 import { computeMargin } from "@shared/lib/types";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
+import { useIsMobile } from "@shared/lib/useIsMobile";
+import { useJobs } from "@features/jobs/lib/jobsStore";
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -33,11 +46,22 @@ function addMonths(d: Date, n: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + n, 1);
 }
 
-export function CalendarView({ jobs }: { jobs: Job[] }) {
-  // Initial view = month containing the earliest upcoming install.
+function shortDate(iso: string): string {
+  return new Date(iso + "T12:00:00").toLocaleDateString("en-CA", {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+export function CalendarView() {
+  const { jobs, updateJob, loading } = useJobs();
+  const isMobile = useIsMobile();
+
   const initialMonth = useMemo(() => {
     const today = new Date();
     const upcoming = jobs
+      .filter((j) => j.installDate)
       .map((j) => new Date(j.installDate + "T12:00:00"))
       .filter((d) => d >= startOfMonth(today))
       .sort((a, b) => a.getTime() - b.getTime())[0];
@@ -45,17 +69,18 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
   }, [jobs]);
 
   const [cursor, setCursor] = useState<Date>(initialMonth);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [moved, setMoved] = useState<string | null>(null);
 
   const monthLabel = cursor.toLocaleDateString("en-CA", {
     month: "long",
     year: "numeric",
   });
 
-  // Build a 6-row × 7-col grid starting on the Sunday on or before day 1.
   const weeks = useMemo(() => {
     const first = startOfMonth(cursor);
     const startDay = new Date(first);
-    startDay.setDate(first.getDate() - first.getDay()); // back up to Sunday
+    startDay.setDate(first.getDate() - first.getDay());
     const rows: Date[][] = [];
     for (let r = 0; r < 6; r++) {
       const row: Date[] = [];
@@ -72,185 +97,373 @@ export function CalendarView({ jobs }: { jobs: Job[] }) {
   const jobsByDate = useMemo(() => {
     const map = new Map<string, Job[]>();
     for (const job of jobs) {
-      const key = job.installDate;
-      const list = map.get(key) ?? [];
+      if (!job.installDate) continue;
+      const list = map.get(job.installDate) ?? [];
       list.push(job);
-      map.set(key, list);
+      map.set(job.installDate, list);
     }
     return map;
   }, [jobs]);
 
-  const todayKey = ymd(new Date());
-
-  // Summary chips for this month
-  const monthlyJobs = useMemo(() => {
-    return jobs
-      .filter((j) => {
-        const d = new Date(j.installDate + "T12:00:00");
-        return (
-          d.getFullYear() === cursor.getFullYear() &&
-          d.getMonth() === cursor.getMonth()
-        );
-      })
-      .sort((a, b) => a.installDate.localeCompare(b.installDate));
-  }, [jobs, cursor]);
+  const monthlyJobs = useMemo(
+    () =>
+      jobs
+        .filter((j) => {
+          if (!j.installDate) return false;
+          const d = new Date(j.installDate + "T12:00:00");
+          return d.getFullYear() === cursor.getFullYear() && d.getMonth() === cursor.getMonth();
+        })
+        .sort((a, b) => a.installDate.localeCompare(b.installDate)),
+    [jobs, cursor]
+  );
 
   const monthlyValue = monthlyJobs.reduce((s, j) => s + j.revenue, 0);
+  const todayKey = ymd(new Date());
+  const activeJob = activeId ? (jobs.find((j) => j.id === activeId) ?? null) : null;
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
+
+  function handleDragStart(e: DragStartEvent) {
+    setActiveId(String(e.active.id));
+  }
+
+  function handleDragEnd(e: DragEndEvent) {
+    setActiveId(null);
+    const { active, over } = e;
+    if (!over) return;
+    const job = jobs.find((j) => j.id === String(active.id));
+    const dayKey = String(over.id);
+    if (!job || job.installDate === dayKey) return;
+    updateJob(job.id, { installDate: dayKey });
+    setMoved(`Moved ${job.client} to ${shortDate(dayKey)}`);
+    window.setTimeout(() => setMoved(null), 4000);
+  }
+
+  const header = (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <div className="flex items-center gap-1 rounded-full bg-surface p-1 shadow-floating">
+        <StepBtn label="Previous month" onClick={() => setCursor(addMonths(cursor, -1))}>
+          <ChevronLeft className="h-4 w-4" strokeWidth={2} />
+        </StepBtn>
+        <button
+          onClick={() => setCursor(startOfMonth(new Date()))}
+          className="rounded-full px-3 py-1 text-xs font-medium text-text-secondary transition-colors duration-fast hover:text-text-primary"
+        >
+          Today
+        </button>
+        <StepBtn label="Next month" onClick={() => setCursor(addMonths(cursor, 1))}>
+          <ChevronRight className="h-4 w-4" strokeWidth={2} />
+        </StepBtn>
+      </div>
+      <h2 className="font-serif text-title font-medium text-text-primary">{monthLabel}</h2>
+      <p className="font-mono text-xs tabular-nums text-text-tertiary">
+        {monthlyJobs.length} install{monthlyJobs.length === 1 ? "" : "s"} ·{" "}
+        {formatCAD(monthlyValue)}
+      </p>
+    </div>
+  );
 
   return (
-    <div className="space-y-4 max-w-7xl">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1 bg-surface border border-border rounded-md p-1">
-          <button
-            onClick={() => setCursor(addMonths(cursor, -1))}
-            aria-label="Previous month"
-            className="p-1.5 rounded hover:bg-surface-muted text-text-secondary hover:text-text-primary transition-colors duration-fast"
-          >
-            <ChevronLeft className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-          <button
-            onClick={() => setCursor(startOfMonth(new Date()))}
-            className="px-2.5 py-1 text-xs font-medium text-text-secondary hover:text-text-primary transition-colors duration-fast"
-          >
-            Today
-          </button>
-          <button
-            onClick={() => setCursor(addMonths(cursor, 1))}
-            aria-label="Next month"
-            className="p-1.5 rounded hover:bg-surface-muted text-text-secondary hover:text-text-primary transition-colors duration-fast"
-          >
-            <ChevronRight className="h-4 w-4" strokeWidth={1.75} />
-          </button>
-        </div>
-        <div className="text-sm font-semibold text-text-primary">
-          {monthLabel}
-        </div>
-        <div className="text-xs text-text-tertiary tabular-nums">
-          {monthlyJobs.length} install{monthlyJobs.length === 1 ? "" : "s"} ·{" "}
-          {formatCAD(monthlyValue)}
-        </div>
-      </div>
+    <div className="max-w-7xl space-y-4">
+      {header}
 
-      <div className="bg-surface border border-border rounded-lg overflow-hidden">
-        <div className="grid grid-cols-7 border-b border-border bg-surface-muted">
-          {WEEKDAY_LABELS.map((d) => (
-            <div
-              key={d}
-              className="px-2 py-2 text-label font-medium uppercase text-text-tertiary text-center"
-            >
-              {d}
+      <p
+        aria-live="polite"
+        className={cn(
+          "text-xs text-status-on-track transition-opacity duration-base",
+          moved ? "opacity-100" : "h-0 opacity-0"
+        )}
+      >
+        {moved}
+      </p>
+
+      {loading ? (
+        <CalendarSkeleton mobile={isMobile} />
+      ) : isMobile ? (
+        <Agenda jobs={monthlyJobs} />
+      ) : (
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="overflow-hidden rounded-2xl bg-surface shadow-resting">
+            <div className="grid grid-cols-7 bg-surface-muted/60">
+              {WEEKDAY_LABELS.map((d) => (
+                <div
+                  key={d}
+                  className="px-2 py-2 text-center text-label font-medium uppercase text-text-tertiary"
+                >
+                  {d}
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 grid-rows-6">
-          {weeks.flat().map((d, idx) => {
-            const inMonth = d.getMonth() === cursor.getMonth();
-            const key = ymd(d);
-            const dayJobs = jobsByDate.get(key) ?? [];
-            const isToday = key === todayKey;
-            const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-
-            return (
-              <div
-                key={idx}
-                className={cn(
-                  "min-h-[96px] border-r border-b border-border last:border-r-0 p-1.5 flex flex-col",
-                  !inMonth && "bg-surface-muted/40",
-                  inMonth && isWeekend && "bg-surface-muted/20"
-                )}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span
-                    className={cn(
-                      "text-xs tabular-nums",
-                      !inMonth && "text-text-disabled",
-                      inMonth && !isToday && "text-text-secondary",
-                      isToday &&
-                        "h-5 w-5 rounded-full bg-accent text-white grid place-items-center text-caption font-semibold"
-                    )}
-                  >
-                    {d.getDate()}
-                  </span>
-                </div>
-                <div className="space-y-1 overflow-hidden">
-                  {dayJobs.slice(0, 3).map((job) => (
-                    <Link
-                      key={job.id}
-                      href={`/jobs/${job.id}`}
-                      className="block text-caption rounded px-1.5 py-1 bg-accent-soft text-accent hover:bg-accent hover:text-white transition-colors duration-fast truncate"
-                      title={`${job.name} — ${job.client}`}
-                    >
-                      <span
-                        className={cn(
-                          "inline-block h-1.5 w-1.5 rounded-full mr-1.5",
-                          HEALTH_DOT[job.healthStatus]
-                        )}
-                      />
-                      {job.client}
-                    </Link>
-                  ))}
-                  {dayJobs.length > 3 && (
-                    <div className="text-micro text-text-tertiary px-1.5">
-                      +{dayJobs.length - 3} more
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {monthlyJobs.length > 0 && (
-        <section className="bg-surface border border-border rounded-lg overflow-hidden">
-          <div className="px-5 py-3.5 border-b border-border bg-surface-muted">
-            <h2 className="text-sm font-semibold text-text-primary">
-              This month — {monthlyJobs.length} install{monthlyJobs.length === 1 ? "" : "s"}
-            </h2>
+            <div className="grid grid-cols-7 grid-rows-6">
+              {weeks.flat().map((d, idx) => (
+                <DayCell
+                  key={idx}
+                  date={d}
+                  inMonth={d.getMonth() === cursor.getMonth()}
+                  isToday={ymd(d) === todayKey}
+                  isPast={ymd(d) < todayKey}
+                  jobs={jobsByDate.get(ymd(d)) ?? []}
+                />
+              ))}
+            </div>
           </div>
-          <ul className="divide-y divide-border">
-            {monthlyJobs.map((job) => {
-              const margin = computeMargin(job);
-              const dateLabel = new Date(job.installDate + "T12:00:00").toLocaleDateString(
-                "en-CA",
-                { weekday: "short", month: "short", day: "numeric" }
-              );
-              return (
-                <li key={job.id}>
-                  <Link
-                    href={`/jobs/${job.id}`}
-                    className="flex items-center gap-4 px-5 py-3 hover:bg-surface-muted/40 transition-colors duration-fast"
-                  >
-                    <div className="text-xs text-text-tertiary tabular-nums w-24 shrink-0">
-                      {dateLabel}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-text-primary truncate">
-                        {job.name}
-                      </div>
-                      <div className="text-xs text-text-secondary truncate">
-                        {job.client} · {job.address}
-                      </div>
-                    </div>
-                    <div className="text-xs text-text-tertiary tabular-nums shrink-0">
-                      {formatCAD(job.revenue)} · GM{" "}
-                      <span
-                        className={cn(
-                          margin.band === "on_track" && "text-status-on-track",
-                          margin.band === "at_risk" && "text-status-at-risk",
-                          margin.band === "blocked" && "text-status-blocked"
-                        )}
-                      >
-                        {margin.marginPct.toFixed(0)}%
-                      </span>
-                    </div>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
+
+          {monthlyJobs.length > 0 && <MonthList jobs={monthlyJobs} />}
+        </DndContext>
       )}
+
+      <DragOverlay dropAnimation={{ duration: 0 }}>
+        {activeJob ? <JobChip job={activeJob} dragging /> : null}
+      </DragOverlay>
+    </div>
+  );
+}
+
+function StepBtn({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      className="grid h-8 w-8 place-items-center rounded-full text-text-secondary transition-colors duration-fast hover:bg-surface-muted hover:text-text-primary"
+    >
+      {children}
+    </button>
+  );
+}
+
+function DayCell({
+  date,
+  inMonth,
+  isToday,
+  isPast,
+  jobs,
+}: {
+  date: Date;
+  inMonth: boolean;
+  isToday: boolean;
+  isPast: boolean;
+  jobs: Job[];
+}) {
+  const key = ymd(date);
+  const { setNodeRef, isOver } = useDroppable({ id: key });
+  const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+  const overdue = isPast && inMonth && jobs.length > 0;
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? jobs : jobs.slice(0, 3);
+
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "flex min-h-[104px] flex-col gap-1 border-b border-r border-border-faint p-1.5 [&:nth-child(7n)]:border-r-0 transition-colors duration-fast",
+        !inMonth && "bg-surface-muted/30",
+        inMonth && isWeekend && "bg-surface-muted/15",
+        overdue && "bg-status-at-risk-soft/30",
+        isOver && "bg-accent-soft/50"
+      )}
+    >
+      <span
+        className={cn(
+          "self-start text-xs tabular-nums",
+          !inMonth && "text-text-disabled",
+          inMonth && !isToday && "text-text-secondary",
+          isToday &&
+            "grid h-5 w-5 place-items-center rounded-full bg-accent-soft font-semibold text-accent"
+        )}
+      >
+        {date.getDate()}
+      </span>
+      <div className="flex flex-col gap-1">
+        {shown.map((job) => (
+          <DraggableChip key={job.id} job={job} />
+        ))}
+        {!expanded && jobs.length > 3 && (
+          <button
+            onClick={() => setExpanded(true)}
+            className="px-1.5 text-left text-micro text-text-tertiary hover:text-text-secondary"
+          >
+            +{jobs.length - 3} more
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DraggableChip({ job }: { job: Job }) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: job.id });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      className={cn("cursor-grab touch-none active:cursor-grabbing", isDragging && "opacity-40")}
+    >
+      <JobChip job={job} />
+    </div>
+  );
+}
+
+function JobChip({ job, dragging = false }: { job: Job; dragging?: boolean }) {
+  return (
+    <Link
+      href={`/jobs/${job.id}`}
+      onClick={(e) => dragging && e.preventDefault()}
+      title={`${job.name} · ${job.client}`}
+      className={cn(
+        "flex items-center gap-1.5 rounded-md px-1.5 py-1 text-caption text-text-primary transition-colors duration-fast",
+        dragging ? "bg-surface shadow-hover" : "bg-surface-muted hover:bg-accent-soft"
+      )}
+    >
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", HEALTH_DOT[job.healthStatus])} />
+      <span className="truncate">{job.client}</span>
+    </Link>
+  );
+}
+
+function MonthList({ jobs }: { jobs: Job[] }) {
+  return (
+    <section className="overflow-hidden rounded-2xl bg-surface shadow-resting">
+      <div className="px-5 py-3 text-label font-medium uppercase text-text-tertiary">
+        This month
+      </div>
+      <ul className="divide-y divide-border-faint">
+        {jobs.map((job) => (
+          <MonthRow key={job.id} job={job} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function MonthRow({ job }: { job: Job }) {
+  const margin = computeMargin(job);
+  return (
+    <li>
+      <Link
+        href={`/jobs/${job.id}`}
+        className="flex items-center gap-4 px-5 py-3 transition-colors duration-fast hover:bg-surface-muted/40"
+      >
+        <span className={cn("h-2 w-2 shrink-0 rounded-full", HEALTH_DOT[job.healthStatus])} />
+        <div className="w-24 shrink-0 font-mono text-xs tabular-nums text-text-tertiary">
+          {shortDate(job.installDate)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-text-primary">{job.name}</div>
+          <div className="truncate text-xs text-text-secondary">
+            {job.client} · {job.address}
+          </div>
+        </div>
+        <div className="shrink-0 text-right font-mono text-xs tabular-nums text-text-tertiary">
+          {formatCAD(job.revenue)} · GM{" "}
+          <span
+            className={cn(
+              margin.band === "on_track" && "text-status-on-track",
+              margin.band === "at_risk" && "text-status-at-risk",
+              margin.band === "blocked" && "text-status-blocked"
+            )}
+          >
+            {margin.marginPct.toFixed(0)}%
+          </span>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function Agenda({ jobs }: { jobs: Job[] }) {
+  const groups = useMemo(() => {
+    const map = new Map<string, Job[]>();
+    for (const j of jobs) {
+      const list = map.get(j.installDate) ?? [];
+      list.push(j);
+      map.set(j.installDate, list);
+    }
+    return Array.from(map.entries());
+  }, [jobs]);
+
+  if (jobs.length === 0) {
+    return (
+      <div className="rounded-2xl bg-surface px-6 py-12 text-center shadow-resting">
+        <p className="text-sm text-text-secondary">No installs this month.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {groups.map(([date, dayJobs]) => (
+        <div key={date}>
+          <div className="mb-1.5 px-1 font-mono text-xs uppercase tracking-wider tabular-nums text-text-tertiary">
+            {shortDate(date)}
+          </div>
+          <div className="overflow-hidden rounded-2xl bg-surface shadow-resting">
+            <ul className="divide-y divide-border-faint">
+              {dayJobs.map((job) => (
+                <MonthRowMobile key={job.id} job={job} />
+              ))}
+            </ul>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MonthRowMobile({ job }: { job: Job }) {
+  const margin = computeMargin(job);
+  return (
+    <li>
+      <Link href={`/jobs/${job.id}`} className="flex items-center gap-3 px-4 py-3">
+        <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", HEALTH_DOT[job.healthStatus])} />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-text-primary">{job.name}</div>
+          <div className="truncate text-xs text-text-secondary">{job.client}</div>
+        </div>
+        <div className="shrink-0 text-right font-mono text-xs tabular-nums">
+          <div className="text-text-primary">{formatCAD(job.revenue)}</div>
+          <div
+            className={cn(
+              margin.band === "on_track" && "text-status-on-track",
+              margin.band === "at_risk" && "text-status-at-risk",
+              margin.band === "blocked" && "text-status-blocked"
+            )}
+          >
+            GM {margin.marginPct.toFixed(0)}%
+          </div>
+        </div>
+      </Link>
+    </li>
+  );
+}
+
+function CalendarSkeleton({ mobile }: { mobile: boolean }) {
+  if (mobile) {
+    return (
+      <div className="space-y-2" aria-hidden>
+        {[0, 1, 2].map((i) => (
+          <div key={i} className="h-16 rounded-2xl bg-surface shadow-resting" />
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="overflow-hidden rounded-2xl bg-surface shadow-resting" aria-hidden>
+      <div className="grid grid-cols-7 grid-rows-6">
+        {Array.from({ length: 42 }).map((_, i) => (
+          <div key={i} className="min-h-[104px] border-b border-r border-border-faint p-1.5">
+            <div className="h-4 w-4 rounded bg-surface-muted" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

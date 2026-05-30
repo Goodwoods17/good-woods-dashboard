@@ -14,12 +14,8 @@ export function SettingsView() {
 
   return (
     <>
-      <PageHeader
-        eyebrow="Settings"
-        title="Workspace"
-        subtitle="Branding, tax, and storage."
-      />
-      <div className="px-8 py-6 max-w-3xl space-y-5">
+      <PageHeader eyebrow="Settings" title="Workspace" subtitle="Branding, tax, and storage." />
+      <div className="max-w-3xl space-y-5 px-4 py-6 md:px-8">
         <ErrorBanner error={error} />
         <StorageSection />
         <RatesSection />

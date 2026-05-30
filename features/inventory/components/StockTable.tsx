@@ -1,130 +1,190 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
-import type { StockEntry } from "@features/inventory/lib/inventoryStore";
-import type { Material } from "@features/catalog/lib/catalogStore";
+import { useIsMobile } from "@shared/lib/useIsMobile";
+import { isLow, type StockEntry, type NewStockEntry } from "@features/inventory/lib/inventoryStore";
 
-export function StockTable({
-  stock,
-  materials,
-  onUpdate,
-  onAdd,
-  onRemove,
-}: {
+type Props = {
   stock: StockEntry[];
-  materials: Material[];
-  onUpdate: (id: string, patch: Partial<StockEntry>) => void;
-  onAdd: () => void;
+  onUpdate: (id: string, patch: Partial<NewStockEntry>) => void;
+  onEdit: (entry: StockEntry) => void;
   onRemove: (id: string) => void;
-}) {
+};
+
+/** Full stock register: a table on desktop/tablet, stacked cards on phone. */
+export function StockRegister(props: Props) {
+  const isMobile = useIsMobile();
+  if (props.stock.length === 0) return null;
+  return isMobile ? <Cards {...props} /> : <DeskTable {...props} />;
+}
+
+const NUM =
+  "w-16 rounded-md bg-transparent px-2 py-1 text-right text-sm tabular-nums transition-colors duration-fast hover:bg-surface-muted focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft";
+
+function DeskTable({ stock, onUpdate, onEdit, onRemove }: Props) {
   return (
-    <div className="bg-surface border border-border rounded-lg overflow-hidden">
+    <section className="overflow-hidden rounded-2xl bg-surface shadow-resting">
+      <div className="px-4 py-3 text-label font-medium uppercase text-text-tertiary">All stock</div>
       <table className="w-full text-sm">
         <thead>
-          <tr className="border-b border-border bg-surface-muted">
-            <Th>Material</Th>
-            <Th align="right">On hand</Th>
-            <Th align="right">Reorder at</Th>
-            <Th>Unit</Th>
-            <Th align="right">Replacement value</Th>
-            <th className="w-8" />
+          <tr className="text-label uppercase text-text-tertiary">
+            <th className="px-4 py-1.5 text-left font-medium">Material</th>
+            <th className="px-2 py-1.5 text-right font-medium">On hand</th>
+            <th className="px-2 py-1.5 text-right font-medium">Reorder</th>
+            <th className="px-2 py-1.5 text-left font-medium">Unit</th>
+            <th className="px-2 py-1.5 text-right font-medium">Value</th>
+            <th className="w-16" />
           </tr>
         </thead>
         <tbody>
-          {stock.map((entry) => {
-            const mat = materials.find((m) => m.id === entry.materialId);
-            const low = entry.qtyOnHand < entry.reorderPoint;
-            const value = (mat?.unitPrice ?? 0) * entry.qtyOnHand;
-            return (
-              <tr
-                key={entry.id}
-                className="border-b border-border last:border-0 group hover:bg-surface-muted/30 transition-colors duration-fast"
-              >
-                <td className="px-4 py-2.5">
-                  <select
-                    value={entry.materialId}
-                    onChange={(e) =>
-                      onUpdate(entry.id, { materialId: e.target.value })
-                    }
-                    className="text-sm bg-transparent border-0 px-2 py-1 focus:outline-none focus:bg-surface-muted rounded text-text-primary"
-                  >
-                    {materials.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}
-                      </option>
-                    ))}
-                  </select>
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <input
-                    type="number"
-                    value={entry.qtyOnHand}
-                    onChange={(e) =>
-                      onUpdate(entry.id, {
-                        qtyOnHand: parseFloat(e.target.value) || 0,
-                      })
-                    }
+          {stock.map((s) => (
+            <tr
+              key={s.id}
+              className="group border-t border-border-faint transition-colors duration-fast hover:bg-surface-muted/30"
+            >
+              <td className="px-4 py-2">
+                <div className="flex items-center gap-2">
+                  <span
                     className={cn(
-                      "w-20 text-right tabular-nums bg-transparent border-0 px-2 py-1 text-sm rounded focus:outline-none focus:bg-surface-muted",
-                      low && "text-status-at-risk font-medium"
+                      "h-2 w-2 shrink-0 rounded-full",
+                      isLow(s) ? "bg-status-at-risk" : "bg-status-on-track"
                     )}
                   />
-                </td>
-                <td className="px-4 py-2.5 text-right">
-                  <input
-                    type="number"
-                    value={entry.reorderPoint}
-                    onChange={(e) =>
-                      onUpdate(entry.id, {
-                        reorderPoint: parseFloat(e.target.value) || 0,
-                      })
-                    }
-                    className="w-20 text-right tabular-nums bg-transparent border-0 px-2 py-1 text-sm rounded focus:outline-none focus:bg-surface-muted text-text-secondary"
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  <input
-                    type="text"
-                    value={entry.unit}
-                    onChange={(e) => onUpdate(entry.id, { unit: e.target.value })}
-                    className="w-24 bg-transparent border-0 px-2 py-1 text-sm text-text-secondary rounded focus:outline-none focus:bg-surface-muted"
-                  />
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-text-secondary">
-                  {formatCAD(value)}
-                </td>
-                <td className="px-2 py-2.5">
-                  <button
-                    onClick={() => onRemove(entry.id)}
-                    className="text-text-tertiary hover:text-status-blocked opacity-0 group-hover:opacity-100 transition-opacity duration-fast"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+                  <span className="truncate text-text-primary">{s.materialName}</span>
+                  {s.reorderedAt && (
+                    <span className="shrink-0 rounded-full bg-surface-muted px-1.5 font-mono text-micro uppercase tracking-wider text-text-tertiary">
+                      on order
+                    </span>
+                  )}
+                </div>
+              </td>
+              <td className="px-2 py-2 text-right">
+                <input
+                  type="number"
+                  value={s.qtyOnHand}
+                  onChange={(e) => onUpdate(s.id, { qtyOnHand: Number(e.target.value) || 0 })}
+                  aria-label={`On hand for ${s.materialName}`}
+                  className={cn(NUM, isLow(s) && "font-medium text-status-at-risk")}
+                />
+              </td>
+              <td className="px-2 py-2 text-right">
+                <input
+                  type="number"
+                  value={s.reorderPoint}
+                  onChange={(e) => onUpdate(s.id, { reorderPoint: Number(e.target.value) || 0 })}
+                  aria-label={`Reorder point for ${s.materialName}`}
+                  className={cn(NUM, "text-text-secondary")}
+                />
+              </td>
+              <td className="px-2 py-2 text-text-secondary">{s.unit}</td>
+              <td className="px-2 py-2 text-right font-mono tabular-nums text-text-secondary">
+                {formatCAD(s.unitValue * s.qtyOnHand)}
+              </td>
+              <td className="px-2 py-2">
+                <div className="flex justify-end gap-0.5 opacity-0 transition-opacity duration-fast group-hover:opacity-100">
+                  <IconBtn label="Edit" onClick={() => onEdit(s)}>
+                    <Pencil className="h-3.5 w-3.5" strokeWidth={2} />
+                  </IconBtn>
+                  <IconBtn label="Remove" danger onClick={() => onRemove(s.id)}>
+                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                  </IconBtn>
+                </div>
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
-      <button
-        onClick={onAdd}
-        className="w-full px-5 py-2.5 flex items-center gap-2 text-sm text-text-tertiary hover:text-accent hover:bg-accent-soft/30 transition-colors duration-fast border-t border-border"
-      >
-        <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
-        Add SKU
-      </button>
+    </section>
+  );
+}
+
+function Cards({ stock, onUpdate, onEdit, onRemove }: Props) {
+  return (
+    <div className="space-y-2">
+      <div className="px-1 text-label font-medium uppercase text-text-tertiary">All stock</div>
+      {stock.map((s) => (
+        <div key={s.id} className="rounded-2xl bg-surface p-3 shadow-resting">
+          <div className="flex items-start gap-2">
+            <span
+              className={cn(
+                "mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full",
+                isLow(s) ? "bg-status-at-risk" : "bg-status-on-track"
+              )}
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-text-primary">{s.materialName}</p>
+              <p className="font-mono text-xs tabular-nums text-text-tertiary">
+                {formatCAD(s.unitValue * s.qtyOnHand)} · {s.unit}
+                {s.reorderedAt ? " · on order" : ""}
+              </p>
+            </div>
+            <div className="flex shrink-0 gap-0.5">
+              <IconBtn label="Edit" onClick={() => onEdit(s)}>
+                <Pencil className="h-4 w-4" strokeWidth={2} />
+              </IconBtn>
+              <IconBtn label="Remove" danger onClick={() => onRemove(s.id)}>
+                <Trash2 className="h-4 w-4" strokeWidth={2} />
+              </IconBtn>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <label className="rounded-lg bg-surface-muted/60 px-3 py-2">
+              <span className="block text-micro uppercase tracking-wider text-text-tertiary">
+                On hand
+              </span>
+              <input
+                type="number"
+                value={s.qtyOnHand}
+                onChange={(e) => onUpdate(s.id, { qtyOnHand: Number(e.target.value) || 0 })}
+                className={cn(
+                  "w-full bg-transparent text-lg tabular-nums focus:outline-none",
+                  isLow(s) ? "text-status-at-risk" : "text-text-primary"
+                )}
+              />
+            </label>
+            <label className="rounded-lg bg-surface-muted/60 px-3 py-2">
+              <span className="block text-micro uppercase tracking-wider text-text-tertiary">
+                Reorder at
+              </span>
+              <input
+                type="number"
+                value={s.reorderPoint}
+                onChange={(e) => onUpdate(s.id, { reorderPoint: Number(e.target.value) || 0 })}
+                className="w-full bg-transparent text-lg tabular-nums text-text-secondary focus:outline-none"
+              />
+            </label>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
 
-function Th({ children, align }: { children: React.ReactNode; align?: "right" }) {
+function IconBtn({
+  label,
+  onClick,
+  danger,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  danger?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <th
-      className={`${align === "right" ? "text-right" : "text-left"} px-4 py-2.5 text-xs font-medium uppercase tracking-wider text-text-tertiary`}
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className={cn(
+        "grid h-9 w-9 place-items-center rounded-md text-text-tertiary transition-colors duration-fast hover:bg-surface-muted",
+        danger && "hover:bg-status-blocked-soft hover:text-status-blocked"
+      )}
     >
       {children}
-    </th>
+    </button>
   );
 }

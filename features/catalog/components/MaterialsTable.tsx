@@ -1,93 +1,91 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
+import { useIsMobile } from "@shared/lib/useIsMobile";
 import { useCatalog, type Material } from "@features/catalog/lib/catalogStore";
-import { getStaleness } from "@features/catalog/lib/priceHistory";
 import { QUOTE_SECTIONS, type SectionId } from "@features/estimator/lib/sections";
-import {
-  UNITS,
-  UNIT_LABELS,
-  type Unit,
-} from "@features/estimator/lib/types";
+import { UNITS, UNIT_LABELS, type Unit } from "@features/estimator/lib/types";
+import { AutoText, NumCell, StaleChip } from "./cells";
+
+const LINE_SECTIONS = QUOTE_SECTIONS.filter((s) => s.layout === "lines");
 
 export function MaterialsTable() {
-  const { materials, addMaterial, updateMaterial, removeMaterial } =
-    useCatalog();
+  const { materials, addMaterial, updateMaterial, removeMaterial } = useCatalog();
+  const isMobile = useIsMobile();
 
   const grouped = useMemo(() => {
     const out: Partial<Record<SectionId, Material[]>> = {};
-    for (const m of materials) {
-      if (!out[m.section]) out[m.section] = [];
-      out[m.section]!.push(m);
-    }
-    return out as Record<SectionId, Material[]>;
+    for (const m of materials) (out[m.section] ??= []).push(m);
+    return out;
   }, [materials]);
 
   return (
     <div className="space-y-4">
-      {QUOTE_SECTIONS.filter(
-        (s) => s.layout !== "prework" && s.layout !== "deficiencies",
-      ).map((section) => {
+      {LINE_SECTIONS.map((section) => {
         const rows = grouped[section.id] ?? [];
         return (
-          <div
+          <section
             key={section.id}
-            className="bg-surface border border-border rounded-lg overflow-hidden"
+            className="overflow-hidden rounded-2xl bg-surface shadow-resting"
           >
-            <div className="px-4 py-2.5 border-b border-border bg-surface-muted flex items-center justify-between">
-              <div>
-                <h3 className="text-xs uppercase tracking-[0.08em] font-semibold text-text-primary">
+            <header className="flex items-start justify-between gap-3 px-4 pb-2 pt-3.5">
+              <div className="min-w-0">
+                <h3 className="font-serif text-title font-medium text-text-primary">
                   {section.label}
                 </h3>
                 {section.description && (
-                  <p className="text-caption text-text-tertiary mt-0.5">
-                    {section.description}
-                  </p>
+                  <p className="mt-0.5 text-xs text-text-tertiary">{section.description}</p>
                 )}
               </div>
-              <span className="text-caption text-text-tertiary">
-                {rows.length} item{rows.length === 1 ? "" : "s"}
+              <span className="shrink-0 font-mono text-xs tabular-nums text-text-tertiary">
+                {rows.length}
               </span>
-            </div>
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-surface-muted/30 text-micro uppercase tracking-wider text-text-tertiary">
-                  <Th>Name</Th>
-                  <Th>Supplier</Th>
-                  <Th align="center">Unit</Th>
-                  <Th align="right">Unit price</Th>
-                  <Th align="right">Waste %</Th>
-                  <Th align="right">Markup %</Th>
-                  <Th>Updated</Th>
-                  <Th>Notes</Th>
-                  <th className="w-8" />
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((m) => (
-                  <MaterialRow
-                    key={m.id}
-                    material={m}
-                    onChange={(p) => updateMaterial(m.id, p)}
-                    onRemove={() => removeMaterial(m.id)}
-                  />
-                ))}
-                {rows.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={9}
-                      className="px-4 py-3 text-center text-xs text-text-tertiary italic"
-                    >
-                      No items in this section yet
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+            </header>
+
+            {rows.length > 0 &&
+              (isMobile ? (
+                <div className="space-y-2 px-3 pb-2">
+                  {rows.map((m) => (
+                    <MaterialCard
+                      key={m.id}
+                      material={m}
+                      onChange={(p) => updateMaterial(m.id, p)}
+                      onRemove={() => removeMaterial(m.id)}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left align-bottom text-label uppercase text-text-tertiary">
+                      <th className="px-3 py-1.5 font-medium">Name</th>
+                      <th className="px-3 py-1.5 font-medium">Supplier</th>
+                      <th className="px-3 py-1.5 text-center font-medium">Unit</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Price</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Waste%</th>
+                      <th className="px-3 py-1.5 text-right font-medium">Markup%</th>
+                      <th className="px-3 py-1.5 font-medium">Notes</th>
+                      <th className="w-10" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((m) => (
+                      <MaterialRow
+                        key={m.id}
+                        material={m}
+                        onChange={(p) => updateMaterial(m.id, p)}
+                        onRemove={() => removeMaterial(m.id)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              ))}
+
             <button
+              type="button"
               onClick={() =>
                 addMaterial({
                   name: "",
@@ -99,12 +97,12 @@ export function MaterialsTable() {
                   defaultMarkupPct: 35,
                 })
               }
-              className="w-full px-5 py-2 flex items-center gap-2 text-xs text-text-tertiary hover:text-accent hover:bg-accent-soft/30 transition-colors duration-fast border-t border-border"
+              className="flex w-full items-center gap-2 border-t border-border-faint px-4 py-2.5 text-xs text-text-tertiary transition-colors duration-fast hover:bg-accent-soft/30 hover:text-accent"
             >
-              <Plus className="h-3 w-3" strokeWidth={1.75} />
-              Add item to {section.label}
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              Add to {section.label}
             </button>
-          </div>
+          </section>
         );
       })}
     </div>
@@ -120,28 +118,27 @@ function MaterialRow({
   onChange: (patch: Partial<Material>) => void;
   onRemove: () => void;
 }) {
-  const stale = getStaleness(material.priceUpdatedAt);
   return (
-    <tr className="border-b border-border last:border-0 group hover:bg-surface-muted/30 transition-colors duration-fast">
-      <Td>
-        <TextInput
+    <tr className="group border-t border-border-faint align-top even:bg-surface-muted/20 hover:bg-surface-muted/40">
+      <td className="max-w-[16rem] px-3 py-1.5">
+        <AutoText
           value={material.name}
           onChange={(v) => onChange({ name: v })}
           placeholder="Item name"
         />
-      </Td>
-      <Td>
-        <TextInput
+      </td>
+      <td className="max-w-[10rem] px-3 py-1.5">
+        <AutoText
           value={material.supplier}
           onChange={(v) => onChange({ supplier: v })}
           placeholder="Supplier"
         />
-      </Td>
-      <Td align="center">
+      </td>
+      <td className="px-3 py-1.5 text-center">
         <select
           value={material.unit}
           onChange={(e) => onChange({ unit: e.target.value as Unit })}
-          className="text-sm bg-transparent border-0 px-1 py-1 focus:outline-none focus:bg-surface-muted focus:rounded"
+          className="rounded-md bg-transparent px-1 py-1 text-sm focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
         >
           {UNITS.map((u) => (
             <option key={u} value={u}>
@@ -149,163 +146,139 @@ function MaterialRow({
             </option>
           ))}
         </select>
-      </Td>
-      <Td align="right">
-        <NumberInput
+      </td>
+      <td className="px-3 py-1.5 text-right">
+        <NumCell
           value={material.unitPrice}
-          step="0.01"
           onChange={(v) => onChange({ unitPrice: v })}
           fmt={(v) => formatCAD(v)}
         />
-      </Td>
-      <Td align="right">
-        <NumberInput
+        <div className="pr-2 text-right">
+          <StaleChip iso={material.priceUpdatedAt} />
+        </div>
+      </td>
+      <td className="px-3 py-1.5 text-right">
+        <NumCell
           value={material.defaultWastePct ?? 0}
           step="1"
           onChange={(v) => onChange({ defaultWastePct: v })}
         />
-      </Td>
-      <Td align="right">
-        <NumberInput
+      </td>
+      <td className="px-3 py-1.5 text-right">
+        <NumCell
           value={material.defaultMarkupPct ?? 35}
           step="1"
           onChange={(v) => onChange({ defaultMarkupPct: v })}
         />
-      </Td>
-      <Td>
-        <StaleChip chip={stale} />
-      </Td>
-      <Td>
-        <TextInput
+      </td>
+      <td className="max-w-[14rem] px-3 py-1.5">
+        <AutoText
           value={material.notes ?? ""}
           onChange={(v) => onChange({ notes: v })}
-          placeholder="(optional notes)"
+          placeholder="Optional"
+          className="text-text-secondary"
         />
-      </Td>
-      <td className="px-2 py-1.5">
+      </td>
+      <td className="px-2 py-1.5 align-middle">
         <button
+          type="button"
           onClick={onRemove}
-          className="text-text-tertiary hover:text-status-blocked opacity-0 group-hover:opacity-100 transition-opacity duration-fast"
-          aria-label="Remove row"
+          aria-label={`Remove ${material.name || "item"}`}
+          className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary opacity-0 transition-all duration-fast hover:bg-status-blocked-soft hover:text-status-blocked group-hover:opacity-100"
         >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
         </button>
       </td>
     </tr>
   );
 }
 
-function StaleChip({
-  chip,
-}: {
-  chip: { level: "fresh" | "ageing" | "stale"; label: string };
-}) {
-  const tone =
-    chip.level === "fresh"
-      ? "bg-status-ontrack/10 text-status-success border-status-success/40"
-      : chip.level === "ageing"
-        ? "bg-status-watch/10 text-status-watch border-status-watch/40"
-        : "bg-status-blocked/10 text-status-blocked border-status-blocked/40";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center px-1.5 py-0.5 rounded-full border text-micro tabular-nums",
-        tone,
-      )}
-    >
-      {chip.label}
-    </span>
-  );
-}
-
-function Th({
-  children,
-  align,
-}: {
-  children: React.ReactNode;
-  align?: "right" | "center";
-}) {
-  return (
-    <th
-      className={cn(
-        "px-2 py-2 font-semibold",
-        align === "right"
-          ? "text-right"
-          : align === "center"
-            ? "text-center"
-            : "text-left",
-      )}
-    >
-      {children}
-    </th>
-  );
-}
-
-function Td({
-  children,
-  align,
-}: {
-  children: React.ReactNode;
-  align?: "right" | "center";
-}) {
-  return (
-    <td
-      className={cn(
-        "px-2 py-1.5",
-        align === "right"
-          ? "text-right tabular-nums"
-          : align === "center"
-            ? "text-center"
-            : "",
-      )}
-    >
-      {children}
-    </td>
-  );
-}
-
-function TextInput({
-  value,
+function MaterialCard({
+  material,
   onChange,
-  placeholder,
+  onRemove,
 }: {
-  value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
+  material: Material;
+  onChange: (patch: Partial<Material>) => void;
+  onRemove: () => void;
 }) {
   return (
-    <input
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="w-full bg-transparent border-0 px-2 py-1 text-sm text-text-primary placeholder:text-text-tertiary rounded focus:outline-none focus:bg-surface-muted"
-    />
+    <div className="rounded-xl bg-surface-muted/40 p-2.5">
+      <div className="flex items-start gap-2">
+        <div className="min-w-0 flex-1">
+          <AutoText
+            value={material.name}
+            onChange={(v) => onChange({ name: v })}
+            placeholder="Item name"
+            className="font-medium"
+          />
+          <AutoText
+            value={material.supplier}
+            onChange={(v) => onChange({ supplier: v })}
+            placeholder="Supplier"
+            className="text-text-secondary"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove item"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-md text-text-tertiary hover:bg-status-blocked-soft hover:text-status-blocked"
+        >
+          <Trash2 className="h-4 w-4" strokeWidth={2} />
+        </button>
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <Labeled label="Unit">
+          <select
+            value={material.unit}
+            onChange={(e) => onChange({ unit: e.target.value as Unit })}
+            className="w-full bg-transparent text-sm focus:outline-none"
+          >
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABELS[u]}
+              </option>
+            ))}
+          </select>
+        </Labeled>
+        <Labeled label="Price">
+          <NumCell
+            value={material.unitPrice}
+            onChange={(v) => onChange({ unitPrice: v })}
+            fmt={(v) => formatCAD(v)}
+            className="text-left"
+          />
+        </Labeled>
+        <Labeled label="Waste %">
+          <NumCell
+            value={material.defaultWastePct ?? 0}
+            step="1"
+            onChange={(v) => onChange({ defaultWastePct: v })}
+            className="text-left"
+          />
+        </Labeled>
+        <Labeled label="Markup %">
+          <NumCell
+            value={material.defaultMarkupPct ?? 35}
+            step="1"
+            onChange={(v) => onChange({ defaultMarkupPct: v })}
+            className="text-left"
+          />
+        </Labeled>
+      </div>
+      <div className="mt-2">
+        <StaleChip iso={material.priceUpdatedAt} />
+      </div>
+    </div>
   );
 }
 
-function NumberInput({
-  value,
-  onChange,
-  step,
-  fmt,
-}: {
-  value: number;
-  onChange: (v: number) => void;
-  step?: string;
-  fmt?: (n: number) => string;
-}) {
-  const [editing, setEditing] = useState<boolean>(false);
+function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <input
-      type={editing ? "number" : "text"}
-      value={editing ? value : fmt ? fmt(value) : String(value)}
-      step={step ?? "0.01"}
-      onFocus={() => setEditing(true)}
-      onBlur={() => setEditing(false)}
-      onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-      className="w-full bg-transparent border-0 px-2 py-1 text-sm text-right tabular-nums text-text-primary rounded focus:outline-none focus:bg-surface-muted"
-    />
+    <label className="rounded-lg bg-surface px-2.5 py-1.5">
+      <span className="block text-micro uppercase tracking-wider text-text-tertiary">{label}</span>
+      {children}
+    </label>
   );
 }
-

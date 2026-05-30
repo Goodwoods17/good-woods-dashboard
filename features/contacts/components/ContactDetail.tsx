@@ -15,12 +15,10 @@ import {
   Users,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { useIsMobile } from "@shared/lib/useIsMobile";
 import { useContacts } from "../lib/contactsStore";
 import { useJobs } from "@features/jobs/lib/jobsStore";
-import {
-  rollupContact,
-  rollupIntroducedClients,
-} from "../lib/aggregate";
+import { rollupContact, rollupIntroducedClients } from "../lib/aggregate";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { RoleTagPills } from "./RoleTagPills";
 import { WarmthChip } from "./WarmthChip";
@@ -41,15 +39,14 @@ export function ContactDetail({ contact }: { contact: Contact }) {
   const { contacts, touchContact } = useContacts();
   const { jobs } = useJobs();
   const [touching, setTouching] = useState(false);
+  const isMobile = useIsMobile();
 
   const rollup = useMemo(() => rollupContact(contact, jobs), [contact, jobs]);
   const introduced = useMemo(
     () => rollupIntroducedClients(contact, contacts, jobs),
     [contact, contacts, jobs]
   );
-  const parent = contact.parentId
-    ? contacts.find((c) => c.id === contact.parentId)
-    : null;
+  const parent = contact.parentId ? contacts.find((c) => c.id === contact.parentId) : null;
   const introducedBy = contact.introducedById
     ? contacts.find((c) => c.id === contact.introducedById)
     : null;
@@ -66,7 +63,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
   }
 
   return (
-    <div className="px-8 py-6 max-w-6xl">
+    <div className="px-4 py-6 md:px-8 max-w-6xl">
       <Link
         href="/crm"
         className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors duration-fast mb-5"
@@ -75,7 +72,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
         Back to Contacts
       </Link>
 
-      <header className="flex items-start justify-between gap-6 mb-7">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6 mb-7">
         <div className="flex items-start gap-3 min-w-0">
           {contact.isAnchor && (
             <span
@@ -102,10 +99,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
             )}
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <RoleTagPills tags={contact.roleTags} />
-              <WarmthChip
-                isAnchor={contact.isAnchor}
-                daysSinceTouch={rollup.daysSinceTouch}
-              />
+              <WarmthChip isAnchor={contact.isAnchor} daysSinceTouch={rollup.daysSinceTouch} />
             </div>
           </div>
         </div>
@@ -114,14 +108,14 @@ export function ContactDetail({ contact }: { contact: Contact }) {
             type="button"
             onClick={handleTouch}
             disabled={touching}
-            className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary hover:bg-surface-muted transition-colors duration-fast disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-surface shadow-floating hover:shadow-hover px-4 min-h-[40px] text-sm font-medium text-text-secondary transition-shadow duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft disabled:opacity-50"
           >
             <Coffee className="h-3.5 w-3.5" strokeWidth={1.75} />
             {touching ? "Updating" : "Touched today"}
           </button>
           <Link
             href={`/crm/${contact.id}/edit`}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-ink-pill text-white px-5 min-h-[40px] text-sm font-medium hover:bg-accent-active transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft"
           >
             <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
             Edit
@@ -130,13 +124,47 @@ export function ContactDetail({ contact }: { contact: Contact }) {
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Hero column: Linked Jobs (P1 #5 — the economic story leads). */}
+        {/* Hero column: Linked Jobs (P1 #5, the economic story leads). */}
         <div className="lg:col-span-2 space-y-6">
           <Section title={`Linked projects (${rollup.payerJobs.length})`}>
             {rollup.payerJobs.length === 0 ? (
               <p className="text-sm text-text-tertiary px-5 pb-5">
                 No projects yet. New projects that list this contact as the payer will show up here.
               </p>
+            ) : isMobile ? (
+              <div className="divide-y divide-border-faint">
+                {rollup.payerJobs.map((j) => (
+                  <Link
+                    key={j.id}
+                    href={`/jobs/${j.id}`}
+                    className="block px-5 py-4 min-h-[40px] hover:bg-surface-muted/40 transition-colors duration-fast"
+                  >
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-text-primary font-medium truncate">{j.name}</span>
+                      <span className="tabular-nums text-text-primary shrink-0">
+                        {formatCAD(j.revenue)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-center justify-between gap-3 text-xs">
+                      <span className="font-mono text-text-tertiary">{j.code}</span>
+                      <span className="text-text-secondary capitalize">
+                        {j.pipelineStatus.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-text-tertiary tabular-nums">
+                      Install: {formatDate(j.installDate)}
+                    </div>
+                  </Link>
+                ))}
+                <div className="flex items-center justify-between px-5 py-3 bg-surface-muted/40">
+                  <span className="text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium">
+                    Lifetime
+                  </span>
+                  <span className="tabular-nums text-text-primary font-medium">
+                    {formatCAD(rollup.lifetimeRevenue)}
+                  </span>
+                </div>
+              </div>
             ) : (
               <table className="w-full text-sm">
                 <thead>
@@ -163,9 +191,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                         >
                           {j.name}
                         </Link>
-                        <div className="text-xs text-text-tertiary font-mono">
-                          {j.code}
-                        </div>
+                        <div className="text-xs text-text-tertiary font-mono">{j.code}</div>
                       </td>
                       <td className="px-4 py-3 text-sm text-text-secondary capitalize">
                         {j.pipelineStatus.replace(/_/g, " ")}
@@ -179,7 +205,10 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                     </tr>
                   ))}
                   <tr className="border-t border-[rgba(26,25,22,0.08)] bg-surface-muted/40">
-                    <td colSpan={2} className="px-4 py-2.5 text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium">
+                    <td
+                      colSpan={2}
+                      className="px-4 py-2.5 text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium"
+                    >
                       Lifetime
                     </td>
                     <td className="px-4 py-2.5 text-right tabular-nums text-text-primary font-medium">
@@ -194,41 +223,65 @@ export function ContactDetail({ contact }: { contact: Contact }) {
 
           {introduced.length > 0 && (
             <Section title={`Introduced clients (${introduced.length})`}>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-surface-muted">
-                    <Th>Name</Th>
-                    <Th align="right">Lifetime revenue</Th>
-                    <Th align="right">Projects</Th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {introduced.map((r, idx) => (
-                    <tr
+              {isMobile ? (
+                <div className="divide-y divide-border-faint">
+                  {introduced.map((r) => (
+                    <Link
                       key={r.contact.id}
-                      className={cn(
-                        "hover:bg-surface-muted/40 transition-colors duration-fast",
-                        idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
-                      )}
+                      href={`/crm/${r.contact.id}`}
+                      className="flex items-baseline justify-between gap-3 px-5 py-4 min-h-[40px] hover:bg-surface-muted/40 transition-colors duration-fast"
                     >
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/crm/${r.contact.id}`}
-                          className="text-text-primary font-medium hover:text-accent transition-colors duration-fast"
-                        >
-                          {r.contact.name}
-                        </Link>
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text-primary">
-                        {formatCAD(r.lifetimeRevenue)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
-                        {r.payerJobs.length}
-                      </td>
-                    </tr>
+                      <span className="text-text-primary font-medium truncate">
+                        {r.contact.name}
+                      </span>
+                      <span className="shrink-0 text-right">
+                        <span className="block tabular-nums text-text-primary">
+                          {formatCAD(r.lifetimeRevenue)}
+                        </span>
+                        <span className="block text-xs tabular-nums text-text-tertiary">
+                          {r.payerJobs.length} project{r.payerJobs.length === 1 ? "" : "s"}
+                        </span>
+                      </span>
+                    </Link>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-surface-muted">
+                      <Th>Name</Th>
+                      <Th align="right">Lifetime revenue</Th>
+                      <Th align="right">Projects</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {introduced.map((r, idx) => (
+                      <tr
+                        key={r.contact.id}
+                        className={cn(
+                          "hover:bg-surface-muted/40 transition-colors duration-fast",
+                          idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <Link
+                            href={`/crm/${r.contact.id}`}
+                            className="text-text-primary font-medium hover:text-accent transition-colors duration-fast"
+                          >
+                            {r.contact.name}
+                          </Link>
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-text-primary">
+                          {formatCAD(r.lifetimeRevenue)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                          {r.payerJobs.length}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </Section>
           )}
         </div>
@@ -272,7 +325,11 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                   label="Website"
                   value={
                     <a
-                      href={contact.website.startsWith("http") ? contact.website : `https://${contact.website}`}
+                      href={
+                        contact.website.startsWith("http")
+                          ? contact.website
+                          : `https://${contact.website}`
+                      }
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-text-primary hover:text-accent transition-colors duration-fast"
@@ -322,15 +379,9 @@ export function ContactDetail({ contact }: { contact: Contact }) {
   );
 }
 
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-white rounded-xl shadow-resting overflow-hidden">
+    <section className="bg-surface rounded-2xl shadow-resting overflow-hidden">
       <div className="px-5 py-3 bg-surface-muted">
         <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       </div>
@@ -350,13 +401,7 @@ function Fact({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function Th({
-  children,
-  align,
-}: {
-  children: React.ReactNode;
-  align?: "right";
-}) {
+function Th({ children, align }: { children: React.ReactNode; align?: "right" }) {
   return (
     <th
       className={cn(

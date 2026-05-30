@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, ChevronDown, ChevronRight, Plus, Search, Sparkles, X } from "lucide-react";
@@ -43,11 +43,7 @@ function digitsOnly(s: string): string {
 function matchByPhone(query: string, contacts: Contact[]): Contact | null {
   const q = digitsOnly(query);
   if (q.length < 6) return null;
-  return (
-    contacts.find((c) =>
-      c.phones.some((p) => digitsOnly(p.value).includes(q))
-    ) ?? null
-  );
+  return contacts.find((c) => c.phones.some((p) => digitsOnly(p.value).includes(q))) ?? null;
 }
 
 type OptionalSlot = "designer" | "architect" | "gc" | "homeowner";
@@ -91,12 +87,7 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-const HEALTH_OPTIONS: HealthStatus[] = [
-  "on_track",
-  "at_risk",
-  "blocked",
-  "paused",
-];
+const HEALTH_OPTIONS: HealthStatus[] = ["on_track", "at_risk", "blocked", "paused"];
 
 function nextJobCode(existing: Job[]): string {
   const year = new Date().getFullYear();
@@ -150,10 +141,7 @@ export default function NewJobPage() {
   // Phone-first contact lookup. Match by digit-substring; if a contact's
   // phone contains the typed digits, suggest auto-filling Payer + any
   // address/site contact the contact knows.
-  const phoneMatch = useMemo(
-    () => matchByPhone(phoneLookup, contacts),
-    [phoneLookup, contacts]
-  );
+  const phoneMatch = useMemo(() => matchByPhone(phoneLookup, contacts), [phoneLookup, contacts]);
   function applyPhoneMatch() {
     if (!phoneMatch) return;
     setPayerId(phoneMatch.id);
@@ -258,9 +246,7 @@ export default function NewJobPage() {
       installDate,
       revenue: parseFloat(revenue) || 0,
       costs: [],
-      activity: [
-        newActivity("note", `Job created. ${name.trim()}`),
-      ],
+      activity: [newActivity("note", `Job created. ${name.trim()}`)],
       notes: notes.trim() || undefined,
       siteAccess,
       source: source.trim() || null,
@@ -417,14 +403,17 @@ export default function NewJobPage() {
                 className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft text-accent hover:bg-accent-soft/80 px-3 py-1 text-xs font-medium transition-colors duration-fast"
               >
                 <Sparkles className="h-3 w-3" strokeWidth={1.75} />
-                {designerPickerOpen ? "Close" : "Sold by a designer? Pre-fill from their last project"}
+                {designerPickerOpen
+                  ? "Close"
+                  : "Sold by a designer? Pre-fill from their last project"}
               </button>
             </div>
             {designerPickerOpen && (
               <div className="rounded-md bg-surface-muted/60 p-3 -mt-2">
                 {designerContacts.length === 0 ? (
                   <p className="text-xs text-text-tertiary">
-                    No designers tagged yet. Tag a contact with the Designer role on the Clients page.
+                    No designers tagged yet. Tag a contact with the Designer role on the Clients
+                    page.
                   </p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
@@ -436,7 +425,10 @@ export default function NewJobPage() {
                         className="inline-flex items-center gap-1.5 rounded-full bg-white text-text-secondary hover:text-text-primary hover:bg-surface px-3 py-1 text-xs font-medium shadow-resting transition-colors duration-fast"
                       >
                         {d.isAnchor && (
-                          <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-accent" />
+                          <span
+                            aria-hidden
+                            className="inline-block h-1.5 w-1.5 rounded-full bg-accent"
+                          />
                         )}
                         {d.name}
                       </button>
@@ -511,9 +503,7 @@ export default function NewJobPage() {
                       )}
                     >
                       <div className="text-sm font-medium">{opt.label}</div>
-                      <div className="text-xs text-text-tertiary mt-0.5">
-                        {opt.hint}
-                      </div>
+                      <div className="text-xs text-text-tertiary mt-0.5">{opt.hint}</div>
                     </button>
                   ))}
                 </div>
@@ -537,14 +527,9 @@ export default function NewJobPage() {
                 <NewProjectDocumentsBlock
                   pending={pendingDocs}
                   onAdd={(doc) =>
-                    setPendingDocs((p) => [
-                      ...p,
-                      { tempId: crypto.randomUUID(), ...doc },
-                    ])
+                    setPendingDocs((p) => [...p, { tempId: crypto.randomUUID(), ...doc }])
                   }
-                  onRemove={(tempId) =>
-                    setPendingDocs((p) => p.filter((d) => d.tempId !== tempId))
-                  }
+                  onRemove={(tempId) => setPendingDocs((p) => p.filter((d) => d.tempId !== tempId))}
                 />
               </CollapsibleCard>
 
@@ -570,11 +555,7 @@ export default function NewJobPage() {
                   />
                 </Field>
                 <Field label="Install date">
-                  <Input
-                    type="date"
-                    value={installDate}
-                    onChange={setInstallDate}
-                  />
+                  <Input type="date" value={installDate} onChange={setInstallDate} />
                 </Field>
               </Card>
 
@@ -602,7 +583,8 @@ export default function NewJobPage() {
                   </Field>
                 </div>
                 <p className="text-caption text-text-tertiary -mt-2">
-                  Estimated stays fixed for quote-accuracy tracking. Final revenue updates as costs land.
+                  Estimated stays fixed for quote-accuracy tracking. Final revenue updates as costs
+                  land.
                 </p>
                 <Field label="Notes">
                   <textarea
@@ -619,7 +601,9 @@ export default function NewJobPage() {
 
           {mode === "quick" && (
             <div className="rounded-md bg-accent-soft/40 px-4 py-3 text-xs text-text-secondary">
-              <strong className="text-text-primary">Quick mode.</strong> Saves with sensible defaults (Sold, On-track, install 30 days out, no revenue yet). Fill the rest from the project page when you're off the call.
+              <strong className="text-text-primary">Quick mode.</strong> Saves with sensible
+              defaults (Sold, On-track, install 30 days out, no revenue yet). Fill the rest from the
+              project page when you&apos;re off the call.
             </div>
           )}
 
@@ -677,13 +661,7 @@ function ModeBtn({
   );
 }
 
-function SourcePicker({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-}) {
+function SourcePicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   const [custom, setCustom] = useState(
     value && !(JOB_SOURCE_PRESETS as readonly string[]).includes(value)
   );
@@ -739,7 +717,12 @@ function NewProjectDocumentsBlock({
   onRemove,
 }: {
   pending: PendingDoc[];
-  onAdd: (doc: { kind: DocumentKind; label: string; driveUrl: string; version: string | null }) => void;
+  onAdd: (doc: {
+    kind: DocumentKind;
+    label: string;
+    driveUrl: string;
+    version: string | null;
+  }) => void;
   onRemove: (tempId: string) => void;
 }) {
   return (
@@ -779,13 +762,7 @@ function NewProjectDocumentsBlock({
   );
 }
 
-function Card({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="bg-surface border border-border rounded-lg overflow-hidden">
       <div className="px-5 py-3 border-b border-border bg-surface-muted">

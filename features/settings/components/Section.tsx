@@ -1,47 +1,51 @@
 "use client";
 
-import { Database } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 
+/**
+ * A floating settings card. Ghost-Border Rule: no border, separated from the
+ * page by tonal step + resting shadow. Internal structure uses faint dividers.
+ */
 export function Section({
   title,
+  description,
   children,
 }: {
   title: string;
+  description?: string;
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-surface border border-border rounded-lg overflow-hidden">
-      <div className="px-5 py-3.5 border-b border-border bg-surface-muted flex items-center gap-2">
-        {title === "Storage" && (
-          <Database className="h-3.5 w-3.5 text-text-tertiary" strokeWidth={1.75} />
+    <section className="rounded-2xl bg-surface shadow-resting">
+      <div className="px-5 py-4 md:px-6 md:py-5">
+        <h2 className="font-serif text-title font-medium text-text-primary">{title}</h2>
+        {description && (
+          <p className="mt-1 text-sm leading-relaxed text-text-secondary">{description}</p>
         )}
-        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
       </div>
-      <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 p-5">
-        {children}
-      </dl>
+      <div className="border-t border-border-faint px-5 py-4 md:px-6 md:py-5">{children}</div>
     </section>
   );
 }
 
-export function Field({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
+/**
+ * A read-only labelled value. Used for fields that are not yet editable
+ * (rendered as display values, never fake-editable inputs).
+ */
+export function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-0.5">
-        {label}
-      </dt>
-      <dd className={cn("text-sm text-text-primary", mono && "font-mono text-xs")}>
+      <dt className="text-label uppercase tracking-[0.06em] text-text-tertiary">{label}</dt>
+      <dd
+        className={cn("mt-1 text-sm text-text-primary", mono && "font-mono text-xs tabular-nums")}
+      >
         {value}
       </dd>
     </div>
   );
+}
+
+/** Quiet caption noting a section is read-only for now. */
+export function NotEditableNote({ children }: { children: React.ReactNode }) {
+  return <p className="mt-4 text-caption leading-relaxed text-text-tertiary">{children}</p>;
 }

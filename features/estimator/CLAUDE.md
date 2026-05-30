@@ -60,17 +60,17 @@ features/estimator/
 
 ## The 9 sections
 
-| # | Section            | Bucket    | Notes                                             |
-|---|--------------------|-----------|---------------------------------------------------|
-| 1 | Materials          | materials | Sheet goods, hardwoods, banding                   |
-| 2 | Hardware           | materials | Hinges, guides, legs, fasteners, pulls            |
-| 3 | CNC                | labour    | Toolpath subcontract or in-house CNC time         |
-| 4 | Doors & Faces      | materials | Doors from supplier + CNC'd fillers/scribes       |
-| 5 | Assembly           | labour    | In-house assembly labour                          |
-| 6 | Finishing          | labour    | In-house spray ($ / SqFt)                         |
-| 7 | Delivery           | materials | Trucking to site                                  |
-| 8 | Install            | labour    | On-site labour at shop rate                       |
-| 9 | GC Subcontractors  | materials | Electricians, plumbers, painters — **toggleable** |
+| #   | Section           | Bucket    | Notes                                             |
+| --- | ----------------- | --------- | ------------------------------------------------- |
+| 1   | Materials         | materials | Sheet goods, hardwoods, banding                   |
+| 2   | Hardware          | materials | Hinges, guides, legs, fasteners, pulls            |
+| 3   | CNC               | labour    | Toolpath subcontract or in-house CNC time         |
+| 4   | Doors & Faces     | materials | Doors from supplier + CNC'd fillers/scribes       |
+| 5   | Assembly          | labour    | In-house assembly labour                          |
+| 6   | Finishing         | labour    | In-house spray ($ / SqFt)                         |
+| 7   | Delivery          | materials | Trucking to site                                  |
+| 8   | Install           | labour    | On-site labour at shop rate                       |
+| 9   | GC Subcontractors | materials | Electricians, plumbers, painters — **toggleable** |
 
 Custom categories (anything not in this list) render in a fallback
 "Other" section at the bottom and bucket as materials by default.
@@ -116,9 +116,16 @@ math, prices drop ~10% on a 35% job.
   already in the LineItem type for this.
 - **CSV import** (Phase 3). Drop a Mozaik CSV → parse the section
   headers as `category`, items as lines, unit symbols (`# / SqFt / Ft
-  / Hrs`) → unit codes, cabinet count rows → CabinetSummary, the
+/ Hrs`) → unit codes, cabinet count rows → CabinetSummary, the
   `Add-On %Subtotal` line → seed `defaultMarkupPct`. Skip
   zero-priced rows by default (toggle to show).
+- **Inventory link** (depends on CSV import + Catalog integration above).
+  Once estimator lines carry real per-material quantities (a per-job bill
+  of materials, fed by the Mozaik CSV import), **Inventory** cross-checks
+  stock-on-hand against upcoming job needs ("Henderson is short 4 sheets").
+  Keep Estimator and Inventory linked: the BOM produced here is the data
+  source for the Inventory job-needs view. See
+  `features/inventory/CLAUDE.md`.
 - **Cabinet count metrics** (Phase 4). $ per cabinet linear foot,
   assembly time by cabinet type, install time by cabinet type. Needs
   a few saved jobs with cabinet counts to be useful.

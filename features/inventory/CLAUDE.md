@@ -8,9 +8,27 @@ Single page (`/inventory`) listing each tracked material with its
 quantity-on-hand and reorder point. Materials whose qty falls at or below
 their reorder point appear in a "low stock" banner at the top.
 
-Stock entries are local-only — persisted to `localStorage` under
-`gw_inventory_v1`. Unlike Jobs and Catalog, this does **not** sync to
-Supabase yet (intentional: low-stakes data, single-shop use).
+Stock entries persist to **Supabase** (`public.inventory_items`, migration
+`20260529010000_inventory_items.sql`) with a localStorage fallback when no
+Supabase env is present. Each entry can link to a Catalog material by
+`materialId` (a soft text ref, no hard FK) and snapshots `materialName`,
+`unit`, and `unitValue` so the row stays self-describing if the catalog
+entry later changes. Free-text entries (no catalog link) are allowed.
+
+The page leads with **Reorder now** (items at/below their reorder point,
+each with a one-tap "Reordered" that flags it on-order until restocked),
+then the full editable register. Responsive: table on desktop/tablet,
+stacked cards on phone.
+
+## Planned link: Inventory ↔ Estimator (job material needs)
+
+The "do we have enough stock to finish upcoming jobs?" view is **not built
+yet** and is intentionally deferred. It needs per-job material quantities (a
+bill of materials), which will come from the **Estimator** once the **Mozaik
+CSV import** lands (parse a Mozaik parts list into estimator lines → per-job
+BOM). When that exists, Inventory will show shortfalls like "Henderson is
+short 4 sheets." Keep these two features linked. See
+`features/estimator/CLAUDE.md`.
 
 ## Where things live
 

@@ -1,25 +1,19 @@
 "use client";
 
 import { PageHeader } from "@shared/components/layout/PageHeader";
-import { useJobs } from "@features/jobs/lib/jobsStore";
 import { CalendarView } from "@features/calendar/components/CalendarView";
 
 export default function CalendarPage() {
-  const { jobs, loading } = useJobs();
-
   return (
     <>
       <PageHeader
-        eyebrow="Calendar"
-        title="Install schedule"
-        subtitle="Every install date across the active pipeline."
+        eyebrow="Schedule"
+        title="Install calendar"
+        subtitle="Every scheduled install, color-coded by health. Drag to reschedule."
+        actions={null}
       />
-      <div className="px-8 py-6">
-        {loading ? (
-          <div className="bg-surface border border-border rounded-lg h-96 animate-pulse" />
-        ) : (
-          <CalendarView jobs={jobs} />
-        )}
+      <div className="px-4 py-6 md:px-8">
+        <CalendarView />
       </div>
     </>
   );

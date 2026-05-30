@@ -42,7 +42,7 @@ function LoginForm() {
     });
 
     if (signInError) {
-      setError(signInError.message);
+      setError(toPlainError(signInError.message));
       setSubmitting(false);
       return;
     }
@@ -56,17 +56,13 @@ function LoginForm() {
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
           <Link logo />
-          <h1 className="text-xl font-semibold text-text-primary mt-4">
-            Sign in
-          </h1>
-          <p className="text-sm text-text-secondary mt-1">
-            Welcome back to Good Woods.
-          </p>
+          <h1 className="font-serif text-title text-text-primary mt-4">Sign in</h1>
+          <p className="text-sm text-text-secondary mt-1">Welcome back to Good Woods.</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-surface border border-border rounded-lg p-6 space-y-4 shadow-sm"
+          className="bg-surface rounded-2xl p-6 space-y-4 shadow-resting"
         >
           <Field
             label="Email"
@@ -86,8 +82,15 @@ function LoginForm() {
           />
 
           {error && (
-            <div className="text-sm text-status-blocked bg-status-blocked-soft border border-status-blocked/30 rounded-md px-3 py-2">
-              {error}
+            <div
+              role="alert"
+              className="flex items-start gap-2 text-sm text-status-blocked bg-status-blocked-soft rounded-xl px-3 py-2.5"
+            >
+              <span
+                aria-hidden
+                className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-status-blocked"
+              />
+              <span>{error}</span>
             </div>
           )}
 
@@ -95,8 +98,9 @@ function LoginForm() {
             type="submit"
             disabled={submitting}
             className={cn(
-              "w-full inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-fast",
+              "w-full inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 min-h-[44px] text-sm font-medium transition-colors duration-fast",
               "bg-ink-pill text-white hover:bg-accent-active",
+              "focus:outline-none focus:ring-2 focus:ring-accent-soft",
               "disabled:bg-text-disabled disabled:cursor-not-allowed"
             )}
           >
@@ -109,18 +113,31 @@ function LoginForm() {
   );
 }
 
+function toPlainError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes("invalid login credentials")) {
+    return "That email and password don't match. Check them and try again.";
+  }
+  if (m.includes("email not confirmed")) {
+    return "This account isn't confirmed yet. Check your inbox for the confirmation link.";
+  }
+  if (m.includes("rate") || m.includes("too many")) {
+    return "Too many attempts. Wait a minute, then try again.";
+  }
+  if (m.includes("network") || m.includes("fetch")) {
+    return "Couldn't reach the server. Check your connection and try again.";
+  }
+  return message;
+}
+
 function Link({ logo }: { logo?: boolean }) {
   if (!logo) return null;
   return (
     <div className="inline-flex items-center gap-2.5">
       <div className="h-8 w-8 rounded-md bg-text-primary grid place-items-center">
-        <span className="text-white text-sm font-semibold tracking-tight">
-          GW
-        </span>
+        <span className="text-white text-sm font-semibold tracking-tight">GW</span>
       </div>
-      <span className="text-base font-semibold text-text-primary tracking-tight">
-        Good Woods
-      </span>
+      <span className="text-base font-semibold text-text-primary tracking-tight">Good Woods</span>
     </div>
   );
 }
@@ -151,7 +168,7 @@ function Field({
         onChange={(e) => onChange(e.target.value)}
         autoComplete={autoComplete}
         required={required}
-        className="w-full text-sm bg-surface-muted border border-border rounded-md px-3 py-2 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+        className="w-full min-h-[44px] text-sm bg-surface-muted border border-border-faint rounded-xl px-3 py-2.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
       />
     </label>
   );

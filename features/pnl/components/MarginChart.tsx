@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from "recharts";
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { formatCAD, formatPct } from "@shared/lib/format";
 import type { MonthBucket } from "@features/pnl/lib/aggregate";
 import { PALETTE } from "@shared/lib/chartPalette";
@@ -25,46 +18,30 @@ export function MarginChart({ series }: { series: MonthBucket[] }) {
   const latestCost = points[lastIdx]?.cost ?? 0;
 
   return (
-    <section className="bg-surface rounded-xl shadow-resting p-5">
-      <div className="flex items-baseline justify-between mb-1">
-        <span className="text-xs uppercase tracking-[0.06em] text-text-tertiary">
-          Margin %
-        </span>
-        <span className="text-xs text-text-tertiary tabular-nums">
+    <section className="bg-surface rounded-2xl shadow-resting p-5 md:p-6">
+      <div className="flex items-baseline justify-between gap-4 mb-4">
+        <div className="min-w-0">
+          <h2 className="font-serif text-title font-medium text-text-primary">Margin over time</h2>
+          <p className="mt-0.5 text-xs text-text-tertiary">
+            Gross margin percentage by install month.
+          </p>
+        </div>
+        <span className="shrink-0 text-xs text-text-tertiary tabular-nums">
           {series.length} month{series.length === 1 ? "" : "s"}
         </span>
       </div>
 
       {points.length === 0 ? (
-        <div className="text-sm text-text-tertiary py-12 text-center">
-          No data yet.
-        </div>
+        <div className="text-sm text-text-tertiary py-16 text-center">No data yet.</div>
       ) : (
         <>
-          <div className="h-60 -ml-2">
+          <div className="h-64 md:h-72 -ml-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart
-                data={points}
-                margin={{ top: 8, right: 16, bottom: 4, left: 8 }}
-              >
+              <AreaChart data={points} margin={{ top: 8, right: 16, bottom: 4, left: 8 }}>
                 <defs>
-                  <linearGradient
-                    id="marginGradient"
-                    x1="0"
-                    y1="0"
-                    x2="0"
-                    y2="1"
-                  >
-                    <stop
-                      offset="0%"
-                      stopColor={PALETTE.accent}
-                      stopOpacity={0.45}
-                    />
-                    <stop
-                      offset="100%"
-                      stopColor={PALETTE.accent}
-                      stopOpacity={0}
-                    />
+                  <linearGradient id="marginGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor={PALETTE.accent} stopOpacity={0.45} />
+                    <stop offset="100%" stopColor={PALETTE.accent} stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <XAxis
@@ -114,13 +91,7 @@ export function MarginChart({ series }: { series: MonthBucket[] }) {
                       // Recharts requires an SVG element return, not null —
                       // emit a zero-radius circle for non-endpoint indices.
                       return (
-                        <circle
-                          key={`dot-${index}`}
-                          cx={cx}
-                          cy={cy}
-                          r={0}
-                          fill="transparent"
-                        />
+                        <circle key={`dot-${index}`} cx={cx} cy={cy} r={0} fill="transparent" />
                       );
                     }
                     return (
@@ -172,9 +143,7 @@ function SparklineRow({
 }) {
   return (
     <div className="flex items-center gap-4">
-      <span className="w-16 shrink-0 text-label uppercase text-text-tertiary">
-        {label}
-      </span>
+      <span className="w-16 shrink-0 text-label uppercase text-text-tertiary">{label}</span>
       <div className="flex-1 min-w-0">
         <Sparkline values={points} />
       </div>

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { RotateCcw } from "lucide-react";
 import { useJobs } from "@features/jobs/lib/jobsStore";
-import { cn } from "@shared/lib/utils";
 import { Section } from "./Section";
 
 export function ResetSection() {
@@ -11,47 +10,46 @@ export function ResetSection() {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <Section title="Reset">
-      <p className="text-sm text-text-secondary col-span-2 mb-3 leading-relaxed">
-        Resetting reloads the original 6 seed jobs and erases any edits,
-        cost-line changes, and activity history. On Supabase this also wipes
-        the cloud table. Cannot be undone.
-      </p>
-      <div className="col-span-2">
-        {!confirming ? (
-          <button
-            onClick={() => setConfirming(true)}
-            className={cn(
-              "inline-flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2 text-sm font-medium",
-              "text-text-secondary hover:border-status-blocked hover:text-status-blocked transition-colors duration-fast"
-            )}
-          >
-            <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Reset to seed jobs
-          </button>
-        ) : (
-          <div className="flex items-center gap-2 bg-status-blocked-soft border border-status-blocked/30 rounded-md p-3">
-            <span className="text-sm text-status-blocked flex-1">
-              Reset will erase all edits. This cannot be undone.
-            </span>
+    <Section
+      title="Reset to seed"
+      description="Reloads the original 6 seed jobs and erases every edit, cost-line change, and activity entry. On Supabase this also wipes the cloud table. This cannot be undone."
+    >
+      {!confirming ? (
+        <button
+          type="button"
+          onClick={() => setConfirming(true)}
+          className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full bg-status-blocked-soft px-4 text-sm font-medium text-status-blocked transition-colors duration-fast hover:bg-status-blocked hover:text-white focus:outline-none focus:ring-2 focus:ring-accent-soft"
+        >
+          <RotateCcw className="h-4 w-4" strokeWidth={1.75} />
+          Reset to seed jobs
+        </button>
+      ) : (
+        <div className="rounded-xl bg-status-blocked-soft p-4">
+          <p className="text-sm font-medium text-status-blocked">
+            Reset will erase all edits. This cannot be undone.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <button
-              onClick={() => setConfirming(false)}
-              className="px-3 py-1.5 text-sm rounded-md bg-surface border border-border text-text-secondary hover:text-text-primary transition-colors duration-fast"
-            >
-              Cancel
-            </button>
-            <button
+              type="button"
               onClick={async () => {
                 await resetToSeed();
                 setConfirming(false);
               }}
-              className="px-3 py-1.5 text-sm rounded-md bg-status-blocked text-white hover:opacity-90 transition-opacity duration-fast"
+              className="inline-flex min-h-[40px] items-center justify-center gap-2 rounded-full bg-status-blocked px-5 text-sm font-medium text-white transition-opacity duration-fast hover:opacity-90 focus:outline-none focus:ring-2 focus:ring-accent-soft"
             >
-              Reset
+              <RotateCcw className="h-4 w-4" strokeWidth={1.75} />
+              Yes, reset everything
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="inline-flex min-h-[40px] items-center justify-center rounded-full bg-surface px-4 text-sm font-medium text-text-secondary shadow-floating transition-shadow duration-fast hover:shadow-hover focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            >
+              Cancel
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </Section>
   );
 }
