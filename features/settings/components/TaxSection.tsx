@@ -1,19 +1,27 @@
 "use client";
 
-import { TAX_RATE } from "@features/jobs/lib/invoice";
-import { Section, Field, NotEditableNote } from "./Section";
+import { useWorkspaceSettings } from "@shared/lib/workspaceSettings";
+import { Section, EditableField } from "./Section";
 
 export function TaxSection() {
+  const { settings, update } = useWorkspaceSettings();
+
+  // Stored as a fraction (0.12); shown and edited as a percent (12).
+  const pct = (settings.taxRate * 100).toFixed((settings.taxRate * 100) % 1 === 0 ? 0 : 2);
+
   return (
     <Section title="Tax" description="Applied to quotes and invoices by default.">
-      <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
-        <Field label="Default rate" value={`${(TAX_RATE * 100).toFixed(0)}%`} mono />
-        <Field label="Region" value="British Columbia (5% GST + 7% PST)" />
-      </dl>
-      <NotEditableNote>
-        Not yet editable. The rate is fixed for BC for now. If a client outside BC needs a different
-        rate, this becomes a per-job setting.
-      </NotEditableNote>
+      <div className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+        <EditableField
+          label="Default rate"
+          type="number"
+          value={pct}
+          onChange={(v) => update({ taxRate: (Number(v) || 0) / 100 })}
+          suffix="%"
+          mono
+          hint="BC default is 12% (5% GST + 7% PST)."
+        />
+      </div>
     </Section>
   );
 }

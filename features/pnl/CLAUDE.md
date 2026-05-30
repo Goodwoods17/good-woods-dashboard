@@ -6,10 +6,11 @@ Profit-and-loss summary derived from completed and in-progress jobs.
 
 Single page (`/pnl`) with:
 
-- Three KPI tiles: lifetime revenue, lifetime cost, lifetime margin (with
-  margin % below)
-- Month-by-month bar chart (Recharts) showing revenue vs. cost per month,
-  with margin trend overlaid
+- A compact **stat strip** in the header register (revenue, cost, margin,
+  margin %) as small label-over-value items, not hero-metric cards
+- A month-by-month **margin line+area chart** (Recharts) as the lead visual
+  (single series, vertical clay-to-transparent gradient fill, no legend),
+  with revenue/cost as subtle sparkline rows
 
 All numbers come from `useJobs()` — there is no separate P&L store. A job
 contributes to a month based on its `installDate` (or estimated install
@@ -32,6 +33,7 @@ features/pnl/
 `src/app/pnl/page.tsx` is a 4-line shell.
 
 Depends on:
+
 - `useJobs()` — single source of revenue/cost truth
 - `computeMargin` from `@shared/lib/types`
 - `recharts` for the bar chart

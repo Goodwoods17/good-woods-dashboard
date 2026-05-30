@@ -11,8 +11,13 @@ Single page (`/settings`) with three sections:
    and `Reset to seed` (wipe back to demo data).
 2. **Database seeding** — a one-shot button that pushes the current job
    list to Supabase (used during initial setup).
-3. **Tax & company** — read-only display of `COMPANY` and `TAX_RATE`
-   constants (currently from `lib/invoice`; see "When to revisit").
+3. **Company & tax** — editable company identity (name, tagline, address,
+   email, GST number) and the default tax rate. These persist via
+   `useWorkspaceSettings` and are pushed into `lib/invoice`'s live identity
+   (`setInvoiceIdentity`), so edits flow through to the invoice PDF, ICS
+   export, and totals.
+4. **Rates & defaults** — editable labour rates + estimator defaults, also
+   via `useWorkspaceSettings`.
 
 ## Where things live
 
@@ -32,6 +37,7 @@ features/settings/
 code yet — sections pull from other features' stores.
 
 Depends on:
+
 - `useJobs()` — for the seed/refresh actions and storage diagnostics
 - `COMPANY` and `TAX_RATE` from `@features/jobs/lib/invoice`
 
@@ -45,7 +51,8 @@ Depends on:
 
 ## When to revisit
 
-- Workspace branding becomes editable (logo upload, colour overrides) →
-  move `COMPANY` constant out of `lib/invoice` into a real settings store.
-- Multiple workspaces or roles → settings becomes per-workspace, gate
-  destructive actions.
+- Logo upload / colour overrides → extend `WorkspaceSettings` + the
+  Company section (text identity already persists).
+- Multiple workspaces or roles → `workspace_settings` is a single-row
+  (`id = 'singleton'`) table today; add a workspace key and gate
+  destructive actions when multi-user lands.

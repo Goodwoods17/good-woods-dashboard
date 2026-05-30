@@ -1,5 +1,5 @@
 import type { Job } from "@shared/lib/types";
-import { COMPANY } from "./invoice";
+import { getCompany } from "./invoice";
 
 function pad(n: number): string {
   return n < 10 ? `0${n}` : String(n);
@@ -54,7 +54,7 @@ export function buildJobICS(job: Job): string {
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    `PRODID:-//${COMPANY.name}//Good Woods Dashboard//EN`,
+    `PRODID:-//${getCompany().name}//Good Woods Dashboard//EN`,
     "CALSCALE:GREGORIAN",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",

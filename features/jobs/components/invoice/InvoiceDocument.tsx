@@ -1,14 +1,8 @@
 "use client";
 
-import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-} from "@react-pdf/renderer";
+import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import type { Job } from "@shared/lib/types";
-import { COMPANY, computeInvoiceTotals, TAX_RATE } from "@features/jobs/lib/invoice";
+import { getCompany, computeInvoiceTotals, getTaxRate } from "@features/jobs/lib/invoice";
 import { PALETTE } from "@shared/lib/chartPalette";
 
 // Map to the local key names the styles object expects. Keeps the JSX
@@ -269,12 +263,13 @@ function fmtDate(iso: string): string {
 
 export function InvoiceDocument({ job }: { job: Job }) {
   const totals = computeInvoiceTotals(job);
-  const taxPct = (TAX_RATE * 100).toFixed(0);
+  const company = getCompany();
+  const taxPct = (getTaxRate() * 100).toFixed(0);
 
   return (
     <Document
       title={`${job.invoice.number} — ${job.client}`}
-      author={COMPANY.name}
+      author={company.name}
       subject={`Invoice for ${job.name}`}
     >
       <Page size="LETTER" style={styles.page}>
@@ -283,8 +278,8 @@ export function InvoiceDocument({ job }: { job: Job }) {
             <View style={styles.brandRow}>
               <Text style={styles.brandMark}>GW</Text>
               <View>
-                <Text style={styles.brandName}>{COMPANY.name}</Text>
-                <Text style={styles.brandTagline}>{COMPANY.tagline}</Text>
+                <Text style={styles.brandName}>{company.name}</Text>
+                <Text style={styles.brandTagline}>{company.tagline}</Text>
               </View>
             </View>
           </View>
@@ -305,10 +300,10 @@ export function InvoiceDocument({ job }: { job: Job }) {
         <View style={styles.partiesGrid}>
           <View style={styles.partyBlock}>
             <Text style={styles.partyLabel}>From</Text>
-            <Text style={styles.partyName}>{COMPANY.name}</Text>
-            <Text style={styles.partyDetail}>{COMPANY.address}</Text>
-            <Text style={styles.partyDetail}>{COMPANY.email}</Text>
-            <Text style={styles.partyDetail}>{COMPANY.gstNumber}</Text>
+            <Text style={styles.partyName}>{company.name}</Text>
+            <Text style={styles.partyDetail}>{company.address}</Text>
+            <Text style={styles.partyDetail}>{company.email}</Text>
+            <Text style={styles.partyDetail}>{company.gstNumber}</Text>
           </View>
           <View style={styles.partyBlock}>
             <Text style={styles.partyLabel}>Bill to</Text>
@@ -368,7 +363,9 @@ export function InvoiceDocument({ job }: { job: Job }) {
           <Text style={styles.footerNote}>
             Thank you for your business. Payment due {fmtDate(job.invoice.dueDate)}.
           </Text>
-          <Text style={styles.footerNote}>{COMPANY.name} · {COMPANY.gstNumber}</Text>
+          <Text style={styles.footerNote}>
+            {company.name} · {company.gstNumber}
+          </Text>
         </View>
       </Page>
     </Document>

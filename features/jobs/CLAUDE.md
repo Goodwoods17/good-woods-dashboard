@@ -40,8 +40,8 @@ features/jobs/
 │       └── InvoiceDocument.tsx  (react-pdf invoice renderer)
 └── lib/
     ├── activity.ts              (diffActivity + newActivity helpers)
-    ├── ics.ts                   (calendar export — depends on invoice for COMPANY)
-    ├── invoice.ts               (COMPANY, TAX_RATE, computeInvoiceTotals, generateInvoicePdf)
+    ├── ics.ts                   (calendar export — uses invoice getCompany())
+    ├── invoice.ts               (company/tax identity via getCompany()/getTaxRate(), set at runtime by workspace settings; computeInvoiceTotals, generateInvoicePdf)
     ├── jobs.ts                  (SEED_JOBS, getJob, etc.)
     ├── jobsRowMap.ts            (Supabase row ↔ Job conversion; internal to jobsStore)
     └── jobsStore.tsx            (JobsProvider, useJobs, useJob)
@@ -67,7 +67,8 @@ features/jobs/
   so we never see `[object Object]` again (see git log for context).
 - **Invoice PDF** uses `@react-pdf/renderer` with a dynamic import in
   `lib/invoice.ts` so the renderer chunk stays out of the main bundle.
-  BC GST+PST = 12% baked into `TAX_RATE`.
+  BC GST+PST = 12% is the default tax rate; the live rate comes from
+  workspace settings via `getTaxRate()` (editable in /settings).
 - **ICS export** generates an all-day install event from the job's
   `installDate` and includes the client + COMPANY in the description.
 - **Site & access** (added 2026-05-25): `job.siteAccess` is a jsonb
