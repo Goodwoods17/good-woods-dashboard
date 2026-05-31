@@ -1,15 +1,20 @@
 import { cn } from "@shared/lib/utils";
 
 /**
- * Clay-soft chip with a mono day count for stale anchor relationships.
- * Locked from /impeccable craft review P0 #3: amber would have hijacked
- * the at-risk semantic axis; clay-soft is on-brand for the workshop and
- * one of the few places clay earns a full-saturation surface under the
- * Rare-Accent Rule.
+ * Warmth indicator for anchor relationships, with two registers:
  *
- * Renders only for anchors past the staleness threshold. Below the
- * threshold (or for non-anchors), returns null so the column reads
- * empty rather than green.
+ * - Healthy (touched within the threshold): a quiet tertiary day count,
+ *   no colour. This exists so the column never reads as broken when an
+ *   anchor is simply fine. Crucially NOT green: the locked /impeccable
+ *   contract rejected green here, so "healthy" is neutral, not sage.
+ * - Stale (past the threshold): clay-soft chip with a mono day count.
+ *   Locked from /impeccable craft review P0 #3: amber would have hijacked
+ *   the at-risk semantic axis; clay-soft is on-brand for the workshop and
+ *   one of the few places clay earns a full-saturation surface under the
+ *   Rare-Accent Rule.
+ *
+ * Non-anchors return null (warmth is only tracked for anchors), as does
+ * an anchor with no touch on record (unknown, not healthy).
  */
 
 export const STALE_THRESHOLD_DAYS = 30;
@@ -23,7 +28,18 @@ export function WarmthChip({
 }) {
   if (!isAnchor) return null;
   if (daysSinceTouch === null) return null;
-  if (daysSinceTouch < STALE_THRESHOLD_DAYS) return null;
+
+  if (daysSinceTouch < STALE_THRESHOLD_DAYS) {
+    return (
+      <span
+        className="font-mono tabular-nums text-xs text-text-tertiary"
+        title={`${daysSinceTouch} days since last touch`}
+      >
+        {daysSinceTouch}d
+      </span>
+    );
+  }
+
   return (
     <span
       className={cn(
