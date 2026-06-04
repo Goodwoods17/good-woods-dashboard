@@ -1,7 +1,7 @@
 # Good Woods Dashboard — Project Guide
 
 The shop-management dashboard for Good Woods (Spacecraft Joinery).
-This is the project-wide source of truth for *how the code is built*.
+This is the project-wide source of truth for _how the code is built_.
 Feature-specific rules live in each `features/<name>/CLAUDE.md`; the
 visual direction lives in `docs/DESIGN.md` / `PRODUCT.md`; the
 woodworking vocabulary lives in `docs/domain.md`. When those conflict
@@ -61,7 +61,7 @@ render it. All real logic lives under `features/` or `shared/`.
   hand-roll currency strings.
 - **Domain terms**: use `docs/domain.md` vocabulary precisely in code,
   comments, and UI copy (overlay, reveal, cup, stile, etc.).
-- **Comments**: explain *why*, not *what*. Default to none.
+- **Comments**: explain _why_, not _what_. Default to none.
 
 ## Toolchain — how to verify and run
 
@@ -113,9 +113,16 @@ guessing.
 
 ## Hard constraints
 
-- Never run destructive git (`push`, `reset --hard`, `clean`) or
+- Normal `git push` is allowed. Never run **force-push**
+  (`git push --force` / `-f`), `git reset --hard`, `git clean`, or
   `rm`/`rmdir` — these are denied in project settings by design.
 - Don't introduce a new dependency without a reason; prefer what's
   already in `package.json`.
 - Don't break the `@/`, `@features/`, `@shared/` import boundaries.
 - Keep route pages thin.
+
+## Global memory
+
+Cross-project context lives at `C:\Users\andre\.claude\projects\C--Users-andre\memory\`
+(index-first via `MEMORY.md`). See `AGENTS.md` -> "Global memory" for the files that
+matter to this project, including `reference/reference_security_practices.md`.
