@@ -16,11 +16,23 @@ two share no tables. See `docs/decisions/0006-catalog-items-vs-offers.md`
    by **operation** (total + average time, sample count), sorted slowest-
    first, so the jam in the shop is visible.
 3. **Estimator auto-suggest.** Operations tagged to a **cabinet type**
-   compare their tracked average against the estimator's
-   `catalog_cabinet_types` assembly minutes; on a meaningful drift (≥3
-   samples, >10% and >3 min) a nudge appears — "Base assembly runs 72m,
-   not 60m" — and **Apply** writes the new default back. Andrew approves;
+   compare their tracked average against `catalog_cabinet_types`
+   assembly minutes; on a meaningful drift (≥3 samples, >10% and >3 min)
+   a nudge appears — "Base assembly runs 72m, not 60m" — and **Apply**
+   writes the new value to `catalog_cabinet_types`. Andrew approves;
    nothing auto-updates silently.
+
+   > ⚠️ **Loop not fully closed yet.** Today `EstimatorView` derives
+   > assembly hours from the hard-coded `DEFAULT_ASSEMBLY_MINUTES` in
+   > `features/estimator/lib/types.ts`, **not** from `catalog_cabinet_types`.
+   > So Apply updates the canonical table but doesn't change quotes until
+   > the estimator is wired to read that table — its own already-planned
+   > item (estimator `PLAN.md` Phase 2: "Cabinet-type minutes from Catalog").
+   > This feature deliberately writes the right home; that one-line swap
+   > closes the loop and should be done with Andrew so any quote shift is
+   > reviewed. The seeded table values match the current constants, so the
+   > swap is behaviour-preserving until a suggestion is applied.
+
 4. **Setup.** Categories, operations, and workers are all **editable and
    addable at runtime** (data, not enums) so unforeseen steps need no
    migration. Removal is a soft-delete (`active=false`) — history stays.

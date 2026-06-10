@@ -22,6 +22,7 @@ import {
   supplierToRow,
   OFFERS_TABLE,
   SUPPLIERS_TABLE,
+  PROCURED_KINDS,
   type CatalogItemView,
   type CatalogOffer,
   type CatalogSupplier,
@@ -107,7 +108,10 @@ const newUuid = (): string =>
 // The material-like kinds the Materials tab and the estimator treat as
 // pickable goods (everything physical that isn't a spray finish). These are
 // exactly the procured kinds that carry offers.
-const MATERIAL_KINDS: CatalogKind[] = ["material", "hardware", "door", "insert"];
+// Single source of truth for "which kinds are procured" lives in catalogRowMap
+// (PROCURED_KINDS); the Materials tab + estimator treat exactly those as
+// pickable goods.
+const MATERIAL_KINDS: CatalogKind[] = [...PROCURED_KINDS];
 
 // ─── Seed: a structural library exercising every kind ───────────────────
 // Real prices/links/suppliers are Andrew's to fill in — these prove the model
@@ -236,6 +240,12 @@ const SEED_SUPPLIERS: CatalogSupplier[] = [
   supplier(S_CABINETDOORS, "Cabinetdoors.com", "https://www.cabinetdoors.com"),
 ];
 
+// Deterministic seed-offer ids so re-running the seed (e.g. React StrictMode's
+// double-invoked effect in dev) is idempotent via upsert-ignore-duplicates,
+// rather than inserting a second copy of every offer.
+const SEED_OFFER_ID = (i: number): string =>
+  `22222222-2222-2222-2222-${i.toString().padStart(12, "0")}`;
+
 // Seed offers. Two demonstrators on purpose:
 //   • m-mdf18 has two offers (Windsor $96 vs cheaper Independent $89) → "← best".
 //   • m-walnut-slab pins a preferred that is NOT the cheapest (New Surrey $74
@@ -259,7 +269,7 @@ const SEED_OFFERS: CatalogOffer[] = [
     productUrl: "https://www.newsurreycabinetdoors.com",
   }),
   offer("in-cutlery", S_FRAMEWARE, 38, { productUrl: "https://www.frameware.ca" }),
-];
+].map((o, i) => ({ ...o, id: SEED_OFFER_ID(i) }));
 
 // Small builders to keep the seed readable.
 function item(
@@ -645,9 +655,13 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         let supplierList = (suppliersRes.data as SupplierRow[] | null)?.map(rowToSupplier) ?? [];
         let offerList = (offersRes.data as OfferRow[] | null)?.map(rowToOffer) ?? [];
 
-        // Seed an empty library.
+        // Seed an empty library. upsert+ignoreDuplicates keeps this idempotent
+        // if the effect double-runs (React StrictMode in dev) — a repeat seed is
+        // a no-op rather than a duplicate-key error or a doubled row set.
         if (items.length === 0) {
-          await sb.from(TABLE).insert(SEED_ITEMS.map(itemToRow));
+          await sb
+            .from(TABLE)
+            .upsert(SEED_ITEMS.map(itemToRow), { onConflict: "id", ignoreDuplicates: true });
           items = SEED_ITEMS;
         }
         // Backfill the offer layer if it's empty (e.g. a Phase-1 DB that seeded
@@ -656,8 +670,13 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           const itemIds = new Set(items.map((i) => i.id));
           const seedOffers = SEED_OFFERS.filter((o) => itemIds.has(o.itemId));
           if (seedOffers.length > 0) {
-            await sb.from(SUPPLIERS_TABLE).insert(SEED_SUPPLIERS.map(supplierToRow));
-            await sb.from(OFFERS_TABLE).insert(seedOffers.map(offerToRow));
+            await sb.from(SUPPLIERS_TABLE).upsert(SEED_SUPPLIERS.map(supplierToRow), {
+              onConflict: "id",
+              ignoreDuplicates: true,
+            });
+            await sb
+              .from(OFFERS_TABLE)
+              .upsert(seedOffers.map(offerToRow), { onConflict: "id", ignoreDuplicates: true });
             supplierList = SEED_SUPPLIERS;
             offerList = seedOffers;
           }
