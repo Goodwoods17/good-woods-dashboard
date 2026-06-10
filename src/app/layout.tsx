@@ -9,6 +9,8 @@ import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
+import { RefaceProvider } from "@features/reface/lib/refaceStore";
+import { LabourProvider } from "@features/labour/lib/labourStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -44,7 +46,11 @@ export default function RootLayout({
                 <DocumentsProvider>
                   <CatalogProvider>
                     <ShopProvider>
-                      <AppShell>{children}</AppShell>
+                      <RefaceProvider>
+                        <LabourProvider>
+                          <AppShell>{children}</AppShell>
+                        </LabourProvider>
+                      </RefaceProvider>
                     </ShopProvider>
                   </CatalogProvider>
                 </DocumentsProvider>
