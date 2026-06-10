@@ -44,3 +44,6 @@ codemap.html
 dev.log
 dev-demo.log
 tsc_out.txt
+
+# Playwright MCP smoke-test artifacts
+.playwright-mcp/

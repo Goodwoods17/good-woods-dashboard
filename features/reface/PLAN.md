@@ -19,18 +19,25 @@ order** against New Surrey's per-sqft price book. Architected to grow into Andre
       re-apply. Repo copy: `supabase/migrations/20260604_reface_studio.sql`.
 - [x] **`lib/types.ts`** — ElementKind, RefaceElement, RefacePhoto, OrderSettings
       (+ defaultOrderSettings), RefaceProject, DetectedElement; ref prefixes D/DR/EP/TK.
-- [ ] **Store + rowMap + provider** — `refaceStore.tsx` (mirror `features/contacts/lib/
-    contactsStore.tsx`: Context, dual supabase/localStorage backend, optimistic +
-      rollback, `refresh`), `refaceRowMap.ts`; mount `<RefaceProvider>` in `src/app/layout.tsx`.
-- [ ] **Pure libs** — `dimensions.ts` (port parsing + fraction formatter from door-sizer.html),
-      `sqft.ts` (w·h·qty/144 + rollups), `newSurreyPriceBook.ts` (seed), `pricing.ts` (cost),
-      `storage.ts` (upload/sign + natural dims).
-- [ ] **UI + route + nav** — RefaceView, ProjectList, PhotoAnnotator, ElementPin, ElementCard,
-      ImportDetected, SummaryPanel, OrderSettingsForm, ExportMenu; `src/app/reface/page.tsx`;
-      `{ href: "/reface", label: "Reface Studio" }` in the Build section of `Sidebar.tsx`.
-- [ ] **Order-form export** — `npm i exceljs`; bundle `assets/wood-doors-order-form.xlsx`;
-      `orderForm.ts` fills cells (doors → A16:E38, drawer fronts → H25:N37), overflow + log().
-- [ ] **CLAUDE.md + verify** — spec/non-goals/roadmap; then tsc + lint + prettier + build + browser smoke test.
+- [x] **Store + rowMap + provider** — `refaceStore.tsx` (dual supabase/localStorage backend,
+      optimistic + rollback, `refresh`), `refaceRowMap.ts`; `<RefaceProvider>` mounted in
+      `src/app/layout.tsx` inside `<ShopProvider>`.
+- [x] **Pure libs** — `dimensions.ts` (ported parsing + `formatFraction`), `sqft.ts`
+      (w·h·qty/144 + rollups), `newSurreyPriceBook.ts` (seed + lookup), `pricing.ts` (cost,
+      doors+drawers only, no minimum), `storage.ts` (upload/sign + natural dims, data-URL
+      fallback offline). Plus `importElements.ts` (labeler, manual-pin factory, DetectedElement
+      validation) and `exporters.ts` (CSV / text).
+- [x] **UI + route + nav** — RefaceView, ProjectList, ProjectWorkspace, PhotoAnnotator,
+      ElementPin, ElementCard, ImportDetected, SummaryPanel, OrderSettingsForm, ExportMenu;
+      `src/app/reface/page.tsx`; `{ href: "/reface", label: "Reface Studio", icon: ScanLine }`
+      in the Build section of `Sidebar.tsx`.
+- [x] **Order-form export** — `exceljs` installed; template at `public/reface/wood-doors-order-form.xlsx`
+      (provenance copy in `assets/`); `orderForm.ts` fills the **verified** cell map (doors B/C/D/E
+      rows 16–38, drawer fronts I/J/L/M rows 25–37, header C6:C13 / K6/K8/K9 / I3 / grain / boring),
+      overflow → extra forms + `console.warn`. Round-trip smoke-tested against the real file.
+- [x] **CLAUDE.md + verify** — `features/reface/CLAUDE.md` written. Gate green: `npx tsc --noEmit`,
+      `npm run lint`, `npx prettier --check`, `npm run build` all pass. Browser smoke test pending
+      (Claude-in-Chrome can't bridge into WSL — run manually at `/reface`).
 
 ## Key decisions (locked)
 
