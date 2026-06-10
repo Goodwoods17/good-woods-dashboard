@@ -65,6 +65,7 @@ export type LineItem = {
   catalogId?: string; // hook to Catalog entry (snapshots below capture state at pick-time)
   supplierSnapshot?: string; // who the catalog item said it came from when picked
   unitPriceSnapshot?: number; // what the price was when picked (catalog may have changed since)
+  offerIdSnapshot?: string; // which catalog offer this line was priced from (inert seam: lets a future cart-loader group a job's lines by supplier)
   roomId?: string; // optional — assigns this line to a Room for per-room subtotals + toggle
   excludeFromQuote?: boolean; // pre-work lines: counted in internal cost, NOT in quoted price
 };
@@ -130,9 +131,7 @@ export function emptyCabinetSummary(): CabinetSummary {
 }
 
 export function totalCabinetLinearFt(s: CabinetSummary): number {
-  return (
-    s.base.linearFt + s.wall.linearFt + s.tall.linearFt + s.island.linearFt
-  );
+  return s.base.linearFt + s.wall.linearFt + s.tall.linearFt + s.island.linearFt;
 }
 
 export function totalCabinetCount(s: CabinetSummary): number {

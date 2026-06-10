@@ -31,6 +31,31 @@ materials, pricing, and metadata. Pricing must not live anywhere else
 Materials + Finishes tabs; hardware/insert/labour/service kinds persist
 but aren't surfaced yet. Real prices/links are unfilled.
 
+## Phase 1.6 — Multi-supplier offers ✅ (2026-06-09)
+
+- [x] `20260610000000_catalog_multi_supplier.sql`: **`catalog_suppliers`** +
+      **`catalog_offers`** child tables; `catalog_price_history.offer_id`;
+      dropped `catalog_items.supplier` (kept `unit_price` as fallback);
+      `set_preferred_offer` RPC + partial unique index (one preferred per
+      item). RLS authenticated-only. **Applied + behaviour-verified on the
+      live DB** (partial-unique rejects a 2nd preferred; cheapest-active
+      query; atomic RPC swap).
+- [x] `catalogRowMap.ts` — supplier/offer mappers + `assembleCatalog` +
+      `pickSurfacedOffer` (preferred ?? cheapest active). `catalogStore`
+      holds items+suppliers+offers, 3-way load with seed backfill, surfaced
+      projections; `Material`/`Finish` now read the surfaced offer.
+- [x] `priceHistory.ts` — per-offer logging + `getPriceDelta` +
+      batched async `fetchDeltas([offerIds])` (one query, no N+1).
+- [x] UI — `MaterialsTable` all-at-once supplier strip (cheapest-first,
+      ← best / ★ preferred, ↑/↓ market delta) + expandable `OffersSubRow`
+      editor; `cells.DeltaChip`/`BestBadge`/`PreferredBadge`.
+- [x] Inert `offerIdSnapshot` seam on the estimator `LineItem` (future
+      cart-loader groups a job's lines by supplier).
+- [x] ADR `0006-catalog-items-vs-offers.md` + glossary `CONTEXT.md`.
+- **Decision:** see `docs/decisions/0006`. Offers only for procured kinds;
+  finish/labour/service stay inline-priced; finish-as-recipe + labour are
+  separate future work.
+
 ## Phase 1.5 — Real data
 
 - [ ] Replace placeholder seed with Andrew's actual material / hardware /

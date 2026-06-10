@@ -16,19 +16,30 @@ it comes from the Catalog.
 Everything the shop prices off is a **`CatalogItem`** distinguished by
 `kind`:
 
-| kind       | what it is                                  |
-| ---------- | ------------------------------------------- |
-| `material` | sheet goods, lumber, sprays — the bulk      |
-| `hardware` | hinges, slides, pulls, fasteners            |
+| kind       | what it is                                      |
+| ---------- | ----------------------------------------------- |
+| `material` | sheet goods, lumber, sprays — the bulk          |
+| `hardware` | hinges, slides, pulls, fasteners                |
 | `door`     | door / drawer fronts (may carry matrix pricing) |
-| `finish`   | spray finishes, priced by sqft              |
-| `insert`   | drawer organisers, cutlery trays, pull-outs |
-| `labour`   | labour line definitions                     |
-| `service`  | flat-rate services (delivery, sub-out)      |
+| `finish`   | spray finishes, priced by sqft                  |
+| `insert`   | drawer organisers, cutlery trays, pull-outs     |
+| `labour`   | labour line definitions                         |
+| `service`  | flat-rate services (delivery, sub-out)          |
 
-Beyond the flat columns (`name`, `supplier`, `link`, `section`, `unit`,
-`unitPrice`, `defaultWastePct`, `defaultMarkupPct`, `notes`), two JSONB
-fields absorb what varies by kind:
+**Multi-supplier (Phase 1.6).** Procured kinds (`material`, `hardware`,
+`door`, `insert`) carry many supplier **offers** in `catalog_offers`,
+drawn from a `catalog_suppliers` list. The price a row shows — and that
+the Estimator/Inventory read — is the **surfaced price**: the pinned
+preferred offer if any, else the cheapest active offer, else the item's
+own inline `unitPrice` (the fallback for in-house kinds and offer-less
+items). The item's `supplier` column is gone — supplier now lives on the
+offer. See `docs/decisions/0006-catalog-items-vs-offers.md` and the
+glossary in `CONTEXT.md`. Offers inherit the item's `unit`, so "cheapest"
+is a valid comparison; a different unit/size is a different item.
+
+Beyond the flat columns (`name`, `link`, `section`, `unit`, `unitPrice`,
+`defaultWastePct`, `defaultMarkupPct`, `notes`), two JSONB fields absorb
+what varies by kind:
 
 - **`pricing`** — multi-dimensional pricing. `null` for simple items; for
   a reface door it holds the species × style grid. Phase 2 folds the full
@@ -52,13 +63,20 @@ seeded once from `SEED_ITEMS` so the book is never blank. Inline edits
 debounce-flush per row (600 ms); price changes stamp `priceUpdatedAt` and
 append to the price-history log.
 
-Three live tables back the feature:
+Five live tables back the feature:
 
 - **`catalog_items`** — the library (RLS: authenticated-only).
-- **`catalog_price_history`** — append-only log of every observed price
-  (manual edits + estimates). `priceHistory.ts` writes here and to a
-  localStorage mirror; the sync read helpers still read the mirror —
-  surfacing the shared history in the UI is a Phase-2 (async) item.
+- **`catalog_suppliers`** — the vendors we buy from; optional `contact_id`
+  link to a CRM contact, `cart_config` jsonb reserved for a future
+  cart-loader. Created inline (find-or-create by name).
+- **`catalog_offers`** — one supplier's price + buy URL/SKU for one
+  procured item. Many per item. Partial unique index enforces one
+  preferred per item; the `set_preferred_offer` RPC pins atomically.
+- **`catalog_price_history`** — append-only log of every observed price,
+  now keyed to the `offer_id` it came from (item-level/estimate rows
+  leave it null). `priceHistory.ts` writes here + a localStorage mirror;
+  `fetchDeltas([offerIds])` batches the per-supplier up/down deltas in one
+  query (no N+1).
 - **`catalog_cabinet_types`** — per-cabinet-type assembly/install/loading
   **minutes** the estimator auto-derives labour from. Hourly **$/rates**
   stay in `workspace_settings` — one home, no double source of truth.
@@ -69,14 +87,18 @@ Three live tables back the feature:
 features/catalog/
 ├── lib/
 │   ├── catalogStore.tsx   CatalogItem/CatalogKind types, CatalogProvider,
-│   │                      useCatalog, SEED_ITEMS, Material/Finish back-compat
-│   └── priceHistory.ts    append-only price log (Supabase + localStorage mirror)
+│   │                      useCatalog, SEED_ITEMS/SUPPLIERS/OFFERS,
+│   │                      supplier+offer API, Material/Finish back-compat
+│   ├── catalogRowMap.ts   supplier/offer row⇄type mappers, pickSurfacedOffer,
+│   │                      assembleCatalog (stitch offers onto items in memory)
+│   └── priceHistory.ts    append-only price log + per-offer deltas (async batch)
 └── components/
     ├── CatalogView.tsx     top-level view with tab nav (Materials | Finishes)
-    ├── MaterialsTable.tsx  materials CRUD, grouped by estimator section
-    ├── FinishesTable.tsx   finishes CRUD
+    ├── MaterialsTable.tsx  materials CRUD + all-at-once supplier offers strip
+    ├── OffersSubRow.tsx    expanded per-item offers editor (price/url/sku/pin)
+    ├── FinishesTable.tsx   finishes CRUD (in-house; no offers)
     ├── CrudTable.tsx       shared Th + CrudRow<T> primitives
-    └── cells.tsx           AutoText, NumCell, StaleChip inline-edit cells
+    └── cells.tsx           AutoText, NumCell, StaleChip, DeltaChip, badges
 ```
 
 `src/app/catalog/page.tsx` is a thin shell rendering `<CatalogView />`.
@@ -87,11 +109,14 @@ Consumers: `/catalog` (CRUD), `/estimator` (reads — Phase 2 picking),
 ## Back-compat surface
 
 The unified model is internal. `useCatalog()` still exposes `materials`
-and `finishes` (derived views over `CatalogItem`) and the
-`addMaterial`/`updateMaterial`/`removeMaterial` /
-`addFinish`/`updateFinish`/`removeFinish` ops, so the existing tables,
-Inventory's `ItemModal`, and `useMaterialsBySection` did not change. New
-code should prefer `items` + `addItem`/`updateItem`/`removeItem`.
+and `finishes` (derived views — now over the **surfaced offer**, so
+`Material.supplier`/`unitPrice` are read-only projections of the surfaced
+offer) and the `addMaterial`/`updateMaterial`/`removeMaterial` /
+`addFinish`/`updateFinish`/`removeFinish` ops, so Inventory's `ItemModal`
+and `useMaterialsBySection` did not change. New code should prefer
+`itemsWithOffers` (the `CatalogItemView` with offers + surfaced offer
+stitched on) and the `addOffer`/`updateOffer`/`removeOffer` /
+`setPreferredOffer` / `addSupplier` API.
 
 `materials` = active items whose kind is material/hardware/door/insert
 **and** that carry a section (so the section-grouped Materials tab keeps
