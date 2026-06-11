@@ -91,9 +91,10 @@ You often have to stop suddenly. Two ways to bank your place:
   Takes one second, costs almost nothing, changes no code.
 - **Add a reason if you have one:** `/save heading out, mid-way through testing reface`.
 
-Next time you open a session, that note is **auto-loaded into my context** — so you
-can just open up and say **"go"** (or *"where were we?"*) and I pick up exactly
-where we left off. No re-explaining.
+Next time you open a session, just type **`/resume`** — I re-read that note, re-check
+the live state of the repo, give you a 3-line "here's where we are," and get moving.
+(The note is also auto-loaded into my context at session start, so "go" or *"where
+were we?"* work too — but `/resume` is the reliable one-word trigger.) No re-explaining.
 
 `.remember/` is local-only (gitignored), so these notes never clutter your repo.
 
@@ -105,7 +106,7 @@ where we left off. No re-explaining.
 |---|---|
 | `go` / `next` / `continue` | the next step I teed up |
 | `/save` *(+ optional note)* | bank our place for next time |
-| *"where were we?"* | read the resume note and re-orient |
+| `/resume` *(or "where were we?")* | pick up exactly where we left off last session |
 | `push` | back the branch up to GitHub |
 | `merge` | fold the tested branch into `main` (I'll confirm first) |
 | *"explain like I'm not a dev"* | plain-English version of anything |
