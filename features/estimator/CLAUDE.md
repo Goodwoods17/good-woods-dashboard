@@ -214,7 +214,13 @@ See `PLAN.md` for sequencing. In short:
   the prerequisite for the Inventory job-needs view.
 - **Inventory link** (after CSV import) — the per-job BOM produced here
   feeds Inventory's stock-vs-needs check. See `features/inventory/CLAUDE.md`.
-- **Cabinet-count metrics** (Phase 4) — $ per cabinet linear foot,
-  assembly/install time by type. Needs saved jobs + per-type minutes
-  tuned in Catalog rather than the hard-coded defaults in `types.ts`.
+- **Cabinet-count metrics** (Phase 4) — $ per cabinet linear foot.
+  ✓ Per-type assembly/install minutes now come from the Catalog
+  (`catalog_cabinet_types` via `useCatalog().cabinetTypes`), tuned by
+  the shop's labour timers; `DEFAULT_*_MINUTES` in `types.ts` are the
+  fallback. The auto-derive reads live minutes, so a labour nudge flows
+  into the next quote. (Loading minutes for delivery still use the
+  default — `DeliveryCalculator` reads `loadMin` from settings/defaults,
+  not yet the Catalog row.) Remaining: $/linear-foot metrics need saved
+  jobs.
 - **PDF quote export** — reuse the invoice render pipeline.

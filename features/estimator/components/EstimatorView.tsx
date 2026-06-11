@@ -13,6 +13,7 @@ import {
   totalCabinetCount,
   DEFAULT_ASSEMBLY_MINUTES,
   DEFAULT_INSTALL_MINUTES,
+  type CabinetTypeId,
   type CabinetSummary as CabinetSummaryT,
   type DeficienciesState,
   type DeliveryState,
@@ -29,11 +30,9 @@ import {
   partitionCabinetSummaryByRoom,
 } from "@features/estimator/lib/totals";
 import { logPricesFromEstimate } from "@features/catalog/lib/priceHistory";
+import { useCatalog, type CatalogCabinetType } from "@features/catalog/lib/catalogStore";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
-import {
-  QUOTE_SECTIONS,
-  type SectionId,
-} from "@features/estimator/lib/sections";
+import { QUOTE_SECTIONS, type SectionId } from "@features/estimator/lib/sections";
 import {
   defaultTemplate,
   isSectionActive,
@@ -51,6 +50,25 @@ import { TemplatePicker, TemplateChip } from "./TemplatePicker";
 
 function newId(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
+}
+
+// Resolve the per-cabinet-type minute record the Cabinet Summary auto-derive
+// uses: start from the shipped defaults, then override with any minutes the
+// shop's labour timers have tuned in the Catalog (catalog_cabinet_types). A
+// missing / zero / NaN row falls back to the default so a blank value can't
+// silently zero a quote's Assembly or Install labour. This read is what
+// closes the time-and-motion → quote loop the Labour feature exists for.
+function resolveMinutes(
+  fallback: Record<CabinetTypeId, number>,
+  rows: CatalogCabinetType[],
+  field: "assemblyMinutes" | "installMinutes"
+): Record<CabinetTypeId, number> {
+  const out = { ...fallback };
+  for (const r of rows) {
+    const v = r[field];
+    if (r.id in out && Number.isFinite(v) && v > 0) out[r.id] = v;
+  }
+  return out;
 }
 
 // Unit guess per section so a freshly-added line is one-touch sensible.
@@ -73,12 +91,23 @@ export function EstimatorView() {
   const router = useRouter();
   const { createJob, jobs } = useJobs();
   const { settings } = useWorkspaceSettings();
+  const { cabinetTypes } = useCatalog();
+
+  // Per-type Assembly/Install minutes, tuned by the shop's labour timers when
+  // available, else the shipped defaults. Behaviour-preserving until a labour
+  // nudge is applied (the Catalog seed equals DEFAULT_*_MINUTES).
+  const assemblyMinutes = useMemo(
+    () => resolveMinutes(DEFAULT_ASSEMBLY_MINUTES, cabinetTypes, "assemblyMinutes"),
+    [cabinetTypes]
+  );
+  const installMinutes = useMemo(
+    () => resolveMinutes(DEFAULT_INSTALL_MINUTES, cabinetTypes, "installMinutes"),
+    [cabinetTypes]
+  );
 
   const [client, setClient] = useState("");
   const [project, setProject] = useState("");
-  const [activeTemplate, setActiveTemplate] = useState<EstimateTemplate>(
-    defaultTemplate(),
-  );
+  const [activeTemplate, setActiveTemplate] = useState<EstimateTemplate>(defaultTemplate());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
 
@@ -87,12 +116,8 @@ export function EstimatorView() {
     ...emptyDelivery(),
     gasRatePerMile: settings.defaultGasRatePerMile,
   });
-  const [deficiencies, setDeficiencies] = useState<DeficienciesState>(
-    emptyDeficiencies(),
-  );
-  const [cabinetSummary, setCabinetSummary] = useState<CabinetSummaryT>(
-    emptyCabinetSummary(),
-  );
+  const [deficiencies, setDeficiencies] = useState<DeficienciesState>(emptyDeficiencies());
+  const [cabinetSummary, setCabinetSummary] = useState<CabinetSummaryT>(emptyCabinetSummary());
 
   const [lines, setLines] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -137,21 +162,14 @@ export function EstimatorView() {
     const assemblyOn = isSectionActive(activeTemplate, "assembly");
     const installOn = isSectionActive(activeTemplate, "install");
     const roomNameFor = (roomId: string | undefined) =>
-      roomId
-        ? (rooms.find((r) => r.id === roomId)?.name ?? "")
-        : "";
+      roomId ? (rooms.find((r) => r.id === roomId)?.name ?? "") : "";
 
     for (const [roomId, sub] of Array.from(partitions.entries())) {
       const roomKey = roomId ?? "all";
-      const roomSuffix = roomId
-        ? ` — ${roomNameFor(roomId) || "Room"}`
-        : "";
+      const roomSuffix = roomId ? ` — ${roomNameFor(roomId) || "Room"}` : "";
 
       if (assemblyOn) {
-        const hours = deriveLabourHoursFromCabinets(
-          sub,
-          DEFAULT_ASSEMBLY_MINUTES,
-        );
+        const hours = deriveLabourHoursFromCabinets(sub, assemblyMinutes);
         if (hours > 0) {
           out.push({
             id: `auto-assembly-${roomKey}`,
@@ -169,10 +187,7 @@ export function EstimatorView() {
       }
 
       if (installOn) {
-        const hours = deriveLabourHoursFromCabinets(
-          sub,
-          DEFAULT_INSTALL_MINUTES,
-        );
+        const hours = deriveLabourHoursFromCabinets(sub, installMinutes);
         if (hours > 0) {
           out.push({
             id: `auto-install-${roomKey}`,
@@ -191,7 +206,7 @@ export function EstimatorView() {
     }
 
     return out;
-  }, [activeTemplate, cabinetSummary, rooms, settings]);
+  }, [activeTemplate, cabinetSummary, rooms, settings, assemblyMinutes, installMinutes]);
 
   // ─── Synthesised lines for the structured sections ───────────────────
   // Pre-work, Delivery, Deficiencies are entered via structured blocks
@@ -231,7 +246,7 @@ export function EstimatorView() {
       const cd = computeDeliveryCost(
         delivery,
         totalCabinetCount(cabinetSummary),
-        settings.labourRates,
+        settings.labourRates
       );
       if (delivery.miles > 0) {
         out.push({
@@ -276,10 +291,7 @@ export function EstimatorView() {
 
     // Deficiencies hours budget becomes one line. The contingency % is
     // passed to computeTotals as an option (added on top of quoted total).
-    if (
-      isSectionActive(activeTemplate, "deficiencies") &&
-      deficiencies.hoursBudget > 0
-    ) {
+    if (isSectionActive(activeTemplate, "deficiencies") && deficiencies.hoursBudget > 0) {
       const cd = computeDeficienciesCost(deficiencies, settings.labourRates);
       out.push({
         id: "auto-deficiencies-budget",
@@ -296,20 +308,13 @@ export function EstimatorView() {
     }
 
     return out;
-  }, [
-    activeTemplate,
-    prework,
-    delivery,
-    cabinetSummary,
-    deficiencies,
-    settings,
-  ]);
+  }, [activeTemplate, prework, delivery, cabinetSummary, deficiencies, settings]);
 
   // Combine: user-typed lines + auto-derived + structured synthetics. The
   // order matters for the LineItemRow positional zip with subtotals.
   const allLines = useMemo<LineItem[]>(
     () => [...lines, ...autoLines, ...syntheticLines],
-    [lines, autoLines, syntheticLines],
+    [lines, autoLines, syntheticLines]
   );
 
   const totals = useMemo(
@@ -321,12 +326,12 @@ export function EstimatorView() {
           ? deficiencies.contingencyPct
           : 0,
       }),
-    [allLines, overheadPct, rooms, activeTemplate, deficiencies.contingencyPct],
+    [allLines, overheadPct, rooms, activeTemplate, deficiencies.contingencyPct]
   );
 
   const preworkCostBreakdown = useMemo(
     () => computePreWorkCost(prework, settings.labourRates),
-    [prework, settings.labourRates],
+    [prework, settings.labourRates]
   );
 
   // Quoted total BEFORE contingency, for the Deficiencies preview.
@@ -335,23 +340,19 @@ export function EstimatorView() {
   // Category dropdown suggestions: active-section labels first, then any
   // custom typed categories.
   const categorySuggestions = useMemo(() => {
-    const activeLabels = QUOTE_SECTIONS.filter((s) =>
-      activeSectionIds.includes(s.id),
-    ).map((s) => s.label);
+    const activeLabels = QUOTE_SECTIONS.filter((s) => activeSectionIds.includes(s.id)).map(
+      (s) => s.label
+    );
     const used = lines.map((l) => l.category).filter(Boolean);
     return Array.from(new Set([...activeLabels, ...used]));
   }, [activeSectionIds, lines]);
 
   // ─── Structured-section content passed into LineItemsTable ────────────
   const structuredContent: Partial<Record<SectionId, ReactNode>> = {};
-  const structuredSubtotals: Partial<
-    Record<SectionId, { cost: number; price: number }>
-  > = {};
+  const structuredSubtotals: Partial<Record<SectionId, { cost: number; price: number }>> = {};
 
   if (isSectionActive(activeTemplate, "prework")) {
-    structuredContent.prework = (
-      <PreWorkBlock prework={prework} onUpdate={setPrework} />
-    );
+    structuredContent.prework = <PreWorkBlock prework={prework} onUpdate={setPrework} />;
     structuredSubtotals.prework = {
       cost: preworkCostBreakdown.totalCost,
       price: 0, // pre-work isn't on the quote
@@ -368,7 +369,7 @@ export function EstimatorView() {
     const cd = computeDeliveryCost(
       delivery,
       totalCabinetCount(cabinetSummary),
-      settings.labourRates,
+      settings.labourRates
     );
     structuredSubtotals.delivery = {
       cost: cd.total,
@@ -380,17 +381,13 @@ export function EstimatorView() {
       <DeficienciesBlock
         deficiencies={deficiencies}
         quotedTotal={quotedPreContingency}
-        onUpdate={(patch) =>
-          setDeficiencies((prev) => ({ ...prev, ...patch }))
-        }
+        onUpdate={(patch) => setDeficiencies((prev) => ({ ...prev, ...patch }))}
       />
     );
     const cd = computeDeficienciesCost(deficiencies, settings.labourRates);
     structuredSubtotals.deficiencies = {
       cost: cd.budgetCost,
-      price:
-        cd.budgetCost * (1 + settings.defaultMarkupPct / 100) +
-        totals.contingency,
+      price: cd.budgetCost * (1 + settings.defaultMarkupPct / 100) + totals.contingency,
     };
   }
 
@@ -421,7 +418,7 @@ export function EstimatorView() {
             supplier: l.supplierSnapshot,
             unitPrice: l.unitPrice,
           })),
-        job.id,
+        job.id
       );
     } catch {
       /* silent — history is non-critical */
@@ -444,8 +441,8 @@ export function EstimatorView() {
               onClickChange={() => setTemplatePickerOpen(true)}
             />
             <span className="text-caption text-text-tertiary">
-              {activeTemplate.activeSections.length} section(s) active. Hidden
-              sections won&apos;t price into this quote.
+              {activeTemplate.activeSections.length} section(s) active. Hidden sections won&apos;t
+              price into this quote.
             </span>
           </div>
 
@@ -456,11 +453,7 @@ export function EstimatorView() {
             onProject={setProject}
           />
 
-          <RoomsPanel
-            rooms={rooms}
-            perRoom={totals.perRoom}
-            onChange={setRooms}
-          />
+          <RoomsPanel rooms={rooms} perRoom={totals.perRoom} onChange={setRooms} />
 
           <LineItemsTable
             lines={allLines}
@@ -478,9 +471,7 @@ export function EstimatorView() {
           <CabinetSummary
             summary={cabinetSummary}
             rooms={rooms}
-            onUpdate={(patch) =>
-              setCabinetSummary((prev) => ({ ...prev, ...patch }))
-            }
+            onUpdate={(patch) => setCabinetSummary((prev) => ({ ...prev, ...patch }))}
           />
         </div>
 
@@ -488,9 +479,7 @@ export function EstimatorView() {
           totals={totals}
           overheadPct={overheadPct}
           contingencyPct={
-            isSectionActive(activeTemplate, "deficiencies")
-              ? deficiencies.contingencyPct
-              : 0
+            isSectionActive(activeTemplate, "deficiencies") ? deficiencies.contingencyPct : 0
           }
           preworkCost={preworkCostBreakdown.totalCost}
           preworkHours={preworkCostBreakdown.totalHours}

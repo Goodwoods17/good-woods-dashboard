@@ -138,10 +138,12 @@ export function totalCabinetCount(s: CabinetSummary): number {
   return s.base.count + s.wall.count + s.tall.count + s.island.count;
 }
 
-// Per-cabinet-type time defaults. Eventually these live in the Catalog
-// (Phase 4) so Andrew can tune them per shop reality. For now they're
-// industry-average starting points so the auto-derive math is useful
-// out-of-the-box.
+// Per-cabinet-type time defaults — now the *fallback*. The live values
+// the auto-derive uses come from the Catalog (`catalog_cabinet_types`,
+// read via `useCatalog().cabinetTypes`), tuned by the shop's labour
+// timers. EstimatorView merges those over these defaults, so a fresh DB
+// (whose seed equals these numbers) behaves identically until a labour
+// nudge is applied. These remain the industry-average starting points.
 
 export const DEFAULT_ASSEMBLY_MINUTES: Record<CabinetTypeId, number> = {
   base: 60,

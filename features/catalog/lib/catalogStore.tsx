@@ -341,6 +341,53 @@ const TABLE = "catalog_items";
 const LS_KEY = "gw_catalog_v1";
 const SCHEMA = 4;
 
+// ─── Cabinet-type minute defaults ───────────────────────────────────────
+// Per-cabinet-type Assembly/Install/Delivery-loading minutes the estimator
+// auto-derives labour from. The shop's labour timers tune these (labour's
+// auto-suggest writes back here), so the estimator reading them is what
+// closes the time-and-motion → quote loop. Read-only here; labour owns the
+// writes. Seed mirrors the SQL seed so the localStorage backend and the
+// pre-load state match the hardcoded estimator defaults exactly.
+
+const CABINET_TYPES_TABLE = "catalog_cabinet_types";
+
+export type CatalogCabinetType = {
+  id: "base" | "wall" | "tall" | "island";
+  label: string;
+  assemblyMinutes: number;
+  installMinutes: number;
+  loadingMinutes: number;
+};
+
+type CabinetTypeRow = {
+  id: CatalogCabinetType["id"];
+  label: string;
+  assembly_minutes: number | string;
+  install_minutes: number | string;
+  loading_minutes: number | string;
+};
+
+const rowToCabinetType = (r: CabinetTypeRow): CatalogCabinetType => ({
+  id: r.id,
+  label: r.label,
+  assemblyMinutes: Number(r.assembly_minutes),
+  installMinutes: Number(r.install_minutes),
+  loadingMinutes: Number(r.loading_minutes),
+});
+
+const SEED_CABINET_TYPES: CatalogCabinetType[] = [
+  { id: "base", label: "Base", assemblyMinutes: 60, installMinutes: 30, loadingMinutes: 5 },
+  { id: "wall", label: "Wall", assemblyMinutes: 45, installMinutes: 20, loadingMinutes: 4 },
+  {
+    id: "tall",
+    label: "Tall / pantry",
+    assemblyMinutes: 90,
+    installMinutes: 45,
+    loadingMinutes: 7,
+  },
+  { id: "island", label: "Island", assemblyMinutes: 90, installMinutes: 45, loadingMinutes: 7 },
+];
+
 // ─── Row mapping (items) ────────────────────────────────────────────────
 
 type ItemRow = {
@@ -578,6 +625,7 @@ type CatalogContextValue = {
   suppliers: CatalogSupplier[];
   materials: Material[]; // material-like kinds with a section (back-compat)
   finishes: Finish[]; // finish kind (back-compat)
+  cabinetTypes: CatalogCabinetType[]; // per-type labour minutes (estimator reads)
   loading: boolean;
   error: string | null;
   addItem: (i: Omit<CatalogItem, "id" | "priceUpdatedAt" | "active">) => void;
@@ -607,6 +655,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const [all, setAll] = useState<CatalogItem[]>(SEED_ITEMS);
   const [suppliers, setSuppliers] = useState<CatalogSupplier[]>(SEED_SUPPLIERS);
   const [offers, setOffers] = useState<CatalogOffer[]>(SEED_OFFERS);
+  const [cabinetTypes, setCabinetTypes] = useState<CatalogCabinetType[]>(SEED_CABINET_TYPES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -642,18 +691,24 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       }
       try {
         const sb = getSupabase();
-        const [itemsRes, offersRes, suppliersRes] = await Promise.all([
+        const [itemsRes, offersRes, suppliersRes, cabsRes] = await Promise.all([
           sb.from(TABLE).select("*"),
           sb.from(OFFERS_TABLE).select("*"),
           sb.from(SUPPLIERS_TABLE).select("*"),
+          sb
+            .from(CABINET_TYPES_TABLE)
+            .select("id, label, assembly_minutes, install_minutes, loading_minutes"),
         ]);
         if (itemsRes.error) throw itemsRes.error;
         if (offersRes.error) throw offersRes.error;
         if (suppliersRes.error) throw suppliersRes.error;
+        if (cabsRes.error) throw cabsRes.error;
 
         let items = (itemsRes.data as ItemRow[] | null)?.map(rowToItem) ?? [];
         let supplierList = (suppliersRes.data as SupplierRow[] | null)?.map(rowToSupplier) ?? [];
         let offerList = (offersRes.data as OfferRow[] | null)?.map(rowToOffer) ?? [];
+        const cabinetTypeList =
+          (cabsRes.data as CabinetTypeRow[] | null)?.map(rowToCabinetType) ?? [];
 
         // Seed an empty library. upsert+ignoreDuplicates keeps this idempotent
         // if the effect double-runs (React StrictMode in dev) — a repeat seed is
@@ -686,6 +741,10 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           setAll(items.sort(byName));
           setSuppliers(supplierList.sort(byName));
           setOffers(offerList);
+          // Empty only on a DB whose migration seed didn't run — keep the
+          // seeded defaults (== the estimator's hardcoded fallback) rather
+          // than blanking the minute table.
+          if (cabinetTypeList.length > 0) setCabinetTypes(cabinetTypeList);
           setError(null);
         }
       } catch (e) {
@@ -1027,6 +1086,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       suppliers,
       materials,
       finishes,
+      cabinetTypes,
       loading,
       error,
       addItem,
@@ -1053,6 +1113,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       suppliers,
       materials,
       finishes,
+      cabinetTypes,
       loading,
       error,
       addItem,
