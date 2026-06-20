@@ -30,17 +30,23 @@ RLS on all 3 tables); `tsc --noEmit` + `next lint` clean.
   seeds the registry in fallback). Providers mounted in `src/app/layout.tsx`.
 - ✅ **Gate met:** `npx tsc --noEmit` clean; migration applied + seed verified.
 
-## Phase 1 — Partners hub & profiles (read-first)  ⬜
+## Phase 1 — Partners hub & profiles (read-first)  ✅  (2026-06-20, commit 9de31bd)
 
-- ⬜ `/partners` hub + tab nav (`PartnersView`), nav entry added.
-- ⬜ `SuppliersList` + `SubtradesList` (search, active filter).
-- ⬜ `SupplierDetail` (`/suppliers/[id]`) — hero **"What we buy here"** reads
-  `useCatalog()` offers for this supplier + delta chips; contact block.
-- ⬜ `SubtradeDetail` (`/subtrades/[id]`) — hero **"Jobs worked"** from
+`tsc --noEmit` + `next lint` clean. Browser smoke confirmed the hub, suppliers
+list, and a supplier profile render with live catalog data. Trade-populated views
+(trade pills, subtrade create) need an authenticated session — authenticated-only
+RLS, same pattern as catalog; the trade-pill visual is proven in the DESIGN.md
+palette render. Final authed create-flow check rides along with Andrew's login.
+
+- ✅ `/partners` hub + tab nav (`PartnersView`), nav entry added.
+- ✅ `SuppliersList` + `SubtradesList` (search, active filter).
+- ✅ `SupplierDetail` (`/suppliers/[id]`) — hero **"What we buy here"** reads
+  `useCatalog()` offers for this supplier; contact block. (Price-delta chips: later.)
+- ✅ `SubtradeDetail` (`/subtrades/[id]`) — hero **"Jobs worked"** from
   `job_trades`; trade pill; contact block. (Empty until Phase 2 writes lines.)
-- ⬜ `SubtradeForm` create/edit (inline mini-form, not Modal); soft-delete.
-- ⬜ Empty states teaching the next action (serif headline + ink-pill CTA).
-- **Gate:** authed browser smoke — create a subtrade, open both profiles.
+- ✅ `SubtradeForm` create/edit; soft-delete (archive).
+- ✅ Empty states teaching the next action (serif headline + ink-pill CTA).
+- 🟡 **Gate:** rendering smoke done; authed create-a-subtrade check pending a real login.
 
 ## Phase 2 — Trades on the project page  ⬜
 
