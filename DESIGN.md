@@ -32,6 +32,14 @@ colors:
   status-blocked-soft: "#F2DDDA"
   status-andon-soft: "#FADBD7"
   ink-pill: "#1A1916"
+  trade-plumbing: "#2D8992"
+  trade-countertop: "#3C84A2"
+  trade-installer: "#547DAB"
+  trade-electrical: "#6C75AF"
+  trade-delivery: "#826FA5"
+  trade-finisher: "#976796"
+  trade-upholstery: "#A16580"
+  trade-other: "#747B83"
 typography:
   display:
     fontFamily: "Cormorant Garamond, Tiempos Headline, Georgia, serif"
@@ -227,6 +235,35 @@ Held from spec v0.2 §3.1 untouched. These are **semantic colours only** — nev
 - **Soft Gray** (`#9A968D`) — `--status-paused`. Deliberately paused work.
 - **Andon Red** (`#D14D3F`) — `--status-andon`. **The only loud colour.** Reserved for active andon alerts and critical safety. Soft fill `#FADBD7`. Pulses at 1200ms.
 
+### Categorical (Trade) Palette
+
+A small, **muted, cool-arc** palette that labels subtrade disciplines (installer,
+finisher, etc.). It exists because trades are a *category* axis that must never be
+confused with the *condition* (health) or *stage* (pipeline) axes. The whole
+palette lives in the cool half of the wheel (hue 200–351), deliberately clear of
+every warm reserved hue (red/andon ~28, clay ~45, taupe ~65, amber ~78, sage/moss
+~135). Chroma is held low (~0.085, "other" near-neutral) so it reads quiet, never
+as a Procore-style safety palette. Lightness is fixed at OKLCH L 0.58 so each dot
+carries the same visual weight as a status dot. All clear WCAG non-text contrast
+(≥3:1) on both the neutral pill (`surface-muted`) and white.
+
+| Trade      | Token              | Hex       | OKLCH                |
+| ---------- | ------------------ | --------- | -------------------- |
+| Plumbing   | `--trade-plumbing`   | `#2D8992` | `oklch(0.58 .085 205)` |
+| Countertop | `--trade-countertop` | `#3C84A2` | `oklch(0.58 .085 228)` |
+| Installer  | `--trade-installer`  | `#547DAB` | `oklch(0.58 .085 252)` |
+| Electrical | `--trade-electrical` | `#6C75AF` | `oklch(0.58 .090 276)` |
+| Delivery   | `--trade-delivery`   | `#826FA5` | `oklch(0.58 .085 300)` |
+| Finisher   | `--trade-finisher`   | `#976796` | `oklch(0.58 .090 327)` |
+| Upholstery | `--trade-upholstery` | `#A16580` | `oklch(0.58 .085 351)` |
+| Other      | `--trade-other`      | `#747B83` | `oklch(0.58 .015 252)` |
+
+The list is **registry-driven** (Settings), so new trades get a hue from this arc
+without a token rename. **Icon carries identity; colour carries the glance.** A
+trade is always shown as a coloured dot **plus** a Lucide icon **plus** a text
+label, so colour is never the sole signal and near-neighbour hues (the three blues)
+stay unambiguous. Verified visually 2026-06-20.
+
 ### Named Rules
 
 **The Foot-Glow Rule.** The canvas carries a vertical gradient: `#FFFFFF` at top, `#FAFAF9` at 60%, `rgba(184,111,82,0.04)` at the foot. The glow is invisible at first glance and only registers as warmth on second look. If it reads as "orange tint" at first look, it's too strong. Tune until ambiguous.
@@ -236,6 +273,8 @@ Held from spec v0.2 §3.1 untouched. These are **semantic colours only** — nev
 **The One Loud Red Rule.** Only `--status-andon` is allowed to be saturated. Every other status colour is muted on purpose. If a screen needs an "alert" red, ask whether it's actually an andon. If not, use `--status-blocked` and a soft background.
 
 **The Warm-Neutral Rule.** Every neutral tints warm (yellow/brown), never blue/gray. If a designer-tool default would push the neutral toward `#F5F5F5` cool, that's wrong; the warm canvas tokens are the source of truth.
+
+**The Off-Axis Categorical Rule.** Trade colours are the *one* sanctioned cool palette, and they earn the exception by staying off every semantic axis: only the categorical `--trade-*` tokens may use cool hues, only as small dots + icons (never fills, never text), and always paired with an icon + label. A trade colour must never be reused to mean a status, a stage, or an accent. If a new categorical need appears (not health, not pipeline), it draws from this arc; it does not mint a warm hue that competes with status.
 
 ## 3. Typography
 
@@ -352,6 +391,14 @@ Built on **shadcn/ui** primitives, tuned to the Quiet-Foreman register. Every in
 - Sizes `sm` (6px) / `md` (8px) / `lg` (10px). Default `md`.
 - Located at `shared/components/ui/StatusDot.tsx`.
 
+### Trade Chip / Trade Pill
+
+- **Style:** `bg-surface-muted` neutral pill (`rounded-full`, padding `4px 11px`), holding a `--trade-*` coloured dot (8px) + a Lucide icon (14px, same trade colour) + the trade label in `text-secondary`. Deliberately **quieter than a Health Pill**: trade colour rides the dot + icon, not a coloured soft-fill, because category must rank below condition in the eight-feet glance.
+- **Icon = identity, colour = glance.** Always render all three (dot + icon + label); colour is never the sole signal, which keeps the three near-blue trades unambiguous and satisfies WCAG.
+- **Suggestion variant:** transparent with a `1px dashed --border`, leading `+`, for the tap-to-add strip on the Trades card.
+- **Trade-line row** (on `/jobs/[id]`): dot + icon + trade label, then the assigned subtrade name (`text-secondary`) or `TBD — tap to assign` (`text-tertiary`, italic). Baseline-aligned, top divider `rgba(26,25,22,0.06)`.
+- Colours come from the registry, mapped through `--trade-*`. Never hardcode a trade hue inline.
+
 ### Margin Cell
 
 - **Style:** colored dot + tabular-num percentage + optional label ("Healthy" / "Tight" / "Below floor").
@@ -400,6 +447,7 @@ Built on **shadcn/ui** primitives, tuned to the Quiet-Foreman register. Every in
 - **Don't** use bright safety-green / safety-yellow / alarm-red. The status palette is muted sage / warm amber / dusty red on purpose. Only `--status-andon` is allowed to be loud, and only during active andon alerts. (PRODUCT.md anti-reference: construction-trade safety palette.)
 - **Don't** use `border-left` or `border-right` greater than 1px as a coloured stripe. Use full borders, background tints, leading dots, or nothing.
 - **Don't** use gradient text. Use a solid color and weight.
+- **Don't** reuse a `--trade-*` colour to mean a status, stage, or accent, or give a trade a coloured soft-fill pill. Trade colour is a cool-arc, dot-plus-icon category cue only. **The Off-Axis Categorical Rule.**
 - **Don't** ship glassmorphism as default — purposeful translucency (the segmented pill, ambient glows) only. The remaining surfaces are solid.
 - **Don't** stack two information architectures on the same view (e.g., AI briefing card AND flat data list competing for the same eye). Pick one focal point. (Open issue today on `/`.)
 - **Don't** use display fonts for UI labels, buttons, or data. Cormorant is for headings only; Inter does everything else.
