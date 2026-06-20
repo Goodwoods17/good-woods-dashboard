@@ -2,11 +2,12 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, ExternalLink, MapPin, Phone, Star } from "lucide-react";
+import { ArrowLeft, ExternalLink, MapPin, Pencil, Star } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { formatCAD } from "@shared/lib/format";
 import { useCatalog } from "@features/catalog/lib/catalogStore";
 import type { CatalogSupplier } from "@features/catalog/lib/catalogRowMap";
+import { PeopleSection } from "./PeopleSection";
 
 function href(url: string): string {
   return url.startsWith("http") ? url : `https://${url}`;
@@ -61,12 +62,21 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
             {offered.length} item{offered.length === 1 ? "" : "s"} priced
           </p>
         </div>
-        <Link
-          href="/catalog"
-          className="inline-flex items-center justify-center gap-1.5 rounded-full bg-surface shadow-floating hover:shadow-hover px-4 min-h-[40px] text-sm font-medium text-text-secondary transition-shadow duration-fast shrink-0"
-        >
-          Manage offers in catalog
-        </Link>
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/catalog"
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-surface shadow-floating hover:shadow-hover px-4 min-h-[40px] text-sm font-medium text-text-secondary transition-shadow duration-fast"
+          >
+            Manage offers
+          </Link>
+          <Link
+            href={`/suppliers/${supplier.id}/edit`}
+            className="inline-flex items-center justify-center gap-1.5 rounded-full bg-ink-pill text-white px-5 min-h-[40px] text-sm font-medium hover:bg-accent-active transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft"
+          >
+            <Pencil className="h-3.5 w-3.5" strokeWidth={1.75} />
+            Edit
+          </Link>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -135,59 +145,45 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
           </Section>
         </div>
 
-        {/* Quiet sidebar: contact facts. */}
+        {/* Quiet sidebar: people, company details, notes. */}
         <aside className="space-y-6">
-          <Section title="Contact">
-            <dl className="px-5 py-4 space-y-3 text-sm">
-              <Fact
-                label="Contact"
-                value={supplier.contactName || <span className="text-text-disabled">Not set</span>}
-              />
-              {supplier.phone && (
-                <Fact
-                  label="Phone"
-                  value={
-                    <a
-                      href={`tel:${supplier.phone}`}
-                      className="inline-flex items-center gap-1.5 text-text-primary hover:text-accent transition-colors duration-fast"
-                    >
-                      <Phone className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      {supplier.phone}
-                    </a>
-                  }
-                />
-              )}
-              {supplier.website && (
-                <Fact
-                  label="Website"
-                  value={
-                    <a
-                      href={href(supplier.website)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex items-center gap-1 text-text-primary hover:text-accent transition-colors duration-fast"
-                    >
-                      {supplier.website}
-                      <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
-                    </a>
-                  }
-                />
-              )}
-              {supplier.address && (
-                <Fact
-                  label="Address"
-                  value={
-                    <span className="inline-flex items-start gap-1.5 text-text-primary">
-                      <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" strokeWidth={1.75} />
-                      {supplier.address}
-                    </span>
-                  }
-                />
-              )}
-              {supplier.accountNumber && <Fact label="Account #" value={supplier.accountNumber} />}
-              {supplier.leadTimeNote && <Fact label="Lead time" value={supplier.leadTimeNote} />}
-            </dl>
-          </Section>
+          <PeopleSection kind="supplier" companyId={supplier.id} />
+
+          {(supplier.website || supplier.address || supplier.accountNumber || supplier.leadTimeNote) && (
+            <Section title="Details">
+              <dl className="px-5 py-4 space-y-3 text-sm">
+                {supplier.website && (
+                  <Fact
+                    label="Website"
+                    value={
+                      <a
+                        href={href(supplier.website)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-text-primary hover:text-accent transition-colors duration-fast"
+                      >
+                        {supplier.website}
+                        <ExternalLink className="h-3 w-3" strokeWidth={1.75} />
+                      </a>
+                    }
+                  />
+                )}
+                {supplier.address && (
+                  <Fact
+                    label="Address"
+                    value={
+                      <span className="inline-flex items-start gap-1.5 text-text-primary">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" strokeWidth={1.75} />
+                        {supplier.address}
+                      </span>
+                    }
+                  />
+                )}
+                {supplier.accountNumber && <Fact label="Account #" value={supplier.accountNumber} />}
+                {supplier.leadTimeNote && <Fact label="Lead time" value={supplier.leadTimeNote} />}
+              </dl>
+            </Section>
+          )}
 
           {supplier.notes && (
             <Section title="Notes">

@@ -2,7 +2,7 @@
 
 import { useMemo } from "react";
 import Link from "next/link";
-import { ArrowLeft, Mail, MapPin, Pencil, Phone } from "lucide-react";
+import { ArrowLeft, MapPin, Pencil } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { formatCAD } from "@shared/lib/format";
 import { useJobs } from "@features/jobs/lib/jobsStore";
@@ -10,6 +10,7 @@ import type { Subtrade } from "../lib/types";
 import { useTrades } from "../lib/tradesStore";
 import { useJobTrades } from "../lib/jobTradesStore";
 import { TradePill } from "./TradePill";
+import { PeopleSection } from "./PeopleSection";
 
 const STATUS_LABEL: Record<string, string> = {
   needed: "Needed",
@@ -135,58 +136,30 @@ export function SubtradeDetail({ subtrade }: { subtrade: Subtrade }) {
           </Section>
         </div>
 
-        {/* Quiet sidebar: contact + rate. */}
+        {/* Quiet sidebar: people, company details, notes. */}
         <aside className="space-y-6">
-          <Section title="Contact">
-            <dl className="px-5 py-4 space-y-3 text-sm">
-              <Fact
-                label="Contact"
-                value={subtrade.contactName || <span className="text-text-disabled">Not set</span>}
-              />
-              {subtrade.phone && (
-                <Fact
-                  label="Phone"
-                  value={
-                    <a
-                      href={`tel:${subtrade.phone}`}
-                      className="inline-flex items-center gap-1.5 text-text-primary hover:text-accent transition-colors duration-fast"
-                    >
-                      <Phone className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      {subtrade.phone}
-                    </a>
-                  }
-                />
-              )}
-              {subtrade.email && (
-                <Fact
-                  label="Email"
-                  value={
-                    <a
-                      href={`mailto:${subtrade.email}`}
-                      className="inline-flex items-center gap-1.5 text-text-primary hover:text-accent transition-colors duration-fast"
-                    >
-                      <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      {subtrade.email}
-                    </a>
-                  }
-                />
-              )}
-              {subtrade.address && (
-                <Fact
-                  label="Address"
-                  value={
-                    <span className="inline-flex items-start gap-1.5 text-text-primary">
-                      <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" strokeWidth={1.75} />
-                      {subtrade.address}
-                    </span>
-                  }
-                />
-              )}
-              {subtrade.typicalRateNote && (
-                <Fact label="Typical rate" value={subtrade.typicalRateNote} />
-              )}
-            </dl>
-          </Section>
+          <PeopleSection kind="subtrade" companyId={subtrade.id} />
+
+          {(subtrade.address || subtrade.typicalRateNote) && (
+            <Section title="Details">
+              <dl className="px-5 py-4 space-y-3 text-sm">
+                {subtrade.address && (
+                  <Fact
+                    label="Address"
+                    value={
+                      <span className="inline-flex items-start gap-1.5 text-text-primary">
+                        <MapPin className="h-3.5 w-3.5 mt-0.5 shrink-0" strokeWidth={1.75} />
+                        {subtrade.address}
+                      </span>
+                    }
+                  />
+                )}
+                {subtrade.typicalRateNote && (
+                  <Fact label="Typical rate" value={subtrade.typicalRateNote} />
+                )}
+              </dl>
+            </Section>
+          )}
 
           {subtrade.notes && (
             <Section title="Notes">

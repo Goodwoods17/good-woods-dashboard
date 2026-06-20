@@ -58,9 +58,34 @@ export type JobTrade = {
   jobId: string;
   tradeId: string;
   subtradeId: string | null;
+  /** The specific person on this trade-line (the installer who shows up), if known. */
+  personId: string | null;
   status: JobTradeStatus;
   cost: number | null;
   notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Which kind of company a person belongs to. */
+export type PartnerCompanyKind = "supplier" | "subtrade";
+
+/**
+ * A person at a supplier or subtrade (ADR 0007 addendum). Belongs to exactly one
+ * company via `supplierId` XOR `subtradeId`. `role` is free text (owner, estimator,
+ * installer, foreman, scheduler, accounts...). One `isPrimary` per company.
+ */
+export type PartnerPerson = {
+  id: string;
+  supplierId: string | null;
+  subtradeId: string | null;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  email: string | null;
+  isPrimary: boolean;
+  notes: string | null;
+  active: boolean;
   createdAt: string;
   updatedAt: string;
 };

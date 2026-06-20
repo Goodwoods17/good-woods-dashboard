@@ -9,6 +9,19 @@ table, **not** CRM contacts — to cover subtrade profiles, supplier profiles, a
 per-project trade coordination. Planned via a `/grill-with-docs` session
 (2026-06-20); glossary terms landed in `docs/domain.md` the same day.
 
+## Addendum (2026-06-20) — people with roles
+
+Reverses decision #3 ("one embedded contact per vendor") after Phase 1 review.
+A supplier or subtrade has **many people**, each with a **role** (owner,
+estimator, installer, foreman, scheduler, accounts...), and a project trade-line
+can be assigned to a **specific person** (the countertop installer who shows up),
+not just the company. Implemented as a `partner_people` child table keyed to one
+of `catalog_suppliers` / `subtrades`, plus a nullable `job_trades.person_id`.
+Vendors stay OUT of the CRM `contacts` table (the unify-into-contacts alternative
+was reconsidered here and again declined — vendor profiles keep their own shape;
+this only adds a people list). The earlier embedded `contact_name`/`phone`/`email`
+columns are superseded by the people list and left inert.
+
 ## Context
 
 The dashboard gives **clients** a full profile (the `contacts` table →

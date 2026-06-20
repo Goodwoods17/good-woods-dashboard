@@ -14,6 +14,7 @@ import { LabourProvider } from "@features/labour/lib/labourStore";
 import { TradesProvider } from "@features/partners/lib/tradesStore";
 import { SubtradesProvider } from "@features/partners/lib/subtradesStore";
 import { JobTradesProvider } from "@features/partners/lib/jobTradesStore";
+import { PartnerPeopleProvider } from "@features/partners/lib/partnerPeopleStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -54,7 +55,9 @@ export default function RootLayout({
                           <TradesProvider>
                             <SubtradesProvider>
                               <JobTradesProvider>
-                                <AppShell>{children}</AppShell>
+                                <PartnerPeopleProvider>
+                                  <AppShell>{children}</AppShell>
+                                </PartnerPeopleProvider>
                               </JobTradesProvider>
                             </SubtradesProvider>
                           </TradesProvider>

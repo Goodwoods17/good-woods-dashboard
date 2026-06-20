@@ -23,9 +23,6 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
 
   const [name, setName] = useState(subtrade?.name ?? "");
   const [tradeId, setTradeId] = useState<string | null>(subtrade?.tradeId ?? null);
-  const [contactName, setContactName] = useState(subtrade?.contactName ?? "");
-  const [phone, setPhone] = useState(subtrade?.phone ?? "");
-  const [email, setEmail] = useState(subtrade?.email ?? "");
   const [address, setAddress] = useState(subtrade?.address ?? "");
   const [rateNote, setRateNote] = useState(subtrade?.typicalRateNote ?? "");
   const [notes, setNotes] = useState(subtrade?.notes ?? "");
@@ -49,9 +46,9 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
           id,
           name: name.trim(),
           tradeId,
-          contactName: contactName.trim() || null,
-          phone: phone.trim() || null,
-          email: email.trim() || null,
+          contactName: null,
+          phone: null,
+          email: null,
           address: address.trim() || null,
           typicalRateNote: rateNote.trim() || null,
           notes: notes.trim() || null,
@@ -65,9 +62,6 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
         await updateSubtrade(subtrade.id, {
           name: name.trim(),
           tradeId,
-          contactName: contactName.trim() || null,
-          phone: phone.trim() || null,
-          email: email.trim() || null,
           address: address.trim() || null,
           typicalRateNote: rateNote.trim() || null,
           notes: notes.trim() || null,
@@ -141,16 +135,7 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
           </Field>
         </Card>
 
-        <Card title="Contact">
-          <Field label="Contact name">
-            <Input value={contactName} onChange={setContactName} placeholder="Foreman or main contact" />
-          </Field>
-          <Field label="Phone">
-            <Input value={phone} onChange={setPhone} placeholder="(250) 555 0182" type="tel" />
-          </Field>
-          <Field label="Email">
-            <Input value={email} onChange={setEmail} placeholder="crew@coastline.ca" type="email" />
-          </Field>
+        <Card title="Details">
           <Field label="Address">
             <Input value={address} onChange={setAddress} placeholder="Shop or mailing address" />
           </Field>
@@ -161,6 +146,9 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
               placeholder="e.g. $65/hr, or $400/day, 2-person crew"
             />
           </Field>
+          <p className="text-xs text-text-tertiary">
+            Add people (owner, installer, foreman...) on the profile after you create the subtrade.
+          </p>
         </Card>
 
         <Card title="Notes">

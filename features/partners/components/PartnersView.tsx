@@ -40,15 +40,13 @@ export function PartnersView() {
         title="Partners"
         subtitle={`${supplierCount} supplier${supplierCount === 1 ? "" : "s"} . ${subtradeCount} subtrade${subtradeCount === 1 ? "" : "s"}`}
         actions={
-          tab === "subtrades" ? (
-            <Link
-              href="/subtrades/new"
-              className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
-            >
-              <Plus className="h-4 w-4" strokeWidth={2} />
-              Add subtrade
-            </Link>
-          ) : undefined
+          <Link
+            href={tab === "subtrades" ? "/subtrades/new" : "/suppliers/new"}
+            className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            {tab === "subtrades" ? "Add subtrade" : "Add supplier"}
+          </Link>
         }
       />
 
