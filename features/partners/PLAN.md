@@ -48,20 +48,20 @@ palette render. Final authed create-flow check rides along with Andrew's login.
 - ✅ Empty states teaching the next action (serif headline + ink-pill CTA).
 - 🟡 **Gate:** rendering smoke done; authed create-a-subtrade check pending a real login.
 
-## Phase 2 — Trades on the project page  ⬜
+## Phase 2 — Trades on the project page  ✅  (2026-06-20, commit 51728d8)
 
-The heart of the feature.
+The heart of the feature. `tsc` + `lint` clean; full authed browser smoke
+verified both directions (assign on the job → shows on the subtrade profile).
 
-- ⬜ `TradesCard` on `/jobs/[id]` (sibling to Parties card), via `features/jobs`.
-- ⬜ `TradeLineRow` — color dot + icon + trade + subtrade combobox (assign /
-  reassign / leave TBD); status; optional `cost` input; notes.
-- ⬜ `TradeSuggestionStrip` — registry defaults as tap-to-add chips; nothing
-  writes until tapped.
-- ⬜ `Add trade` button → add a `job_trades` line (trade required, subtrade
-  optional).
-- ⬜ Wire `SubtradeDetail` "Jobs worked" to the now-populated lines.
-- **Gate:** add an Installer + Electrician to a project, assign one, leave one
-  TBD; confirm both directions (job ↔ subtrade) read correctly.
+- ✅ `TradesCard` on `/jobs/[id]` OverviewTab (sibling to Parties), via
+  `features/partners` (imported like DocumentsCard).
+- ✅ Trade-line row — trade pill + status (needed/booked/done) + remove +
+  optional `cost`; Company (subtrade) select, then Person select scoped to that
+  subtrade's people (`job_trades.person_id` = the specific installer).
+- ✅ Suggestion strip — registry `is_suggested_default` trades not yet on the
+  job, tap-to-add; nothing writes until tapped.
+- ✅ Add-trade picker → adds a `job_trades` line (subtrade null = TBD).
+- ✅ `SubtradeDetail` "Jobs worked" reads the populated lines (both directions).
 
 ## Phase 3 — Trade registry & the color palette  ⬜
 
