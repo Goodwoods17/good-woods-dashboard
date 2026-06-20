@@ -63,7 +63,7 @@ verified both directions (assign on the job → shows on the subtrade profile).
 - ✅ Add-trade picker → adds a `job_trades` line (subtrade null = TBD).
 - ✅ `SubtradeDetail` "Jobs worked" reads the populated lines (both directions).
 
-## Phase 3 — Trade registry & the color palette  ⬜
+## Phase 3 — Trade registry & the color palette  ✅  (2026-06-20, commit 0936a6e)
 
 - ✅ **GATE CLEARED — `/impeccable` pass on the categorical palette (2026-06-20).**
   8-color cool-arc trade palette defined in `DESIGN.md` (frontmatter `--trade-*`
@@ -71,9 +71,12 @@ verified both directions (assign on the job → shows on the subtrade profile).
   Chip component spec). Proven off every semantic axis and ≥3:1 WCAG non-text
   contrast; visually verified against the health pills (warm/cool split). Build
   consumes the tokens — do not re-derive hues.
-- ⬜ `TradeRegistryEditor` in `/settings` — CRUD + reorder + suggested toggle.
-- ⬜ `TradePill` + `tradeColors.ts` (maps registry trade → `--trade-*` token +
-  Lucide icon; dot + icon + label, per the DESIGN.md Trade Chip spec).
+- ✅ `TradeRegistryEditor` in `/settings` — rename, recolour (8-swatch palette),
+  set icon, reorder (sort_order swap), suggested toggle, archive/restore, add.
+- ✅ `TradePill` (in Phase 1) — `tradeColorVar` + `tradeIcon` helpers map a
+  registry trade → `--trade-*` token + Lucide icon; dot + icon + label per the
+  DESIGN.md Trade Chip spec. (No separate `tradeColors.ts`; helpers live in
+  `TradePill.tsx`.)
 
 ## Phase 4 — Connective tissue & polish  ⬜
 
