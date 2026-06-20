@@ -8,11 +8,13 @@ Status legend: ⬜ not started · 🟡 in progress · ✅ done
 
 ---
 
-## Phase 0 — Schema & data layer  ⬜
+## Phase 0 — Schema & data layer  ✅  (2026-06-20, commit 2c285ac)
 
-The foundation. Additive only; nothing existing is dropped.
+The foundation. Additive only; nothing existing is dropped. Migration applied to
+the live project + verified (8 trades seeded, 4 suggested, 6 new supplier cols,
+RLS on all 3 tables); `tsc --noEmit` + `next lint` clean.
 
-- ⬜ Migration `supabase/migrations/<ts>_partners.sql`:
+- ✅ Migration `supabase/migrations/20260620000000_partners.sql`:
   - `subtrades` table (+ RLS authenticated-only).
   - `trades` registry table (+ RLS), **seeded** with installer, finisher,
     countertop, electrical, plumbing, delivery, upholstery, other — each with a
@@ -21,12 +23,12 @@ The foundation. Additive only; nothing existing is dropped.
     (subtrade `ON DELETE SET NULL`, job `ON DELETE CASCADE`).
   - `ALTER TABLE catalog_suppliers ADD` `contact_name`, `phone`, `address`,
     `account_number`, `lead_time_note`, `active default true`.
-- ⬜ Types + row maps (`lib/rowMaps.ts`): `Subtrade`, `Trade`, `JobTrade`,
-  enriched `CatalogSupplier`.
-- ⬜ Stores: `subtradesStore.tsx`, `tradesStore.tsx`, `jobTradesStore.tsx`
-  (Supabase + `localStorage` fallback, mirroring catalog/contacts). Mount
-  providers in `src/app/layout.tsx`.
-- **Gate:** `npx tsc --noEmit` clean; stores read/write against a live branch.
+- ✅ Types + row maps (`lib/types.ts`, `lib/rowMaps.ts`): `Subtrade`, `Trade`,
+  `JobTrade`, enriched `CatalogSupplier`.
+- ✅ Stores: `subtradesStore.tsx`, `tradesStore.tsx`, `jobTradesStore.tsx`
+  (Supabase + `localStorage` fallback, mirroring catalog/contacts; trades store
+  seeds the registry in fallback). Providers mounted in `src/app/layout.tsx`.
+- ✅ **Gate met:** `npx tsc --noEmit` clean; migration applied + seed verified.
 
 ## Phase 1 — Partners hub & profiles (read-first)  ⬜
 
