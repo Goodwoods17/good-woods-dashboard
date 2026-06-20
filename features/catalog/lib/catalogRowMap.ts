@@ -28,6 +28,14 @@ export type CatalogSupplier = {
   cartConfig: Record<string, unknown>; // reserved for the future cart-loader
   contactId?: string; // optional CRM link; a supplier is NOT a contact
   notes?: string;
+  // Profile fields (Partners feature, ADR 0007). The supplier profile reuses
+  // this table rather than minting a new one; one main contact embedded here.
+  contactName?: string;
+  phone?: string;
+  address?: string;
+  accountNumber?: string;
+  leadTimeNote?: string;
+  active?: boolean; // soft-delete; false drops it from lists, keeps offers resolvable (default true)
 };
 
 export type CatalogOffer = {
@@ -68,6 +76,12 @@ export type SupplierRow = {
   cart_config: Record<string, unknown> | null;
   contact_id: string | null;
   notes: string | null;
+  contact_name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  account_number?: string | null;
+  lead_time_note?: string | null;
+  active?: boolean | null;
   created_at?: string;
   updated_at?: string;
 };
@@ -107,6 +121,12 @@ export function rowToSupplier(r: SupplierRow): CatalogSupplier {
     cartConfig: r.cart_config ?? {},
     contactId: r.contact_id ?? undefined,
     notes: r.notes ?? undefined,
+    contactName: r.contact_name ?? undefined,
+    phone: r.phone ?? undefined,
+    address: r.address ?? undefined,
+    accountNumber: r.account_number ?? undefined,
+    leadTimeNote: r.lead_time_note ?? undefined,
+    active: r.active ?? true,
   };
 }
 
@@ -118,6 +138,12 @@ export function supplierToRow(s: CatalogSupplier): SupplierRow {
     cart_config: s.cartConfig ?? {},
     contact_id: s.contactId ?? null,
     notes: s.notes ?? null,
+    contact_name: s.contactName ?? null,
+    phone: s.phone ?? null,
+    address: s.address ?? null,
+    account_number: s.accountNumber ?? null,
+    lead_time_note: s.leadTimeNote ?? null,
+    active: s.active ?? true,
   };
 }
 
