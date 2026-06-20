@@ -62,6 +62,11 @@ export function SubtradeDetail({ subtrade }: { subtrade: Subtrade }) {
               </span>
             )}
           </div>
+          {subtrade.description && (
+            <p className="mt-3 max-w-xl text-sm text-text-secondary leading-relaxed">
+              {subtrade.description}
+            </p>
+          )}
         </div>
         <div className="shrink-0">
           <Link

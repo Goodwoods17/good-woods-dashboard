@@ -35,6 +35,8 @@ export type Subtrade = {
   id: string;
   name: string;
   tradeId: string | null;
+  /** What this subtrade does for us (company-level job description). */
+  description: string | null;
   contactName: string | null;
   phone: string | null;
   email: string | null;
@@ -81,6 +83,8 @@ export type PartnerPerson = {
   subtradeId: string | null;
   name: string;
   role: string | null;
+  /** Free-text job description for this person (what they do / their scope). */
+  description: string | null;
   phone: string | null;
   email: string | null;
   isPrimary: boolean;

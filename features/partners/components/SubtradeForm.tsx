@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Archive } from "lucide-react";
+import { ArrowLeft, Archive, Plus } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import type { Subtrade } from "../lib/types";
 import { useSubtrades } from "../lib/subtradesStore";
@@ -12,17 +12,69 @@ import { TradeDot } from "./TradePill";
 
 type Mode = "create" | "edit";
 
+// Palette slugs (DESIGN.md categorical trade palette) to assign a colour to a
+// custom trade added inline. Cycles so new trades stay visually distinct.
+const TRADE_PALETTE = [
+  "installer",
+  "finisher",
+  "countertop",
+  "electrical",
+  "plumbing",
+  "delivery",
+  "upholstery",
+  "other",
+];
+
 export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mode }) {
   const router = useRouter();
   const { createSubtrade, updateSubtrade, archiveSubtrade } = useSubtrades();
-  const { trades } = useTrades();
+  const { trades, createTrade } = useTrades();
 
   const tradeOptions = trades
     .filter((t) => t.active)
     .sort((a, b) => a.sortOrder - b.sortOrder);
 
+  const [addingTrade, setAddingTrade] = useState(false);
+  const [newTrade, setNewTrade] = useState("");
+
+  async function handleAddTrade() {
+    const label = newTrade.trim();
+    if (!label) return;
+    // Reuse an existing trade if the name already exists (case-insensitive).
+    const existing = trades.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    if (existing) {
+      setTradeId(existing.id);
+      setNewTrade("");
+      setAddingTrade(false);
+      return;
+    }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const color = TRADE_PALETTE[trades.length % TRADE_PALETTE.length];
+    try {
+      await createTrade({
+        id,
+        key: `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${id.slice(0, 4)}`,
+        label,
+        color,
+        icon: "shapes",
+        isSuggestedDefault: false,
+        sortOrder: tradeOptions.length + 10,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setTradeId(id);
+      setNewTrade("");
+      setAddingTrade(false);
+    } catch {
+      /* surfaced via store error */
+    }
+  }
+
   const [name, setName] = useState(subtrade?.name ?? "");
   const [tradeId, setTradeId] = useState<string | null>(subtrade?.tradeId ?? null);
+  const [description, setDescription] = useState(subtrade?.description ?? "");
   const [address, setAddress] = useState(subtrade?.address ?? "");
   const [rateNote, setRateNote] = useState(subtrade?.typicalRateNote ?? "");
   const [notes, setNotes] = useState(subtrade?.notes ?? "");
@@ -46,6 +98,7 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
           id,
           name: name.trim(),
           tradeId,
+          description: description.trim() || null,
           contactName: null,
           phone: null,
           email: null,
@@ -62,6 +115,7 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
         await updateSubtrade(subtrade.id, {
           name: name.trim(),
           tradeId,
+          description: description.trim() || null,
           address: address.trim() || null,
           typicalRateNote: rateNote.trim() || null,
           notes: notes.trim() || null,
@@ -101,7 +155,7 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
 
       <form onSubmit={handleSubmit} className="space-y-5">
         <Card title="Identity">
-          <Field label="Name" required>
+          <Field label="Company name" required>
             <Input
               value={name}
               onChange={setName}
@@ -110,7 +164,7 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
             />
           </Field>
           <Field label="Trade">
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5">
               {tradeOptions.map((t) => {
                 const selected = tradeId === t.id;
                 return (
@@ -131,7 +185,63 @@ export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mo
                   </button>
                 );
               })}
+              {addingTrade ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <input
+                    value={newTrade}
+                    onChange={(e) => setNewTrade(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddTrade();
+                      }
+                    }}
+                    placeholder="New trade"
+                    autoFocus
+                    className="min-h-[40px] w-36 text-xs bg-surface border border-border rounded-full px-3 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddTrade()}
+                    className="inline-flex items-center rounded-full bg-ink-pill text-white px-3 min-h-[40px] text-xs font-medium hover:bg-accent-active transition-colors duration-fast"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingTrade(false);
+                      setNewTrade("");
+                    }}
+                    className="text-xs text-text-tertiary hover:text-text-secondary px-1 transition-colors duration-fast"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingTrade(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 min-h-[40px] text-xs text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors duration-fast"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  New trade
+                </button>
+              )}
             </div>
+            {tradeOptions.length === 0 && !addingTrade && (
+              <p className="text-xs text-text-tertiary mt-2">
+                No trades loaded yet. Once you are signed in the standard trades appear here, or add
+                your own above.
+              </p>
+            )}
+          </Field>
+          <Field label="What they do">
+            <Input
+              value={description}
+              onChange={setDescription}
+              placeholder="e.g. Templating, fabrication, and install of stone countertops"
+            />
           </Field>
         </Card>
 

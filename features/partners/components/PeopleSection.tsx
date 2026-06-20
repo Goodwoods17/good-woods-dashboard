@@ -119,6 +119,9 @@ function PersonRow({
               {person.role}
             </span>
           )}
+          {person.description && (
+            <p className="mt-1 text-xs text-text-tertiary leading-relaxed">{person.description}</p>
+          )}
           <div className="mt-1.5 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
             {person.phone && (
               <a
@@ -191,6 +194,7 @@ function PersonForm({
   const { createPerson, updatePerson } = usePartnerPeople();
   const [name, setName] = useState(person?.name ?? "");
   const [role, setRole] = useState(person?.role ?? "");
+  const [description, setDescription] = useState(person?.description ?? "");
   const [phone, setPhone] = useState(person?.phone ?? "");
   const [email, setEmail] = useState(person?.email ?? "");
   const [saving, setSaving] = useState(false);
@@ -205,6 +209,7 @@ function PersonForm({
         await updatePerson(person.id, {
           name: name.trim(),
           role: role.trim() || null,
+          description: description.trim() || null,
           phone: phone.trim() || null,
           email: email.trim() || null,
         });
@@ -216,6 +221,7 @@ function PersonForm({
           subtradeId: kind === "subtrade" ? companyId : null,
           name: name.trim(),
           role: role.trim() || null,
+          description: description.trim() || null,
           phone: phone.trim() || null,
           email: email.trim() || null,
           isPrimary: isFirst, // first person added is the default contact
@@ -263,6 +269,12 @@ function PersonForm({
           className="min-h-[36px] text-sm bg-surface border border-border rounded-md px-3 py-2 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
         />
       </div>
+      <input
+        value={description}
+        onChange={(e) => setDescription(e.target.value)}
+        placeholder="Job description (what they do, their scope)"
+        className="w-full min-h-[36px] text-sm bg-surface border border-border rounded-md px-3 py-2 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+      />
       <datalist id="partner-role-suggestions">
         {ROLE_SUGGESTIONS.map((r) => (
           <option key={r} value={r} />

@@ -35,6 +35,7 @@ export type CatalogSupplier = {
   address?: string;
   accountNumber?: string;
   leadTimeNote?: string;
+  description?: string; // what this supplier specialises in (company-level)
   active?: boolean; // soft-delete; false drops it from lists, keeps offers resolvable (default true)
 };
 
@@ -81,6 +82,7 @@ export type SupplierRow = {
   address?: string | null;
   account_number?: string | null;
   lead_time_note?: string | null;
+  description?: string | null;
   active?: boolean | null;
   created_at?: string;
   updated_at?: string;
@@ -126,6 +128,7 @@ export function rowToSupplier(r: SupplierRow): CatalogSupplier {
     address: r.address ?? undefined,
     accountNumber: r.account_number ?? undefined,
     leadTimeNote: r.lead_time_note ?? undefined,
+    description: r.description ?? undefined,
     active: r.active ?? true,
   };
 }
@@ -143,6 +146,7 @@ export function supplierToRow(s: CatalogSupplier): SupplierRow {
     address: s.address ?? null,
     account_number: s.accountNumber ?? null,
     lead_time_note: s.leadTimeNote ?? null,
+    description: s.description ?? null,
     active: s.active ?? true,
   };
 }

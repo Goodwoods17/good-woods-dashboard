@@ -72,6 +72,7 @@ export type SubtradeRow = {
   id: string;
   name: string;
   trade_id: string | null;
+  description: string | null;
   contact_name: string | null;
   phone: string | null;
   email: string | null;
@@ -88,6 +89,7 @@ export function rowToSubtrade(r: SubtradeRow): Subtrade {
     id: r.id,
     name: r.name ?? "",
     tradeId: r.trade_id,
+    description: r.description,
     contactName: r.contact_name,
     phone: r.phone,
     email: r.email,
@@ -105,6 +107,7 @@ export function subtradeToRow(s: Subtrade): SubtradeRow {
     id: s.id,
     name: s.name,
     trade_id: s.tradeId ?? null,
+    description: s.description ?? null,
     contact_name: s.contactName ?? null,
     phone: s.phone ?? null,
     email: s.email ?? null,
@@ -174,6 +177,7 @@ export type PartnerPersonRow = {
   subtrade_id: string | null;
   name: string;
   role: string | null;
+  description: string | null;
   phone: string | null;
   email: string | null;
   is_primary: boolean;
@@ -190,6 +194,7 @@ export function rowToPartnerPerson(r: PartnerPersonRow): PartnerPerson {
     subtradeId: r.subtrade_id,
     name: r.name ?? "",
     role: r.role,
+    description: r.description,
     phone: r.phone,
     email: r.email,
     isPrimary: r.is_primary ?? false,
@@ -207,6 +212,7 @@ export function partnerPersonToRow(p: PartnerPerson): PartnerPersonRow {
     subtrade_id: p.subtradeId ?? null,
     name: p.name,
     role: p.role ?? null,
+    description: p.description ?? null,
     phone: p.phone ?? null,
     email: p.email ?? null,
     is_primary: p.isPrimary,

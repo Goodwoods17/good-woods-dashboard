@@ -61,6 +61,11 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
           <p className="text-sm text-text-secondary mt-1.5">
             {offered.length} item{offered.length === 1 ? "" : "s"} priced
           </p>
+          {supplier.description && (
+            <p className="mt-2 max-w-xl text-sm text-text-secondary leading-relaxed">
+              {supplier.description}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           <Link

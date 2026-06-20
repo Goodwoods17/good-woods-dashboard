@@ -21,6 +21,7 @@ export function SupplierForm({
   const { addSupplier, updateSupplier } = useCatalog();
 
   const [name, setName] = useState(supplier?.name ?? "");
+  const [description, setDescription] = useState(supplier?.description ?? "");
   const [website, setWebsite] = useState(supplier?.website ?? "");
   const [address, setAddress] = useState(supplier?.address ?? "");
   const [account, setAccount] = useState(supplier?.accountNumber ?? "");
@@ -33,6 +34,7 @@ export function SupplierForm({
 
   function patch() {
     return {
+      description: description.trim() || undefined,
       website: website.trim() || undefined,
       address: address.trim() || undefined,
       accountNumber: account.trim() || undefined,
@@ -78,6 +80,13 @@ export function SupplierForm({
         <Card title="Supplier">
           <Field label="Name" required>
             <Input value={name} onChange={setName} placeholder="e.g. Windsor Plywood" autoFocus />
+          </Field>
+          <Field label="Description">
+            <Input
+              value={description}
+              onChange={setDescription}
+              placeholder="What they supply / specialty (e.g. cabinet-grade ply + melamine)"
+            />
           </Field>
           <Field label="Website">
             <Input value={website} onChange={setWebsite} placeholder="windsorplywood.com" />
