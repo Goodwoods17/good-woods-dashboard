@@ -97,7 +97,7 @@ export function QuoteSummary({
                 className={cn(
                   "tabular-nums font-medium",
                   totals.quoted - totals.internalCost >= 0
-                    ? "text-status-success"
+                    ? "text-status-on-track"
                     : "text-status-blocked",
                 )}
               >
@@ -107,7 +107,7 @@ export function QuoteSummary({
             {contingencyPct > 0 && (
               <div className="flex items-center justify-between text-xs">
                 <span className="text-text-tertiary">Net (contingency unused — upside)</span>
-                <span className="tabular-nums text-status-success">
+                <span className="tabular-nums text-status-on-track">
                   {formatCAD(totals.quoted - totals.internalCost + totals.contingency)}
                 </span>
               </div>
