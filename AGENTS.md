@@ -52,3 +52,17 @@ Five canonical triage labels with their default names: `needs-triage`,
 Single-context repo. Domain glossary at `docs/domain.md` (not the
 conventional `CONTEXT.md`). ADRs at `docs/decisions/` (not
 `docs/adr/`). See [`docs/agents/domain.md`](docs/agents/domain.md).
+
+## Global memory (cross-project brain)
+
+Beyond this repo, Andrew keeps a shared memory at
+`C:\Users\andre\.claude\projects\C--Users-andre\memory\`. It is **index-first**:
+read its `MEMORY.md`, then open files by the path it lists — don't browse folders.
+Most relevant to this project:
+
+- `projects/project_good_woods_dashboard.md` — live status, branches, open decisions
+- `projects/project_good_woods_branding.md` — locked "Lit Workshop" visual direction
+- `reference/tools_and_capabilities.md` — Supabase / Chrome / Vercel MCP + auth state
+- `reference/reference_security_practices.md` — security posture (protect the Supabase token)
+
+When a cross-session decision lands here, update that memory (and its `MEMORY.md` index).

@@ -1,26 +1,77 @@
 "use client";
 
-import { useMemo } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { useIsMobile } from "@shared/lib/useIsMobile";
-import { useCatalog, type Material } from "@features/catalog/lib/catalogStore";
+import { useCatalog, type CatalogItemView } from "@features/catalog/lib/catalogStore";
+import { PROCURED_KINDS } from "@features/catalog/lib/catalogRowMap";
+import { fetchDeltas, type PriceDelta } from "@features/catalog/lib/priceHistory";
 import { QUOTE_SECTIONS, type SectionId } from "@features/estimator/lib/sections";
 import { UNITS, UNIT_LABELS, type Unit } from "@features/estimator/lib/types";
-import { AutoText, NumCell, StaleChip } from "./cells";
+import { AutoText, BestBadge, DeltaChip, NumCell, PreferredBadge, StaleChip } from "./cells";
+import { OffersEditor } from "./OffersSubRow";
 
 const LINE_SECTIONS = QUOTE_SECTIONS.filter((s) => s.layout === "lines");
+const PROCURED = new Set<string>(PROCURED_KINDS);
 
 export function MaterialsTable() {
-  const { materials, addMaterial, updateMaterial, removeMaterial } = useCatalog();
+  const { itemsWithOffers, addItem, updateItem, removeItem, updateOffer } = useCatalog();
   const isMobile = useIsMobile();
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [deltas, setDeltas] = useState<Map<string, PriceDelta>>(new Map());
+
+  // The procured, section-bound items the Materials tab shows.
+  const rowsAll = useMemo(
+    () => itemsWithOffers.filter((v) => PROCURED.has(v.kind) && v.section),
+    [itemsWithOffers]
+  );
+
+  // One batched price-history read for every visible offer (no N+1).
+  const offerIdsKey = useMemo(
+    () =>
+      rowsAll
+        .flatMap((v) => v.offers.map((o) => o.id))
+        .sort()
+        .join(","),
+    [rowsAll]
+  );
+  useEffect(() => {
+    const ids = offerIdsKey ? offerIdsKey.split(",") : [];
+    if (ids.length === 0) {
+      setDeltas(new Map());
+      return;
+    }
+    let cancelled = false;
+    void fetchDeltas(ids).then((m) => {
+      if (!cancelled) setDeltas(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [offerIdsKey]);
 
   const grouped = useMemo(() => {
-    const out: Partial<Record<SectionId, Material[]>> = {};
-    for (const m of materials) (out[m.section] ??= []).push(m);
+    const out: Partial<Record<SectionId, CatalogItemView[]>> = {};
+    for (const v of rowsAll) (out[v.section as SectionId] ??= []).push(v);
     return out;
-  }, [materials]);
+  }, [rowsAll]);
+
+  const toggle = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  // The inline price cell edits the surfaced offer (single-supplier items stay
+  // one-click); with no offers it edits the item's own inline price.
+  const setSurfacedPrice = (v: CatalogItemView, price: number) => {
+    if (v.surfacedOffer) updateOffer(v.surfacedOffer.id, { unitPrice: price });
+    else updateItem(v.id, { unitPrice: price });
+  };
 
   return (
     <div className="space-y-4">
@@ -48,12 +99,16 @@ export function MaterialsTable() {
             {rows.length > 0 &&
               (isMobile ? (
                 <div className="space-y-2 px-3 pb-2">
-                  {rows.map((m) => (
+                  {rows.map((v) => (
                     <MaterialCard
-                      key={m.id}
-                      material={m}
-                      onChange={(p) => updateMaterial(m.id, p)}
-                      onRemove={() => removeMaterial(m.id)}
+                      key={v.id}
+                      view={v}
+                      deltas={deltas}
+                      expanded={expanded.has(v.id)}
+                      onToggle={() => toggle(v.id)}
+                      onChange={(p) => updateItem(v.id, p)}
+                      onPrice={(price) => setSurfacedPrice(v, price)}
+                      onRemove={() => removeItem(v.id)}
                     />
                   ))}
                 </div>
@@ -62,7 +117,7 @@ export function MaterialsTable() {
                   <thead>
                     <tr className="text-left align-bottom text-label uppercase text-text-tertiary">
                       <th className="px-3 py-1.5 font-medium">Name</th>
-                      <th className="px-3 py-1.5 font-medium">Supplier</th>
+                      <th className="px-3 py-1.5 font-medium">Suppliers</th>
                       <th className="px-3 py-1.5 text-center font-medium">Unit</th>
                       <th className="px-3 py-1.5 text-right font-medium">Price</th>
                       <th className="px-3 py-1.5 text-right font-medium">Waste%</th>
@@ -72,12 +127,16 @@ export function MaterialsTable() {
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((m) => (
+                    {rows.map((v) => (
                       <MaterialRow
-                        key={m.id}
-                        material={m}
-                        onChange={(p) => updateMaterial(m.id, p)}
-                        onRemove={() => removeMaterial(m.id)}
+                        key={v.id}
+                        view={v}
+                        deltas={deltas}
+                        expanded={expanded.has(v.id)}
+                        onToggle={() => toggle(v.id)}
+                        onChange={(p) => updateItem(v.id, p)}
+                        onPrice={(price) => setSurfacedPrice(v, price)}
+                        onRemove={() => removeItem(v.id)}
                       />
                     ))}
                   </tbody>
@@ -87,12 +146,13 @@ export function MaterialsTable() {
             <button
               type="button"
               onClick={() =>
-                addMaterial({
+                addItem({
+                  kind: "material",
                   name: "",
-                  supplier: "",
+                  section: section.id,
                   unit: section.id === "casework" ? "ea" : "sqft",
                   unitPrice: 0,
-                  section: section.id,
+                  attributes: {},
                   defaultWastePct: 0,
                   defaultMarkupPct: 35,
                 })
@@ -109,97 +169,193 @@ export function MaterialsTable() {
   );
 }
 
+/** Compact, cheapest-first "all suppliers at once" strip for the collapsed row. */
+function SuppliersStrip({
+  view,
+  deltas,
+  expanded,
+  onToggle,
+}: {
+  view: CatalogItemView;
+  deltas: Map<string, PriceDelta>;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const { suppliers } = useCatalog();
+  const nameOf = (id: string) => suppliers.find((s) => s.id === id)?.name ?? "—";
+  const count = view.offers.length;
+
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={expanded}
+      className="group/strip flex w-full flex-wrap items-center gap-1.5 rounded-md px-1 py-1 text-left transition-colors duration-fast hover:bg-surface-muted/50"
+    >
+      {count === 0 ? (
+        <span className="text-xs text-text-tertiary group-hover/strip:text-accent">
+          + Add suppliers
+        </span>
+      ) : (
+        view.offers.slice(0, 3).map((o) => {
+          const isSurfaced = view.surfacedOffer?.id === o.id;
+          return (
+            <span
+              key={o.id}
+              className={cn(
+                "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs tabular-nums",
+                isSurfaced ? "bg-ink-pill/10 font-medium text-text-primary" : "text-text-secondary"
+              )}
+            >
+              <span className="truncate max-w-[7rem]">{nameOf(o.supplierId)}</span>
+              <span className="font-mono">{formatCAD(o.unitPrice)}</span>
+              {o.isPreferred && <span className="text-accent">★</span>}
+              {view.bestOffer?.id === o.id && !o.isPreferred && (
+                <span className="text-status-on-track">←</span>
+              )}
+              <DeltaChip delta={deltas.get(o.id)} />
+            </span>
+          );
+        })
+      )}
+      {count > 3 && <span className="text-xs text-text-tertiary">+{count - 3} more</span>}
+      {count > 0 && (
+        <span className="ml-0.5 inline-flex items-center gap-0.5 text-micro text-text-tertiary">
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-fast",
+              expanded && "rotate-180"
+            )}
+            strokeWidth={2}
+          />
+        </span>
+      )}
+    </button>
+  );
+}
+
 function MaterialRow({
-  material,
+  view,
+  deltas,
+  expanded,
+  onToggle,
   onChange,
+  onPrice,
   onRemove,
 }: {
-  material: Material;
-  onChange: (patch: Partial<Material>) => void;
+  view: CatalogItemView;
+  deltas: Map<string, PriceDelta>;
+  expanded: boolean;
+  onToggle: () => void;
+  onChange: (patch: {
+    name?: string;
+    unit?: Unit;
+    defaultWastePct?: number;
+    defaultMarkupPct?: number;
+    notes?: string;
+  }) => void;
+  onPrice: (price: number) => void;
   onRemove: () => void;
 }) {
+  const multi = view.offers.length > 1;
   return (
-    <tr className="group border-t border-border-faint align-top even:bg-surface-muted/20 hover:bg-surface-muted/40">
-      <td className="max-w-[16rem] px-3 py-1.5">
-        <AutoText
-          value={material.name}
-          onChange={(v) => onChange({ name: v })}
-          placeholder="Item name"
-        />
-      </td>
-      <td className="max-w-[10rem] px-3 py-1.5">
-        <AutoText
-          value={material.supplier}
-          onChange={(v) => onChange({ supplier: v })}
-          placeholder="Supplier"
-        />
-      </td>
-      <td className="px-3 py-1.5 text-center">
-        <select
-          value={material.unit}
-          onChange={(e) => onChange({ unit: e.target.value as Unit })}
-          className="rounded-md bg-transparent px-1 py-1 text-sm focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
-        >
-          {UNITS.map((u) => (
-            <option key={u} value={u}>
-              {UNIT_LABELS[u]}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="px-3 py-1.5 text-right">
-        <NumCell
-          value={material.unitPrice}
-          onChange={(v) => onChange({ unitPrice: v })}
-          fmt={(v) => formatCAD(v)}
-        />
-        <div className="pr-2 text-right">
-          <StaleChip iso={material.priceUpdatedAt} />
-        </div>
-      </td>
-      <td className="px-3 py-1.5 text-right">
-        <NumCell
-          value={material.defaultWastePct ?? 0}
-          step="1"
-          onChange={(v) => onChange({ defaultWastePct: v })}
-        />
-      </td>
-      <td className="px-3 py-1.5 text-right">
-        <NumCell
-          value={material.defaultMarkupPct ?? 35}
-          step="1"
-          onChange={(v) => onChange({ defaultMarkupPct: v })}
-        />
-      </td>
-      <td className="max-w-[14rem] px-3 py-1.5">
-        <AutoText
-          value={material.notes ?? ""}
-          onChange={(v) => onChange({ notes: v })}
-          placeholder="Optional"
-          className="text-text-secondary"
-        />
-      </td>
-      <td className="px-2 py-1.5 align-middle">
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label={`Remove ${material.name || "item"}`}
-          className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary opacity-0 transition-all duration-fast hover:bg-status-blocked-soft hover:text-status-blocked group-hover:opacity-100"
-        >
-          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-        </button>
-      </td>
-    </tr>
+    <>
+      <tr className="group border-t border-border-faint align-top even:bg-surface-muted/20 hover:bg-surface-muted/40">
+        <td className="max-w-[16rem] px-3 py-1.5">
+          <AutoText
+            value={view.name}
+            onChange={(v) => onChange({ name: v })}
+            placeholder="Item name"
+          />
+        </td>
+        <td className="max-w-[20rem] px-3 py-1.5">
+          <SuppliersStrip view={view} deltas={deltas} expanded={expanded} onToggle={onToggle} />
+        </td>
+        <td className="px-3 py-1.5 text-center">
+          <select
+            value={view.unit}
+            onChange={(e) => onChange({ unit: e.target.value as Unit })}
+            className="rounded-md bg-transparent px-1 py-1 text-sm focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
+          >
+            {UNITS.map((u) => (
+              <option key={u} value={u}>
+                {UNIT_LABELS[u]}
+              </option>
+            ))}
+          </select>
+        </td>
+        <td className="px-3 py-1.5 text-right">
+          <NumCell value={view.surfacedPrice} onChange={onPrice} fmt={(v) => formatCAD(v)} />
+          <div className="flex items-center justify-end gap-1 pr-2">
+            {view.preferredOffer ? <PreferredBadge /> : multi ? <BestBadge /> : null}
+            <StaleChip iso={view.priceUpdatedAt} />
+          </div>
+        </td>
+        <td className="px-3 py-1.5 text-right">
+          <NumCell
+            value={view.defaultWastePct ?? 0}
+            step="1"
+            onChange={(v) => onChange({ defaultWastePct: v })}
+          />
+        </td>
+        <td className="px-3 py-1.5 text-right">
+          <NumCell
+            value={view.defaultMarkupPct ?? 35}
+            step="1"
+            onChange={(v) => onChange({ defaultMarkupPct: v })}
+          />
+        </td>
+        <td className="max-w-[14rem] px-3 py-1.5">
+          <AutoText
+            value={view.notes ?? ""}
+            onChange={(v) => onChange({ notes: v })}
+            placeholder="Optional"
+            className="text-text-secondary"
+          />
+        </td>
+        <td className="px-2 py-1.5 align-middle">
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${view.name || "item"}`}
+            className="grid h-8 w-8 place-items-center rounded-md text-text-tertiary opacity-0 transition-all duration-fast hover:bg-status-blocked-soft hover:text-status-blocked group-hover:opacity-100"
+          >
+            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+          </button>
+        </td>
+      </tr>
+      {expanded && (
+        <tr className="bg-surface-muted/10">
+          <td colSpan={8} className="px-3 pb-2.5 pt-0.5">
+            <OffersEditor view={view} deltas={deltas} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
 
 function MaterialCard({
-  material,
+  view,
+  deltas,
+  expanded,
+  onToggle,
   onChange,
+  onPrice,
   onRemove,
 }: {
-  material: Material;
-  onChange: (patch: Partial<Material>) => void;
+  view: CatalogItemView;
+  deltas: Map<string, PriceDelta>;
+  expanded: boolean;
+  onToggle: () => void;
+  onChange: (patch: {
+    name?: string;
+    unit?: Unit;
+    defaultWastePct?: number;
+    defaultMarkupPct?: number;
+    notes?: string;
+  }) => void;
+  onPrice: (price: number) => void;
   onRemove: () => void;
 }) {
   return (
@@ -207,16 +363,10 @@ function MaterialCard({
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <AutoText
-            value={material.name}
+            value={view.name}
             onChange={(v) => onChange({ name: v })}
             placeholder="Item name"
             className="font-medium"
-          />
-          <AutoText
-            value={material.supplier}
-            onChange={(v) => onChange({ supplier: v })}
-            placeholder="Supplier"
-            className="text-text-secondary"
           />
         </div>
         <button
@@ -228,10 +378,15 @@ function MaterialCard({
           <Trash2 className="h-4 w-4" strokeWidth={2} />
         </button>
       </div>
+
+      <div className="mt-1.5">
+        <SuppliersStrip view={view} deltas={deltas} expanded={expanded} onToggle={onToggle} />
+      </div>
+
       <div className="mt-2 grid grid-cols-2 gap-2">
         <Labeled label="Unit">
           <select
-            value={material.unit}
+            value={view.unit}
             onChange={(e) => onChange({ unit: e.target.value as Unit })}
             className="w-full bg-transparent text-sm focus:outline-none"
           >
@@ -242,17 +397,17 @@ function MaterialCard({
             ))}
           </select>
         </Labeled>
-        <Labeled label="Price">
+        <Labeled label="Price (surfaced)">
           <NumCell
-            value={material.unitPrice}
-            onChange={(v) => onChange({ unitPrice: v })}
+            value={view.surfacedPrice}
+            onChange={onPrice}
             fmt={(v) => formatCAD(v)}
             className="text-left"
           />
         </Labeled>
         <Labeled label="Waste %">
           <NumCell
-            value={material.defaultWastePct ?? 0}
+            value={view.defaultWastePct ?? 0}
             step="1"
             onChange={(v) => onChange({ defaultWastePct: v })}
             className="text-left"
@@ -260,16 +415,24 @@ function MaterialCard({
         </Labeled>
         <Labeled label="Markup %">
           <NumCell
-            value={material.defaultMarkupPct ?? 35}
+            value={view.defaultMarkupPct ?? 35}
             step="1"
             onChange={(v) => onChange({ defaultMarkupPct: v })}
             className="text-left"
           />
         </Labeled>
       </div>
-      <div className="mt-2">
-        <StaleChip iso={material.priceUpdatedAt} />
+
+      <div className="mt-2 flex items-center gap-1">
+        {view.preferredOffer ? <PreferredBadge /> : view.offers.length > 1 ? <BestBadge /> : null}
+        <StaleChip iso={view.priceUpdatedAt} />
       </div>
+
+      {expanded && (
+        <div className="mt-2">
+          <OffersEditor view={view} deltas={deltas} />
+        </div>
+      )}
     </div>
   );
 }

@@ -10,6 +10,7 @@ import {
   BookOpen,
   Settings,
   Users,
+  Handshake,
   Hammer,
   Truck,
   Package,
@@ -18,6 +19,8 @@ import {
   LogOut,
   Sparkles,
   FolderOpen,
+  ScanLine,
+  Timer,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
@@ -47,12 +50,15 @@ const NAV: NavSection[] = [
       { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/projects", label: "Projects", icon: FolderOpen },
       { href: "/crm", label: "Clients", icon: Users },
+      { href: "/partners", label: "Partners", icon: Handshake },
     ],
   },
   {
     label: "Build",
     items: [
       { href: "/shop", label: "Shop floor", icon: Hammer },
+      { href: "/reface", label: "Reface Studio", icon: ScanLine },
+      { href: "/labour", label: "Labour", icon: Timer },
       { href: "/sops", label: "SOPs", icon: BookOpen },
       { href: "/installer", label: "Installer", icon: Truck },
     ],
@@ -80,9 +86,7 @@ export function Sidebar() {
       <div className="px-5 py-5 border-b border-border">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="h-7 w-7 rounded-md bg-text-primary grid place-items-center">
-            <span className="text-white text-xs font-semibold tracking-tight">
-              GW
-            </span>
+            <span className="text-white text-xs font-semibold tracking-tight">GW</span>
           </div>
           <div className="flex flex-col leading-tight">
             <span className="text-sm font-semibold text-text-primary tracking-tight">
@@ -108,7 +112,11 @@ export function Sidebar() {
                     ? pathname === "/"
                     : item.href === "/projects"
                       ? pathname.startsWith("/projects") || pathname.startsWith("/jobs")
-                      : pathname.startsWith(item.href);
+                      : item.href === "/partners"
+                        ? pathname.startsWith("/partners") ||
+                          pathname.startsWith("/suppliers") ||
+                          pathname.startsWith("/subtrades")
+                        : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>
@@ -136,9 +144,7 @@ export function Sidebar() {
         {user && (
           <div className="flex items-center justify-between gap-2">
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-medium text-text-primary truncate">
-                {user.email}
-              </div>
+              <div className="text-xs font-medium text-text-primary truncate">{user.email}</div>
               <div className="text-micro uppercase tracking-wider text-text-tertiary">
                 Signed in
               </div>

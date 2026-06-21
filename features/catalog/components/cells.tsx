@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import { cn } from "@shared/lib/utils";
-import { getStaleness } from "@features/catalog/lib/priceHistory";
+import { getStaleness, type PriceDelta } from "@features/catalog/lib/priceHistory";
 
 /**
  * Auto-growing text cell: wraps long values onto extra lines (growing the row
@@ -71,6 +72,50 @@ export function NumCell({
         className
       )}
     />
+  );
+}
+
+/**
+ * Per-offer price movement: ↓ green when the last price dropped (cheaper is
+ * good), ↑ amber when it rose. Silent on the first-ever price (no prior to
+ * compare). This is the "did this supplier move with the market?" signal.
+ */
+export function DeltaChip({ delta }: { delta?: PriceDelta | null }) {
+  if (!delta || delta.previous === null || delta.direction === "flat") return null;
+  const up = delta.direction === "up";
+  const Icon = up ? ArrowUpRight : ArrowDownRight;
+  const pct = delta.pct === null ? null : Math.abs(delta.pct);
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-mono text-micro tabular-nums",
+        up
+          ? "bg-status-at-risk-soft text-status-at-risk"
+          : "bg-status-on-track-soft text-status-on-track"
+      )}
+      title={`${up ? "Up" : "Down"} from ${delta.previous} to ${delta.current}`}
+    >
+      <Icon className="h-3 w-3" strokeWidth={2.25} />
+      {pct === null ? (up ? "up" : "down") : `${pct.toFixed(0)}%`}
+    </span>
+  );
+}
+
+/** Cheapest-offer marker. */
+export function BestBadge() {
+  return (
+    <span className="inline-flex items-center rounded-full bg-status-on-track-soft px-1.5 py-0.5 text-micro font-medium text-status-on-track">
+      ← best
+    </span>
+  );
+}
+
+/** Pinned-preferred marker. */
+export function PreferredBadge() {
+  return (
+    <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent">
+      ★ preferred
+    </span>
   );
 }
 

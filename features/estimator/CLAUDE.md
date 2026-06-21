@@ -1,135 +1,226 @@
 # Estimator
 
-Mozaik-shaped quote builder. Each line is a uniform `category · item ·
-qty × unit × $/unit` row with optional `waste %` for hardwoods/sheet
-goods, and per-line markup. Convert to a draft Job in one click.
+Mozaik-shaped quote builder. A quote is a stack of **10 fixed sections**
+(pre-work → deficiencies) the way Andrew actually works a job. Most
+sections are uniform line-item tables (`category · item · qty × unit ×
+$/unit`, with optional `waste %` and per-line markup); three are bespoke
+structured blocks. Templates switch whole sections on/off; **Rooms** let
+a client drop "the bathroom" in one click. Convert to a draft Job in one
+click.
+
+> **Spec status:** reconciled 2026-06-02 to match the shipped code
+> (`d859c0f` 10-category restructure + rooms/templates, then the
+> `c9a872f` redesign). If you change behaviour, update this file in the
+> same commit — it is read-before-touch.
 
 ## What it does
 
-Single page (`/estimator`) with these sections, top to bottom:
+Single page (`/estimator`), top to bottom:
 
 1. **Project** — client + project name.
-2. **Line items** — every line has: category (free-text with dropdown of
-   common ones), item name, optional description, qty, unit
-   (`# / SqFt / Ft / bf / Hrs`), $/unit, optional waste %, markup %. The
-   row footer shows: `Cost · Markup % (+$X) · Line total`.
-3. **Defaults** — workshop overhead % and default markup % (seeds new
-   lines, doesn't retroactively change existing ones).
-4. **Cabinet summary** — # base / wall / tall cabinets and their linear
-   feet, plus # pulls and an optional room Ft. Info only; not priced.
-   Will feed metrics later ($ per linear foot, assembly time per cabinet
-   type, etc).
+2. **Template picker** — choose which sections are active (see
+   Templates). Switching a template toggles whole sections; custom
+   templates persist in localStorage.
+3. **Rooms panel** — zero or more named rooms, each independently
+   enabled. Lines and cabinet entries can be tagged to a room; disabling
+   a room removes its contribution from the quote (and its invoice
+   lines) without deleting anything.
+4. **The 10 sections** (see table). Line-layout sections render the
+   spreadsheet grid; `prework`, `delivery`, and `deficiencies` render
+   their own structured blocks.
+5. **Cabinet summary** — counts + linear feet per cabinet type (base /
+   wall / tall / island) plus # pulls. This is **not info-only**: it
+   auto-derives Assembly, Install, and Delivery-loading hours via
+   per-type minute defaults.
 
 Sidebar **Quote summary**: Materials · Labour · Direct · Overhead ·
-Total cost · Markup (with effective margin %) · Quoted price.
+Contingency · Total cost · Markup (with effective margin %) · Quoted
+price, plus a per-room rollup when rooms exist.
 
-Click **Save as Job** → draft Job in pipeline stage Sold, costs split
-into the canonical materials/labour/overhead CostLine schema, invoice
-line items reflect per-line marked-up prices.
+Click **Save as Job** → draft Job in pipeline stage `sold`, costs split
+into the canonical materials/labour/overhead `CostLine` schema (pre-work
+and contingency added as isolated labour lines), invoice line items
+reflect per-line marked-up prices with overhead + contingency appended
+so the invoice sum reconciles to `job.revenue`.
+
+## The 10 sections
+
+Source of truth: `lib/sections.ts` (`QUOTE_SECTIONS`).
+
+| #   | id             | Label                     | Bucket    | Layout       |
+| --- | -------------- | ------------------------- | --------- | ------------ |
+| 1   | `prework`      | Pre-work                  | prework   | prework      |
+| 2   | `casework`     | Casework                  | materials | lines        |
+| 3   | `cnc`          | CNC subcontract           | materials | lines        |
+| 4   | `doors`        | Door materials & profiles | materials | lines        |
+| 5   | `face`         | Face components           | materials | lines        |
+| 6   | `finishing`    | Finishing                 | labour    | lines        |
+| 7   | `assembly`     | Assembly                  | labour    | lines        |
+| 8   | `delivery`     | Packing & delivery        | materials | delivery     |
+| 9   | `install`      | Install                   | labour    | lines        |
+| 10  | `deficiencies` | Deficiencies              | labour    | deficiencies |
+
+- **Bucket** decides how a section's cost groups on the saved Job's
+  CostLine entries. `materials` and `labour` are billed; `prework` is a
+  third bucket that is **internal-only** (`excludeFromQuote: true`) — it
+  counts toward true cost and margin but never the client price.
+- **Layout** `lines` uses the freeform grid; `prework` / `delivery` /
+  `deficiencies` swap in bespoke blocks (the renderer reads
+  `SectionDef.layout`).
+- Custom categories (a line whose `category` matches no section label)
+  fall into a fallback **"Other"** group at the bottom and bucket as
+  materials.
+
+## Templates
+
+`lib/templates.ts`. A template is just a set of `activeSections`.
+Five built-ins:
+
+| id                  | Name                  | Active sections                                            |
+| ------------------- | --------------------- | ---------------------------------------------------------- |
+| `tpl_full_build`    | Full custom build     | all 10 (the default)                                       |
+| `tpl_reface`        | Refacing              | prework, doors, face, finishing, delivery, install, defic. |
+| `tpl_install_only`  | Install only          | prework, delivery, install, deficiencies                   |
+| `tpl_design_only`   | Design / measure only | prework                                                    |
+| `tpl_sub_finishing` | Sub finishing         | prework, finishing, delivery                               |
+
+Custom templates persist in localStorage under `gw_estimate_templates_v1`
+(forward-only schema). Moving them to Supabase is a Phase-2 item.
+
+## Rooms
+
+`Room { id, name, enabled }` in `lib/types.ts`. Lines carry an optional
+`roomId`; cabinet entries carry an optional `roomId` per type. A disabled
+room's lines contribute nothing to costs, markup, quoted price, the
+invoice, or the per-room rollup — but are preserved so re-enabling is
+free. `partitionCabinetSummaryByRoom` splits cabinet counts so
+auto-derived Assembly/Install lines inherit the right room (one room per
+cabinet type today — mixed-room within a type is out of scope).
+
+## The bespoke blocks
+
+- **Pre-work** (`PreWorkBlock`) — three fixed slots (site visit / design
+  / estimating), hours each, priced at `designRate`. Internal cost only.
+- **Delivery** (`DeliveryCalculator`) — distance-driven, not a line.
+  `cost = gas (miles×2×$/mi) + travel (hours×installRate) + loading
+(cabinetCount×loadMin/60 × shopRate)`. Loading time auto-scales with
+  the cabinet count.
+- **Deficiencies** (`DeficienciesBlock`) — two parts: an hours budget
+  for typical touch-ups (`hoursBudget × installRate`) **plus** a
+  contingency % applied to the quoted total for true unknowns.
 
 ## Where things live
 
 ```
 features/estimator/
 ├── lib/
-│   ├── types.ts                   LineItem, Unit + labels, CabinetSummary,
-│   │                              DEFAULT_LABOUR_RATE, DEFAULT_MARKUP_PCT
-│   ├── sections.ts                QUOTE_SECTIONS (the fixed 9), bucket
-│   │                              mapping, toggle helpers
-│   ├── totals.ts                  computeTotals — pure pricing math with
-│   │                              waste, bucketed by section
-│   └── createJobFromEstimate.ts   builds a Job spec from estimator state
+│   ├── types.ts                 Unit, Room, LineItem, LabourRates,
+│   │                            CabinetSummary (base/wall/tall/island +
+│   │                            pulls), per-type minute defaults,
+│   │                            PreWork/Delivery/Deficiencies state + empties
+│   ├── sections.ts              QUOTE_SECTIONS (the 10), bucket + layout
+│   │                            mapping, excludeFromQuote helpers
+│   ├── templates.ts             5 built-in templates + custom (localStorage)
+│   ├── totals.ts                computeTotals (pure pricing) + the three
+│   │                            block cost fns + cabinet→hours derivation
+│   └── createJobFromEstimate.ts builds a Job spec (costs + invoice) from state
 └── components/
-    ├── EstimatorView.tsx          top-level: state + handlers + GC toggle
-    ├── ProjectSection.tsx         Client + Project fields
-    ├── LineItemsTable.tsx         Wrapper card; renders one column header
-    │                              + one SectionBlock per quote section
-    ├── SectionBlock.tsx           One section: divider header + subtotal +
-    │                              its lines + "Add line in {section}". Has
-    │                              an on/off Toggle when section is
-    │                              toggleable (GC Subcontractors).
-    ├── LineItemRow.tsx            Single horizontal grid row, all 11
-    │                              columns side-by-side. Grid template is
-    │                              applied via inline style.
-    ├── MarkupSection.tsx          Overhead % + Default markup %
-    ├── CabinetSummary.tsx         Bottom info block (counts + linear ft)
-    ├── QuoteSummary.tsx           Sidebar summary + Save
-    └── inputs.tsx                 FieldInput, NumberInput, Sub, SummaryRow,
-                                   CategoryInput (free-text + datalist)
+    ├── EstimatorView.tsx        top-level: state + handlers + template/room wiring
+    ├── ProjectSection.tsx       Client + Project fields
+    ├── TemplatePicker.tsx       Template select + TemplateChip
+    ├── RoomsPanel.tsx           Add/name/toggle rooms
+    ├── LineItemsTable.tsx       Wrapper card; one SectionBlock per active section
+    ├── SectionBlock.tsx         One section: header + subtotal + lines/block
+    ├── LineItemRow.tsx          Single horizontal grid row (all columns inline)
+    ├── PreWorkBlock.tsx         Pre-work slots (internal cost)
+    ├── DeliveryCalculator.tsx   Distance/time/loading delivery cost
+    ├── DeficienciesBlock.tsx    Hours budget + contingency %
+    ├── MarkupSection.tsx        Overhead % + default markup % defaults
+    ├── CabinetSummary.tsx       Counts + linear ft per type; feeds auto-derive
+    ├── QuoteSummary.tsx         Sidebar summary + per-room rollup + Save
+    └── inputs.tsx               FieldInput, NumberInput, Sub, SummaryRow, CategoryInput
 ```
 
-## The 9 sections
+`src/app/estimator/page.tsx` is a 2-line shell.
 
-| #   | Section           | Bucket    | Notes                                             |
-| --- | ----------------- | --------- | ------------------------------------------------- |
-| 1   | Materials         | materials | Sheet goods, hardwoods, banding                   |
-| 2   | Hardware          | materials | Hinges, guides, legs, fasteners, pulls            |
-| 3   | CNC               | labour    | Toolpath subcontract or in-house CNC time         |
-| 4   | Doors & Faces     | materials | Doors from supplier + CNC'd fillers/scribes       |
-| 5   | Assembly          | labour    | In-house assembly labour                          |
-| 6   | Finishing         | labour    | In-house spray ($ / SqFt)                         |
-| 7   | Delivery          | materials | Trucking to site                                  |
-| 8   | Install           | labour    | On-site labour at shop rate                       |
-| 9   | GC Subcontractors | materials | Electricians, plumbers, painters — **toggleable** |
+## Labour rates
 
-Custom categories (anything not in this list) render in a fallback
-"Other" section at the bottom and bucket as materials by default.
-
-`src/app/estimator/page.tsx` is a 4-line shell.
+`LabourRates { designRate, shopRate, installRate }` live in **workspace
+settings** (`/settings`), defaults `85 / 85 / 95`. Pre-work prices at
+designRate; assembly + in-shop work + loading at shopRate; install +
+on-site + travel at installRate. `DEFAULT_LABOUR_RATE` in types.ts is a
+legacy single-rate fallback only.
 
 ## Domain notes
 
-- **Units** mirror Mozaik labels in the UI: `#` (count), `SqFt`, `Ft`
-  (linear feet), `bf` (board feet, hardwoods), `Hrs`. Internal codes
-  are `ea / sqft / lf / bf / hr`.
-- **Waste %** is only useful for materials machined to size (hardwood
-  rails & stiles, sheet goods). `buyingQty = qty × (1 + waste%/100)`.
-  Line cost is computed on the buying qty, not the finished qty — so
-  Andrew doesn't eat the waste himself. Waste field auto-shows for
-  `bf / SqFt / Ft` units; auto-hides for `#` and `Hrs`.
-- **Materials vs Labour bucketing** is by section (see `lib/sections.ts`):
-  CNC / Assembly / Finishing / Install bucket as labour; everything else
-  buckets as materials. Lines whose category doesn't match a known
-  section default to materials. This determines how the saved Job's
-  CostLine entries are grouped.
-- **Markup is on cost** (`linePrice = lineCost × (1 + markup%)`). Cost
-  here already includes waste. So a 35% markup on a hardwood line is
-  35% on the waste-adjusted purchase amount.
-- **Overhead** is applied workshop-wide on direct cost (materials +
-  labour), added on top of the marked-up line prices. The sidebar
-  shows the **effective margin %** (gross profit / quoted) so the
-  cabinetmaker view (markup) and the P&L view (margin) line up.
+- **Units** mirror Mozaik labels: `#` (count), `SqFt`, `Ft` (linear
+  feet), `bf` (board feet), `Hrs`. Internal codes `ea / sqft / lf / bf /
+hr`.
+- **Waste %**: `buyingQty = qty × (1 + waste%/100)`; line cost is on the
+  buying qty so Andrew doesn't eat the waste. Auto-shows for `bf / SqFt /
+Ft`, auto-hides for `#` and `Hrs` (soft hint — the field still accepts
+  a value on any unit).
+- **Markup is on cost**: `linePrice = lineCost × (1 + markup%)` (cost
+  already includes waste).
+- **Negative inputs are clamped to 0** in `computeTotals` — a stray `-4`
+  never silently inverts a cost.
 
-## Markup vs margin reminder
+## Pricing model (the exact math in `totals.ts`)
 
-A 35% **markup** on $1,000 cost = $1,350 (margin 25.9%).
-A 35% **margin** on $1,000 cost = $1,538 (markup 53.8%).
-The estimator uses markup. If a future change ever switches to margin
-math, prices drop ~10% on a 35% job.
+```
+buyingQty   = qty × (1 + waste%/100)
+lineCost    = buyingQty × unitPrice
+linePrice   = lineCost × (1 + markup%/100)
+direct      = Σ lineCost of enabled, non-prework lines (materials + labour)
+overhead    = direct × overhead%
+contingency = (Σ enabled linePrice + overhead) × contingency%
+quoted      = Σ enabled linePrice + overhead + contingency
+totalCost   = direct + overhead                       (firm — what you owe)
+internalCost= direct + prework + overhead + contingency (true cost reality)
+effectiveMarginPct = (quoted − totalCost − contingency) / quoted × 100
+```
+
+Contingency is treated as **expected labour**, not profit — it is
+subtracted in the margin formula so an optimistic buffer can't inflate
+the margin Andrew bids on. The saved Job records contingency as a
+full-value labour CostLine for the same reason, so the in-app margin and
+the bookkeeping reconcile.
+
+### Markup vs margin reminder
+
+A 35% **markup** on $1,000 cost = $1,350 (margin 25.9%). A 35% **margin**
+on $1,000 cost = $1,538 (markup 53.8%). The estimator uses markup. If a
+future change switches to margin math, prices drop ~10% on a 35% job.
+
+## Non-goals (today)
+
+- The estimate itself is **not** persisted to Supabase — there is no
+  "draft estimate" table. State lives in component memory until you
+  "Save as Job", which writes a Job. Re-opening `/estimator` is a blank
+  slate. (Draft-estimate persistence is a candidate, see PLAN.md.)
+- Catalog picking, CSV import, and a standalone PDF quote are not built —
+  see "When to revisit".
 
 ## When to revisit (Phase 2+)
 
-- **Catalog integration** (Phase 2). Expand the Catalog feature to hold
-  any reusable item (sheet goods, hardwoods, hinges, guides, fasteners,
-  legs, labour rates). The estimator row gets a "pick from Catalog"
-  affordance and a "save this line to Catalog" button. `catalogId` is
-  already in the LineItem type for this.
-- **CSV import** (Phase 3). Drop a Mozaik CSV → parse the section
-  headers as `category`, items as lines, unit symbols (`# / SqFt / Ft
-/ Hrs`) → unit codes, cabinet count rows → CabinetSummary, the
-  `Add-On %Subtotal` line → seed `defaultMarkupPct`. Skip
-  zero-priced rows by default (toggle to show).
-- **Inventory link** (depends on CSV import + Catalog integration above).
-  Once estimator lines carry real per-material quantities (a per-job bill
-  of materials, fed by the Mozaik CSV import), **Inventory** cross-checks
-  stock-on-hand against upcoming job needs ("Henderson is short 4 sheets").
-  Keep Estimator and Inventory linked: the BOM produced here is the data
-  source for the Inventory job-needs view. See
-  `features/inventory/CLAUDE.md`.
-- **Cabinet count metrics** (Phase 4). $ per cabinet linear foot,
-  assembly time by cabinet type, install time by cabinet type. Needs
-  a few saved jobs with cabinet counts to be useful.
-- **Per-cabinet templates** ("10ft kitchen kit" → 7 base + 9 wall + N
-  parts) would live in `features/estimator/lib/templates.ts`.
-- **PDF quote export** (separate from invoice) — reuse the invoice
-  rendering pipeline.
+See `PLAN.md` for sequencing. In short:
+
+- **Catalog integration** (Phase 2) — "pick from Catalog" + "save line
+  to Catalog". `catalogId` + price/supplier snapshot fields already exist
+  on `LineItem`.
+- **CSV import** (Phase 3) — drop a Mozaik CSV → section headers →
+  categories, items → lines, unit symbols → unit codes, cabinet rows →
+  CabinetSummary, the `Add-On %` subtotal → seed default markup. This is
+  the prerequisite for the Inventory job-needs view.
+- **Inventory link** (after CSV import) — the per-job BOM produced here
+  feeds Inventory's stock-vs-needs check. See `features/inventory/CLAUDE.md`.
+- **Cabinet-count metrics** (Phase 4) — $ per cabinet linear foot.
+  ✓ Per-type assembly/install minutes now come from the Catalog
+  (`catalog_cabinet_types` via `useCatalog().cabinetTypes`), tuned by
+  the shop's labour timers; `DEFAULT_*_MINUTES` in `types.ts` are the
+  fallback. The auto-derive reads live minutes, so a labour nudge flows
+  into the next quote. (Loading minutes for delivery still use the
+  default — `DeliveryCalculator` reads `loadMin` from settings/defaults,
+  not yet the Catalog row.) Remaining: $/linear-foot metrics need saved
+  jobs.
+- **PDF quote export** — reuse the invoice render pipeline.

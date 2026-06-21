@@ -38,9 +38,13 @@ next-env.d.ts
 # claude code / local tooling
 .claude/
 .remember/
+.superpowers/
 codemap.html
 
 # local dev artifacts
 dev.log
 dev-demo.log
 tsc_out.txt
+
+# Playwright MCP smoke-test artifacts
+.playwright-mcp/

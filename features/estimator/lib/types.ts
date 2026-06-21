@@ -65,6 +65,7 @@ export type LineItem = {
   catalogId?: string; // hook to Catalog entry (snapshots below capture state at pick-time)
   supplierSnapshot?: string; // who the catalog item said it came from when picked
   unitPriceSnapshot?: number; // what the price was when picked (catalog may have changed since)
+  offerIdSnapshot?: string; // which catalog offer this line was priced from (inert seam: lets a future cart-loader group a job's lines by supplier)
   roomId?: string; // optional — assigns this line to a Room for per-room subtotals + toggle
   excludeFromQuote?: boolean; // pre-work lines: counted in internal cost, NOT in quoted price
 };
@@ -130,19 +131,19 @@ export function emptyCabinetSummary(): CabinetSummary {
 }
 
 export function totalCabinetLinearFt(s: CabinetSummary): number {
-  return (
-    s.base.linearFt + s.wall.linearFt + s.tall.linearFt + s.island.linearFt
-  );
+  return s.base.linearFt + s.wall.linearFt + s.tall.linearFt + s.island.linearFt;
 }
 
 export function totalCabinetCount(s: CabinetSummary): number {
   return s.base.count + s.wall.count + s.tall.count + s.island.count;
 }
 
-// Per-cabinet-type time defaults. Eventually these live in the Catalog
-// (Phase 4) so Andrew can tune them per shop reality. For now they're
-// industry-average starting points so the auto-derive math is useful
-// out-of-the-box.
+// Per-cabinet-type time defaults — now the *fallback*. The live values
+// the auto-derive uses come from the Catalog (`catalog_cabinet_types`,
+// read via `useCatalog().cabinetTypes`), tuned by the shop's labour
+// timers. EstimatorView merges those over these defaults, so a fresh DB
+// (whose seed equals these numbers) behaves identically until a labour
+// nudge is applied. These remain the industry-average starting points.
 
 export const DEFAULT_ASSEMBLY_MINUTES: Record<CabinetTypeId, number> = {
   base: 60,

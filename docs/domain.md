@@ -77,6 +77,35 @@ grid of holes drilled along cabinet sides. All standard hardware
 - **Trade coordination** — managing overlap with other trades
   (electrical, plumbing, etc.) during install
 
+## Parties we work with
+
+Spacecraft has relationships with several kinds of outside party. They are
+deliberately distinct concepts — what you pay them *for* differs, and so
+does the record that holds them.
+
+- **Client** — a party that pays Spacecraft for work (homeowner, designer,
+  GC, architect). Lives in the contacts table; the **Payer** is the client
+  on the hook for a given job. The client relationship carries the sales
+  story (revenue, warmth, who introduced them).
+- **Supplier** — an outside business Spacecraft *buys goods from*:
+  materials, hardware, doors, finishes (e.g. Windsor Plywood, New Surrey
+  Cabinet Doors). A supplier is known by the goods it prices (its offers),
+  not by labour.
+- **Subtrade** — an outside company or person Spacecraft *hires to perform
+  work on a job*: install crews, finishers, countertop fabricators,
+  electricians, delivery. Canadian construction term. A subtrade is paid
+  for **labour/work**, which is what distinguishes it from a Supplier (paid
+  for goods) and from **in-house crew** (employees / Users, not a subtrade).
+- **Trade** — the discipline a subtrade practises: installer, finisher,
+  countertops, electrical, plumbing, delivery, upholstery, other. The set of
+  trades is a managed list (the **trade registry**), each carrying a colour and
+  an icon for at-a-glance reading. (Also the sense in "trade coordination" above
+  — managing overlap with other trades on site.)
+- **Trade-line** — a single trade a project *needs*, listed on the project. It
+  may be unassigned ("needed, no one booked yet") or filled by a specific
+  subtrade. A project has many trade-lines; planning them before the work starts
+  is normal. The thing you add with the "Add trade" button.
+
 ## Add new terms here
 
 When introducing a domain term in code, add it here first.
