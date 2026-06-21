@@ -106,6 +106,58 @@ does the record that holds them.
   subtrade. A project has many trade-lines; planning them before the work starts
   is normal. The thing you add with the "Add trade" button.
 
+## Workflow & costing
+
+- **Phase** — one of the six workflow stages a job's work and cost group
+  under: Design · CNC/Cut · Assembly · Finishing · Delivery · Install. The
+  **canonical term** across estimator, labour, and job costing (resolved
+  2026-06-20). Stored as `labour_categories` — the table keeps the legacy
+  name "category"; we say *phase*. A job's **milestones are these six phases**
+  1:1 (ADR 0008), so the current milestone doubles as the schedule gate that
+  marks a phase complete (Design = signed drawings/contract/estimate;
+  Delivery = all parts on site). Still distinct from `PipelineStatus`, the
+  sales pipeline.
+- **Cost code** — an Operation (a named unit of shop work) that carries a
+  short, unique `code` (e.g. `ASM-BASE`). The shared key that lets budgeted
+  vs. actual labour be compared across the estimate, the live timers, and
+  the job. Nests under a Phase.
+- **Driver** — an optional **unit of measure** a cost code's time scales with
+  (sheet, board foot, board, linear foot…). A code *with* a driver tracks
+  **minutes per unit** and estimates as `quantity × min/unit`; a code *without*
+  one is flat (time-only). Drivers come from a managed unit list (the estimator's
+  `ea/sqft/lf/bf` plus `sheet`/`board`) so per-unit averages stay comparable. A
+  timer Session on a driven code records the `quantity` done, enabling
+  physical-%-complete projection. Maps to quantity on a QuickBooks item line.
+- **Budget** — the planned cost frozen on a Job when an estimate is saved:
+  per cost code for labour (budgeted minutes × phase rate), per phase for
+  materials. The baseline actuals are measured against.
+- **Cost-actual** — an incurred job cost as it lands: in-house labour (from
+  timer Sessions), or a logged **Supplier** (material) or **Subtrade**
+  payment, optionally attributed to the Partner paid. Distinct from the
+  estimate's quoted cost and from the Budget.
+- **Project** — the user-facing name for a **Job** (internal `Job` entity /
+  `features/jobs`; QuickBooks calls it a project too). The durable container
+  for one piece of work. Over its life a project can take **more than one
+  estimate → invoice cycle** (the original plus change orders), so its Budget
+  and revenue **accumulate**.
+- **Change order** — added or changed scope partway through a project. Handled
+  as a **new estimate + new invoice within the same project** — not an edit to
+  the original — so the originals stay intact and both budget and revenue grow.
+  An unbudgeted mid-job task that is *not* a change order (rework, scope creep)
+  correctly shows as variance against the existing budget.
+- **Estimate** — a light record of one budgeting cycle on a project (the original
+  or a change order); owns its budget lines (per cost code + per phase). The
+  durable summary the estimator emits on _Save as Job_ — not a re-editable
+  document. Maps to a QuickBooks **Estimate** (see ADR 0010).
+- **Invoice** — a light record of one revenue cycle on a project; its amount adds
+  to the project's revenue. Maps to a QuickBooks **Invoice**. A project's total
+  revenue = Σ its invoices.
+- **QuickBooks mapping** — the costing model is shaped to map 1:1 onto QuickBooks
+  for a future integration: Project→Project, Payer→Customer, Estimate→Estimate,
+  Invoice→Invoice, **Phase→Class**, **Cost code→Item**, Worker→Employee,
+  Session→Time Activity, Supplier/Subtrade→Vendor, cost-actual→Bill/Expense. Full
+  table + rationale in ADR 0010.
+
 ## Add new terms here
 
 When introducing a domain term in code, add it here first.

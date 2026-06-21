@@ -29,6 +29,8 @@ Andrew wants to know **how a job is doing while it's still open** — not after 
 6. Andrew wants a **running estimate-vs-actual timeline marker on the job**.
 7. The five timeline treatments are **all wanted, as switchable views over one dataset** (not a single pick).
 8. Future: roll into a **shop employee time tracker** ("who did what on each job") — the `worker_id` seam already exists.
+9. **Change orders = a new estimate + new invoice within the same project** — budget and revenue accumulate across cycles; an unbudgeted non-change-order task (rework/scope creep) shows as variance against the existing budget.
+10. **QuickBooks-ready** — model **Estimate** + **Invoice** as light first-class records and align all terminology/shapes to QB (**ADR 0010**); the sync itself is out of scope for v1.
 
 ## 3. Approach chosen
 
@@ -47,8 +49,15 @@ Promote the existing operations table into the canonical cost-code registry. **N
 
 - `code` — short, editable, **unique** identifier (e.g. `ASM-BASE`, `FIN-SPRAY`). Auto-suggested from the operation name; editable. This is the marker tying estimate ↔ timer ↔ actuals.
 - Phase = the existing `category_id` (the 6 phases). **No new column** — categories _are_ phases; UI language shifts to "phase".
+- `driver_unit` (nullable) — an optional **driver**: the unit a code's time scales with (`sheet` · `bf` · `board` · `lf` · `sqft` · `ea`). **Null = a flat, time-only code** (Design, Spray-per-batch). One driver per code (two drivers → two codes). Units come from a managed list reusing the estimator's `Unit` plus `sheet` / `board`, so per-unit averages stay comparable. Generalizes today's cabinet auto-derive (cabinet count × min/cabinet).
 
-**Historical average is computed, not stored** — derived from completed `labour_sessions` for that code, so it's always live and there is nothing to keep in sync. Exposed via the labour store so the estimator can default a code's budgeted minutes to its history.
+**Historical average is computed, not stored** — derived from completed `labour_sessions` for that code, so it's always live and there is nothing to keep in sync. Exposed via the labour store so the estimator can default a code's budgeted minutes to its history. Rules:
+
+- **Per-unit for driven codes** — a driven code's average is **minutes ÷ unit** (Σ minutes ÷ Σ session quantity), so it estimates as `qty × min/unit`; a flat code's average is minutes per session.
+- **Recent-weighted**, not all-time — favour the last ~10 sessions / 12 months so a bid reflects how the shop runs *now*.
+- **Outlier-trimmed** — ignore sessions beyond ~3× the median (a forgotten-running timer can't poison the average); trim only kicks in once there are enough samples to spare.
+- **Any real data beats the hand-set default** — with 1–2 samples, use them and show a **confidence / sample count** (e.g. "based on 2 jobs"); only with **zero** samples does the code fall back to its hand-set / template default.
+- The **≥3-sample bar** remains only for the *approve-to-apply nudge* that suggests rewriting a code's saved default — a higher bar to *change* a number than to *pre-fill* one.
 
 Operations remain runtime-addable + soft-deletable (`active=false`), so **adding a task mid-job already works**.
 
@@ -65,14 +74,14 @@ These are **distinct from the estimator's existing section-templates** (which on
 
 Written at _Save as Job_; editable on the job afterward. One row per budgeted labour code, plus material rows per phase:
 
-- `id`, `job_id`, `code_id` (nullable — null for a phase-level material budget row), `phase_id` (snapshot), `kind` (`labour` | `material`), `budgeted_minutes` (labour only), `rate` (snapshot, labour only), `budgeted_amount`, `sort`.
+- `id`, `job_id`, `estimate_id` (FK → `job_estimates`, §4.8 — which budgeting cycle this line belongs to), `code_id` (nullable — null for a phase-level material budget row), `phase_id` (snapshot), `kind` (`labour` | `material`), `budgeted_quantity` (nullable — driven codes), `budgeted_minutes` (labour only; for a driven code = `quantity × min-per-unit`), `rate` (snapshot, labour only), `budgeted_amount`, `sort`.
 
-Snapshotting phase + rate matches labour's "history never rewrites" philosophy.
+Snapshotting phase + rate matches labour's "history never rewrites" philosophy. **Subtrade budgets are not stored here** — they're read live from each trade-line's `job_trades.cost` (ADR 0007's captured-for-future field), mapped to the trade's phase. This realizes ADR 0007 §9's "future P&L tie-in" without duplicating the number.
 
 ### 4.4 Actuals — two sources, one ledger view
 
-- **Labour actuals** = the existing `labour_sessions`, reliably tagged `job_id` + code. No new table; the timers already run _are_ the actual labour data. Actual labour-$ = `Σ session minutes × rate` (rate from the code's phase, via workspace settings).
-- **Material / sub actuals** = new `job_cost_actuals` — `id`, `job_id`, `kind` (`material` | `sub` | `labour_adj`), `amount`, `code_id` (nullable), `phase_id` (nullable), `date`, `note`, `created_at`. Where a lumber invoice or subcontractor bill is logged as it lands.
+- **Labour actuals** = the existing `labour_sessions`, reliably tagged `job_id` + code. No new table; the timers already run _are_ the actual labour data. Actual labour-$ = `Σ session minutes × rate` (rate from the code's phase, via workspace settings). A **driven** code's session also records `quantity` (units done that run, captured on _Stop_), so actual minutes-per-unit and physical %-complete are known.
+- **Material / subtrade actuals** = new `job_cost_actuals` — `id`, `job_id`, `kind` (`material` | `subtrade` | `labour_adj`), `amount`, `partner_id` (nullable — the **Supplier** or **Subtrade** paid; aligns the ledger with the Partners model, ADR 0007), `trade_line_id` (nullable — for a subtrade actual, the job trade-line it fulfills), `code_id` (nullable), `phase_id` (nullable), `date`, `note`, `created_at`. Where a lumber invoice (Supplier) or subtrade bill is logged as it lands. **Attribution only — no PO/invoice auto-import in v1**; the partner link sets up that future integration.
 
 ### 4.5 The granularity rule (sanity-checked with Andrew)
 
@@ -82,6 +91,23 @@ Snapshotting phase + rate matches labour's "history never rewrites" philosophy.
 ### 4.6 RLS
 
 All new tables: authenticated-only, matching the rest of the app (see `gw-auth-and-rls`). Seeded server-side like the existing labour tables.
+
+### 4.7 Referential integrity & the labour↔job link
+
+- The new costing tables use **proper FKs**: `job_cost_budgets` / `job_cost_actuals` → `job_id` NOT NULL FK; `code_id` / `phase_id` / `partner_id` / `trade_line_id` nullable FKs.
+- **`labour_sessions.job_id` is upgraded from a soft ref to a nullable FK** (`ON DELETE SET NULL`). Now that this link carries dollars, a _set_ value must point at a real job — no silent misattribution. **Null stays allowed** for untagged / ad-hoc shop work, preserving the decoupling's real benefit (timers that don't require a job). This **reverses the "no FK" line in `features/labour/CLAUDE.md`**, to be updated when the change lands.
+- **Untagged time** (null `job_id`) is rolled into a visible "shop time not on a job" bucket, never dropped; sessions can be **retro-assigned** to a job + code.
+
+### 4.8 Estimates & Invoices (QuickBooks-ready — ADR 0010)
+
+A project (Job) accrues **multiple budgeting + revenue cycles** over its life (the original quote plus change orders). Two light, project-scoped records mirror the QuickBooks objects they'll later sync to:
+
+- **`job_estimates`** — `id`, `job_id`, `label` (e.g. "Original", "Change order 1"), `date`, `total`, `created_at`. Owns its `job_cost_budgets` lines (§4.3). The durable summary the estimator emits on _Save as Job_ — **not** a re-editable estimate document (ADR 0009 holds). Maps to QB **Estimate**.
+- **`job_invoices`** — `id`, `job_id`, `number`, `issued_date`, `due_date`, `amount`, `created_at`. Each adds to the project's revenue. Maps to QB **Invoice**.
+
+**Rollups:** project budget = Σ its estimates' lines; project revenue = Σ its invoices. `Job.revenue` stays the canonical revenue total (= Σ invoices) so `computeMargin` / `/pnl` are **unchanged**; the embedded legacy `Job.invoice` is migrated into `job_invoices` as the first row (sequenced carefully against the existing invoice-render path — a plan-level detail, not a v1 invoicing rewrite).
+
+**No `quickbooks_id` columns / sync table in v1** — the readiness deliverable is the aligned shapes + names (Phase=Class, Cost code=Item, …); the sync is later a central `quickbooks_links` mapping table added with no change to these tables. Full mapping in ADR 0010.
 
 ## 5. Estimator → budget flow
 
@@ -142,14 +168,15 @@ A **segmented view switcher** (Andrew wants all five, as switchable lenses):
 - A single headline: **total margin at risk across open jobs** ("$X on the table to claw back").
 - The month chart may render in-progress months' projected margin as a **dashed extension** of the booked (solid) series.
 
-Reuses `computePnlStats`, extended to compute projected cost from each open job's budget + actuals.
+Reuses `computePnlStats`, extended to compute projected cost from each open job's budget + actuals. Revenue per job = Σ its invoices (= `Job.revenue` rollup, §4.8), so change-order revenue flows in automatically.
 
 ## 8. The math (defined)
 
 Per phase, given `budget` (labour+material) and `actual` (labour+material+sub):
 
-- A phase is **complete** when the job's milestone for that phase has passed.
+- A phase is **complete** when the job's `currentMilestone` is at or past that phase — milestones are realigned to the six phases 1:1 (**ADR 0008**), so the milestone _is_ the phase-complete signal; no separate toggle. A job reaching `pipelineStatus = complete` locks all phases.
 - `projectedPhaseCost = complete ? actual : max(actual, budget)` — completed phases lock to actual; open phases assume you at least hit budget for remaining work, and overruns persist.
+- For a **driven** code the open projection is **quantity-aware**: `actual + (budgeted_qty − done_qty) × current cost-per-unit`, where cost-per-unit comes from the session rate so far. So "18 of 40 sheets, running hot" projects the overrun *now*, instead of waiting for cost to cross budget. Flat codes use `max(actual, budget)`.
 - `projectedJobCost = Σ projectedPhaseCost + overhead`
 - `projectedMargin$ = revenue − projectedJobCost`
 - `budgetedMargin$ = revenue − (Σ budget + overhead)`
@@ -171,26 +198,28 @@ Per phase, given `budget` (labour+material) and `actual` (labour+material+sub):
 ## 9. Non-goals (v1)
 
 - **Per-employee breakdown** on the job — the `worker_id` seam exists; deferred to the shop employee time-tracker follow-on.
-- **PO / invoice auto-import from Partners** — material/sub actuals are logged manually for now.
+- **PO / invoice auto-import from Partners** — material/subtrade actuals are logged manually for now (the optional `partner_id` / `trade_line_id` links set up that future integration without building it).
 - **Rewriting the estimator's pricing math** — the coded panel is additive/reconciled, not a replacement.
 - **A true dated project schedule** for the burn-up plan line — v1 uses a linear/milestone baseline.
 - **No Anthropic API spend** — pure CRUD + analytics, consistent with `/labour` (`billing-prefer-max-plan-over-api`). Any future AI insight runs off the Max plan.
 
 ## 10. Phasing (for the implementation plan)
 
-- **P0 — Schema & types.** Migrations: `labour_operations.code`, `cost_code_templates`(+items), `job_cost_budgets`, `job_cost_actuals`; RLS; seeds; shared types.
-- **P1 — Cost-code registry + templates in `/labour`.** Code field + phase framing in setup; task-template CRUD; computed historical-average exposure.
-- **P2 — Estimator labour-codes panel.** Load template, auto-seed from cabinet summary, reconciliation note; write `job_cost_budgets` on _Save as Job_; section→phase material rollup.
-- **P3 — Job Budget-vs-Actual tab.** Shared data layer (budget + actuals rollup, projected math) + views **E / B / C** + "Log actual cost" actuals logging.
-- **P4 — Remaining views + P&L rollup.** Views **A / D**; `/pnl` open-jobs band + projected series.
-- **P5 — Learning loop.** Historical averages feed estimator task-template defaults (approve-to-apply, generalizing today's cabinet-type nudge).
+- **P0 — Milestone realignment (ADR 0008).** `MilestoneStage` → the six phases; migration backfills `jobs.current_milestone`; update `MilestonesStrip`, `TasksTab` hints, `activity.ts`, seeds, briefing prompt, `createJobFromEstimate`. Prerequisite for the phase-complete signal.
+- **P1 — Schema & types.** Migrations: `labour_operations.code` + `driver_unit`, `labour_sessions.quantity`, `cost_code_templates`(+items), `job_estimates`, `job_invoices`, `job_cost_budgets` (FK → estimate, + `budgeted_quantity`), `job_cost_actuals` (with `partner_id` / `trade_line_id`); migrate legacy `Job.invoice` → `job_invoices`; RLS; seeds; shared types.
+- **P2 — Cost-code registry + templates in `/labour`.** Code field + phase framing + **driver-unit** per code in setup; **quantity prompt on timer Stop** for driven codes; task-template CRUD; computed historical-average exposure (per-unit for driven codes).
+- **P3 — Estimator labour-codes panel.** Load template, auto-seed from cabinet summary, reconciliation note; write `job_cost_budgets` on _Save as Job_; section→phase material rollup; subtrade budget read from `job_trades.cost`.
+- **P4 — Job Budget-vs-Actual tab.** Shared data layer (budget + actuals rollup, projected math) + views **E / B / C** + "Log actual cost" actuals logging.
+- **P5 — Remaining views + P&L rollup.** Views **A / D**; `/pnl` open-jobs band + projected series.
+- **P6 — Learning loop.** Historical averages feed estimator task-template defaults (approve-to-apply, generalizing today's cabinet-type nudge).
 
 Each phase should leave the app green (`tsc` + `lint` + `build`) and be independently demoable.
 
 ## 11. Risks / open questions
 
-- **Section→phase mapping (§5)** and **phase→rate mapping (§8)** are concrete defaults; confirm they match how Andrew thinks about material homes and labour rates (esp. Delivery's mixed rate).
-- **Phase-complete signal** depends on the job's milestone model; if a phase has no milestone, treat as in-progress.
+- **Section→phase mapping (§5)** and **phase→rate mapping (§8)** are concrete defaults; confirm they match how Andrew thinks about material homes and labour rates (esp. Delivery's mixed rate). _(Reviewed in the 2026-06-20 grill; defaults stand.)_
+- **Phase-complete signal** — resolved: milestones realign to the six phases 1:1 (ADR 0008), so `currentMilestone` is the signal.
+- **Subtrade budget vs. actual** reconcile against `job_trades.cost` (ADR 0007's captured field): that field is the _budgeted_ subtrade cost; subtrade cost-actuals (kind `subtrade`, `trade_line_id`) track against it.
 - **Reconciliation drift** between coded labour budget and quoted labour: surface as a warning, don't block save.
 
 ## 12. Glossary
