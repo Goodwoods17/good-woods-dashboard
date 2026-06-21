@@ -49,6 +49,17 @@
     --status-blocked-soft: #F2DDDA;
     --status-andon-soft: #FADBD7;
 
+    /* Categorical trade palette — off-axis cool arc (DESIGN.md §2 "Categorical
+       (Trade) Palette"). Small dots + icons only, never status. */
+    --trade-installer: #547DAB;
+    --trade-finisher: #976796;
+    --trade-countertop: #3C84A2;
+    --trade-electrical: #6C75AF;
+    --trade-plumbing: #2D8992;
+    --trade-delivery: #826FA5;
+    --trade-upholstery: #A16580;
+    --trade-other: #747B83;
+
     /* Shadow vocabulary — soft elevation, no borders (DESIGN.md §4) */
     --shadow-resting: 0 8px 22px -14px rgb(26 25 22 / 0.10);
     --shadow-hover: 0 12px 30px -18px rgb(26 25 22 / 0.18);

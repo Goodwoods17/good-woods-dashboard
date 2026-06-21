@@ -9,6 +9,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
 import { DocumentsCard } from "@features/documents/components/DocumentsCard";
+import { TradesCard } from "@features/partners/components/TradesCard";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
@@ -171,6 +172,8 @@ export function OverviewTab({ job }: { job: Job }) {
           </ul>
         </section>
       )}
+
+      <TradesCard jobId={job.id} />
 
       <DocumentsCard projectId={job.id} />
 

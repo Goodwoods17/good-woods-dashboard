@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Plus, Star, Trash2, X } from "lucide-react";
+import Link from "next/link";
+import { ArrowUpRight, Check, Plus, Star, Trash2, X } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { useCatalog, type CatalogItemView } from "@features/catalog/lib/catalogStore";
@@ -57,6 +58,15 @@ export function OffersEditor({
                   if (id) updateOffer(offer.id, { supplierId: id });
                 }}
               />
+              {offer.supplierId && (
+                <Link
+                  href={`/suppliers/${offer.supplierId}`}
+                  className="mt-0.5 inline-flex items-center gap-0.5 text-[11px] text-text-tertiary hover:text-accent transition-colors duration-fast"
+                >
+                  View profile
+                  <ArrowUpRight className="h-3 w-3" strokeWidth={1.75} />
+                </Link>
+              )}
             </div>
 
             {/* Price + movement */}

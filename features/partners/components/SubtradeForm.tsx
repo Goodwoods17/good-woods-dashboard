@@ -1,0 +1,378 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { ArrowLeft, Archive, Plus } from "lucide-react";
+import { cn } from "@shared/lib/utils";
+import type { Subtrade } from "../lib/types";
+import { useSubtrades } from "../lib/subtradesStore";
+import { useTrades } from "../lib/tradesStore";
+import { TradeDot } from "./TradePill";
+
+type Mode = "create" | "edit";
+
+// Palette slugs (DESIGN.md categorical trade palette) to assign a colour to a
+// custom trade added inline. Cycles so new trades stay visually distinct.
+const TRADE_PALETTE = [
+  "installer",
+  "finisher",
+  "countertop",
+  "electrical",
+  "plumbing",
+  "delivery",
+  "upholstery",
+  "other",
+];
+
+export function SubtradeForm({ subtrade, mode }: { subtrade?: Subtrade; mode: Mode }) {
+  const router = useRouter();
+  const { createSubtrade, updateSubtrade, archiveSubtrade } = useSubtrades();
+  const { trades, createTrade } = useTrades();
+
+  const tradeOptions = trades
+    .filter((t) => t.active)
+    .sort((a, b) => a.sortOrder - b.sortOrder);
+
+  const [addingTrade, setAddingTrade] = useState(false);
+  const [newTrade, setNewTrade] = useState("");
+
+  async function handleAddTrade() {
+    const label = newTrade.trim();
+    if (!label) return;
+    // Reuse an existing trade if the name already exists (case-insensitive).
+    const existing = trades.find((t) => t.label.toLowerCase() === label.toLowerCase());
+    if (existing) {
+      setTradeId(existing.id);
+      setNewTrade("");
+      setAddingTrade(false);
+      return;
+    }
+    const id = crypto.randomUUID();
+    const now = new Date().toISOString();
+    const color = TRADE_PALETTE[trades.length % TRADE_PALETTE.length];
+    try {
+      await createTrade({
+        id,
+        key: `${label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${id.slice(0, 4)}`,
+        label,
+        color,
+        icon: "shapes",
+        isSuggestedDefault: false,
+        sortOrder: tradeOptions.length + 10,
+        active: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      setTradeId(id);
+      setNewTrade("");
+      setAddingTrade(false);
+    } catch {
+      /* surfaced via store error */
+    }
+  }
+
+  const [name, setName] = useState(subtrade?.name ?? "");
+  const [tradeId, setTradeId] = useState<string | null>(subtrade?.tradeId ?? null);
+  const [description, setDescription] = useState(subtrade?.description ?? "");
+  const [address, setAddress] = useState(subtrade?.address ?? "");
+  const [rateNote, setRateNote] = useState(subtrade?.typicalRateNote ?? "");
+  const [notes, setNotes] = useState(subtrade?.notes ?? "");
+  const [submitting, setSubmitting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const canSubmit = name.trim().length > 0;
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      if (mode === "create") {
+        const id = crypto.randomUUID();
+        const now = new Date().toISOString();
+        const fresh: Subtrade = {
+          id,
+          name: name.trim(),
+          tradeId,
+          description: description.trim() || null,
+          contactName: null,
+          phone: null,
+          email: null,
+          address: address.trim() || null,
+          typicalRateNote: rateNote.trim() || null,
+          notes: notes.trim() || null,
+          active: true,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await createSubtrade(fresh);
+        router.push(`/subtrades/${id}`);
+      } else if (subtrade) {
+        await updateSubtrade(subtrade.id, {
+          name: name.trim(),
+          tradeId,
+          description: description.trim() || null,
+          address: address.trim() || null,
+          typicalRateNote: rateNote.trim() || null,
+          notes: notes.trim() || null,
+        });
+        router.push(`/subtrades/${subtrade.id}`);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not save subtrade.");
+      setSubmitting(false);
+    }
+  }
+
+  async function handleArchive() {
+    if (!subtrade) return;
+    if (!window.confirm(`Archive ${subtrade.name}? You can restore it later.`)) return;
+    setArchiving(true);
+    try {
+      await archiveSubtrade(subtrade.id);
+      router.push("/partners");
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Could not archive.");
+      setArchiving(false);
+    }
+  }
+
+  const backHref = mode === "edit" && subtrade ? `/subtrades/${subtrade.id}` : "/partners";
+
+  return (
+    <div className="px-4 py-6 md:px-8 max-w-2xl">
+      <Link
+        href={backHref}
+        className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary transition-colors duration-fast mb-5"
+      >
+        <ArrowLeft className="h-3.5 w-3.5" strokeWidth={1.75} />
+        Back
+      </Link>
+
+      <form onSubmit={handleSubmit} className="space-y-5">
+        <Card title="Identity">
+          <Field label="Company name" required>
+            <Input
+              value={name}
+              onChange={setName}
+              placeholder="e.g. Coastline Install Co."
+              autoFocus
+            />
+          </Field>
+          <Field label="Trade">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {tradeOptions.map((t) => {
+                const selected = tradeId === t.id;
+                return (
+                  <button
+                    type="button"
+                    key={t.id}
+                    onClick={() => setTradeId(selected ? null : t.id)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "inline-flex items-center gap-1.5 rounded-full px-3.5 min-h-[40px] text-xs font-medium transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft",
+                      selected
+                        ? "bg-ink-pill text-white"
+                        : "bg-surface-muted text-text-secondary hover:bg-surface-sunken"
+                    )}
+                  >
+                    <TradeDot color={t.color} />
+                    {t.label}
+                  </button>
+                );
+              })}
+              {addingTrade ? (
+                <span className="inline-flex items-center gap-1.5">
+                  <input
+                    value={newTrade}
+                    onChange={(e) => setNewTrade(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        void handleAddTrade();
+                      }
+                    }}
+                    placeholder="New trade"
+                    autoFocus
+                    className="min-h-[40px] w-36 text-xs bg-surface border border-border rounded-full px-3 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void handleAddTrade()}
+                    className="inline-flex items-center rounded-full bg-ink-pill text-white px-3 min-h-[40px] text-xs font-medium hover:bg-accent-active transition-colors duration-fast"
+                  >
+                    Add
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAddingTrade(false);
+                      setNewTrade("");
+                    }}
+                    className="text-xs text-text-tertiary hover:text-text-secondary px-1 transition-colors duration-fast"
+                  >
+                    Cancel
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingTrade(true)}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-border px-3 min-h-[40px] text-xs text-text-secondary hover:text-text-primary hover:border-border-strong transition-colors duration-fast"
+                >
+                  <Plus className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  New trade
+                </button>
+              )}
+            </div>
+            {tradeOptions.length === 0 && !addingTrade && (
+              <p className="text-xs text-text-tertiary mt-2">
+                No trades loaded yet. Once you are signed in the standard trades appear here, or add
+                your own above.
+              </p>
+            )}
+          </Field>
+          <Field label="What they do">
+            <Input
+              value={description}
+              onChange={setDescription}
+              placeholder="e.g. Templating, fabrication, and install of stone countertops"
+            />
+          </Field>
+        </Card>
+
+        <Card title="Details">
+          <Field label="Address">
+            <Input value={address} onChange={setAddress} placeholder="Shop or mailing address" />
+          </Field>
+          <Field label="Typical rate">
+            <Input
+              value={rateNote}
+              onChange={setRateNote}
+              placeholder="e.g. $65/hr, or $400/day, 2-person crew"
+            />
+          </Field>
+          <p className="text-xs text-text-tertiary">
+            Add people (owner, installer, foreman...) on the profile after you create the subtrade.
+          </p>
+        </Card>
+
+        <Card title="Notes">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            rows={4}
+            placeholder="Reliability, scheduling quirks, anything worth remembering before the next job."
+            className="w-full min-h-[96px] text-sm bg-surface border border-border rounded-md px-3 py-2.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast resize-y"
+          />
+        </Card>
+
+        {submitError && (
+          <div className="bg-status-blocked-soft rounded-md p-3 text-sm text-status-blocked">
+            {submitError}
+          </div>
+        )}
+
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
+          {mode === "edit" && subtrade ? (
+            <button
+              type="button"
+              onClick={handleArchive}
+              disabled={archiving}
+              className="inline-flex items-center gap-1.5 min-h-[40px] text-xs text-text-tertiary hover:text-status-blocked transition-colors duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft rounded-full px-1"
+            >
+              <Archive className="h-3.5 w-3.5" strokeWidth={1.75} />
+              {archiving ? "Archiving" : "Archive subtrade"}
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2">
+            <Link
+              href={backHref}
+              className="inline-flex items-center justify-center rounded-full bg-surface shadow-floating hover:shadow-hover px-5 min-h-[40px] text-sm font-medium text-text-secondary transition-shadow duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            >
+              Cancel
+            </Link>
+            <button
+              type="submit"
+              disabled={!canSubmit || submitting}
+              className={cn(
+                "inline-flex items-center justify-center rounded-full bg-ink-pill text-white px-5 min-h-[40px] text-sm font-medium hover:bg-accent-active transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft",
+                "disabled:bg-text-disabled disabled:cursor-not-allowed"
+              )}
+            >
+              {submitting
+                ? mode === "create"
+                  ? "Creating"
+                  : "Saving"
+                : mode === "create"
+                  ? "Add subtrade"
+                  : "Save changes"}
+            </button>
+          </div>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function Card({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="bg-surface rounded-2xl shadow-resting overflow-hidden">
+      <div className="px-5 py-3 bg-surface-muted">
+        <h2 className="text-sm font-semibold text-text-primary">{title}</h2>
+      </div>
+      <div className="p-5 space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  required,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1.5">
+        {label}
+        {required && <span className="text-accent"> *</span>}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+  autoFocus,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+  autoFocus?: boolean;
+}) {
+  return (
+    <input
+      type={type}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      autoFocus={autoFocus}
+      className="w-full min-h-[40px] text-sm bg-surface border border-border rounded-md px-3 py-2.5 placeholder:text-text-tertiary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+    />
+  );
+}

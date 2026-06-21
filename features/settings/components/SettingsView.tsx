@@ -3,11 +3,13 @@
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { ErrorBanner } from "./ErrorBanner";
+import { Section } from "./Section";
 import { StorageSection } from "./StorageSection";
 import { RatesSection } from "./RatesSection";
 import { CompanySection } from "./CompanySection";
 import { TaxSection } from "./TaxSection";
 import { ResetSection } from "./ResetSection";
+import { TradeRegistryEditor } from "@features/partners/components/TradeRegistryEditor";
 
 export function SettingsView() {
   const { error } = useJobs();
@@ -19,6 +21,12 @@ export function SettingsView() {
         <ErrorBanner error={error} />
         <StorageSection />
         <RatesSection />
+        <Section
+          title="Trades"
+          description="The disciplines you assign subtrades to. Reorder, recolour, set their icon, mark which are suggested on new projects, or add your own."
+        >
+          <TradeRegistryEditor />
+        </Section>
         <CompanySection />
         <TaxSection />
         <ResetSection />

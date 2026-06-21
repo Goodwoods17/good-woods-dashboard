@@ -10,6 +10,7 @@ import {
   BookOpen,
   Settings,
   Users,
+  Handshake,
   Hammer,
   Truck,
   Package,
@@ -49,6 +50,7 @@ const NAV: NavSection[] = [
       { href: "/calendar", label: "Calendar", icon: Calendar },
       { href: "/projects", label: "Projects", icon: FolderOpen },
       { href: "/crm", label: "Clients", icon: Users },
+      { href: "/partners", label: "Partners", icon: Handshake },
     ],
   },
   {
@@ -110,7 +112,11 @@ export function Sidebar() {
                     ? pathname === "/"
                     : item.href === "/projects"
                       ? pathname.startsWith("/projects") || pathname.startsWith("/jobs")
-                      : pathname.startsWith(item.href);
+                      : item.href === "/partners"
+                        ? pathname.startsWith("/partners") ||
+                          pathname.startsWith("/suppliers") ||
+                          pathname.startsWith("/subtrades")
+                        : pathname.startsWith(item.href);
                 const Icon = item.icon;
                 return (
                   <li key={item.href}>

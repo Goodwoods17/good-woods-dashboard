@@ -11,6 +11,10 @@ import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { ShopProvider } from "@features/shop/lib/shopStore";
 import { RefaceProvider } from "@features/reface/lib/refaceStore";
 import { LabourProvider } from "@features/labour/lib/labourStore";
+import { TradesProvider } from "@features/partners/lib/tradesStore";
+import { SubtradesProvider } from "@features/partners/lib/subtradesStore";
+import { JobTradesProvider } from "@features/partners/lib/jobTradesStore";
+import { PartnerPeopleProvider } from "@features/partners/lib/partnerPeopleStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -48,7 +52,15 @@ export default function RootLayout({
                     <ShopProvider>
                       <RefaceProvider>
                         <LabourProvider>
-                          <AppShell>{children}</AppShell>
+                          <TradesProvider>
+                            <SubtradesProvider>
+                              <JobTradesProvider>
+                                <PartnerPeopleProvider>
+                                  <AppShell>{children}</AppShell>
+                                </PartnerPeopleProvider>
+                              </JobTradesProvider>
+                            </SubtradesProvider>
+                          </TradesProvider>
                         </LabourProvider>
                       </RefaceProvider>
                     </ShopProvider>
