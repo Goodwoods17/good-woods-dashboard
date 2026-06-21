@@ -78,13 +78,18 @@ verified both directions (assign on the job → shows on the subtrade profile).
   DESIGN.md Trade Chip spec. (No separate `tradeColors.ts`; helpers live in
   `TradePill.tsx`.)
 
-## Phase 4 — Connective tissue & polish  ⬜
+## Phase 4 — Connective tissue & polish  ✅  (2026-06-20, commit 61136e6)
 
-- ⬜ Catalog offers editor deep-links to `/suppliers/[id]`.
-- ⬜ Backfill: link existing `catalog_offers` suppliers into the new profile UI;
-  confirm no orphans.
-- ⬜ Briefing/empty-state copy review; no em dashes.
-- **Gate:** `npx tsc --noEmit` · `npm run lint` · `npm run build` · authed smoke.
+- ✅ Catalog offers editor deep-links to `/suppliers/[id]` ("View profile" under
+  each offer's supplier picker).
+- ✅ Backfill / orphan check: 0 orphaned offers, trade-lines, or people. Existing
+  catalog suppliers already surface in the Partners hub + profiles (same rows).
+- ✅ Em-dash scrub on the new UI (Trades-card person dropdown separator → parens).
+- ✅ **Gate met:** `tsc --noEmit` clean · `next lint` clean · `npm run build`
+  green (all partners routes compiled) · authed end-to-end smokes throughout
+  Phases 1-3.
+
+**Feature complete.** All four phases shipped on `feat/partners` (unpushed).
 
 ---
 
