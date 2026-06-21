@@ -242,7 +242,7 @@ export default function NewJobPage() {
       template,
       pipelineStatus,
       healthStatus,
-      currentMilestone: "sold",
+      currentMilestone: "design",
       installDate,
       revenue: parseFloat(revenue) || 0,
       costs: [],

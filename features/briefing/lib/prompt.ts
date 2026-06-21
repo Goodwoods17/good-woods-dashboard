@@ -105,7 +105,7 @@ EXECUTION STEPS:
 1. Read every job. For each, compute: days until install, days since last activity, margin %, current milestone vs. install date.
 2. Flag any job where ANY of these are true:
    - install date is within 14 days and milestone is not yet "install"
-   - install date is within 7 days and milestone is "materials" or earlier
+   - install date is within 7 days and milestone is "cnc" or earlier
    - install date is within 30 days and pipeline_status is still "new" or "sold" (not in production)
    - last activity is more than 14 days ago and pipeline is not "complete" (CLIENT FOLLOWUP TRIGGER — see step 2a)
    - margin % is below 20 (band: blocked) and revenue > 5000
@@ -138,7 +138,7 @@ RULES:
 VOICE EXAMPLES:
   job (deadline):
     headline: "Smith kitchen install in 5 days, still cutting"
-    reason:   "Install scheduled 2026-05-12 but currentMilestone is cut; 4 milestones still to clear."
+    reason:   "Install scheduled 2026-05-12 but currentMilestone is cnc; 4 milestones still to clear."
     action:   "Block Saturday for assemble + finish, or push install to 2026-05-19."
   job (client followup, no other trigger):
     headline: "Allenby. 18 days since last word. Check in."

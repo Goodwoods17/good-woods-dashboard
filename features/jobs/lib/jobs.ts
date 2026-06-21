@@ -10,7 +10,7 @@ export const SEED_JOBS: Job[] = [
     template: "full_project",
     pipelineStatus: "in_production",
     healthStatus: "on_track",
-    currentMilestone: "cut",
+    currentMilestone: "cnc",
     installDate: "2026-06-22",
     revenue: 84200,
     costs: [
@@ -43,7 +43,7 @@ export const SEED_JOBS: Job[] = [
     template: "full_project",
     pipelineStatus: "in_design",
     healthStatus: "on_track",
-    currentMilestone: "sold",
+    currentMilestone: "design",
     installDate: "2026-07-14",
     revenue: 62500,
     costs: [
@@ -74,7 +74,7 @@ export const SEED_JOBS: Job[] = [
     template: "refacing",
     pipelineStatus: "in_finishing",
     healthStatus: "at_risk",
-    currentMilestone: "finish",
+    currentMilestone: "finishing",
     installDate: "2026-05-20",
     revenue: 14800,
     costs: [
@@ -134,7 +134,7 @@ export const SEED_JOBS: Job[] = [
     template: "spray_finishing",
     pipelineStatus: "sold",
     healthStatus: "blocked",
-    currentMilestone: "materials",
+    currentMilestone: "cnc",
     installDate: "2026-06-01",
     revenue: 6200,
     costs: [
