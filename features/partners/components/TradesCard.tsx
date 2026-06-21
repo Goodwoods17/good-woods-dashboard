@@ -197,7 +197,7 @@ function TradeLineRow({
               {people.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
-                  {p.role ? ` — ${p.role}` : ""}
+                  {p.role ? ` (${p.role})` : ""}
                 </option>
               ))}
             </Select>
