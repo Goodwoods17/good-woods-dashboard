@@ -65,23 +65,25 @@ features/partners/
 ├── CLAUDE.md
 ├── PLAN.md
 ├── lib/
+│   ├── types.ts               Trade, Subtrade, JobTrade, PartnerPerson types
+│   ├── rowMaps.ts             Supabase row <-> type mappers + table-name consts
+│   ├── tradesStore.tsx        TradesProvider, useTrades (registry, SEED_TRADES), CRUD
 │   ├── subtradesStore.tsx     SubtradesProvider, useSubtrades, CRUD
-│   ├── tradesStore.tsx        TradesProvider, useTrades (registry), CRUD + reorder
-│   ├── jobTradesStore.tsx     trade-line CRUD, assign/unassign subtrade, per-job query
-│   ├── rowMaps.ts             Supabase row <-> type mappers
-│   └── tradeColors.ts         palette token map + icon map (pending /impeccable)
+│   ├── jobTradesStore.tsx     trade-line CRUD, assign subtrade/person, per-job query
+│   └── partnerPeopleStore.tsx PartnerPeopleProvider, peopleFor, CRUD + setPrimary
 └── components/
-    ├── PartnersView.tsx       /partners hub + tab nav
+    ├── PartnersView.tsx       /partners hub + tab nav (Suppliers | Subtrades)
     ├── SuppliersList.tsx      Suppliers tab
     ├── SubtradesList.tsx      Subtrades tab
     ├── SupplierDetail.tsx     /suppliers/[id]  (hero: catalog offers)
     ├── SubtradeDetail.tsx     /subtrades/[id]  (hero: jobs worked)
-    ├── SubtradeForm.tsx       create/edit subtrade (inline mini-form, not Modal)
-    ├── TradesCard.tsx         the Trades card for /jobs/[id]
-    ├── TradeLineRow.tsx       one trade-line (dot+icon, trade, subtrade combobox)
-    ├── TradeSuggestionStrip.tsx  tap-to-add default trades
-    ├── TradePill.tsx          color dot + icon + label
-    └── TradeRegistryEditor.tsx   the /settings panel
+    ├── SupplierForm.tsx       create/edit supplier (writes catalog_suppliers)
+    ├── SubtradeForm.tsx       create/edit subtrade (inline trade picker + add-custom)
+    ├── PeopleSection.tsx      people list + inline add/edit per company (roles, primary)
+    ├── TradesCard.tsx         Trades card for /jobs/[id] (trade-line rows + suggestion
+    │                          strip + add-trade picker, all inline)
+    ├── TradePill.tsx          color dot + icon + label; tradeColorVar/tradeIcon helpers
+    └── TradeRegistryEditor.tsx   the /settings registry panel
 ```
 
 Route pages stay thin: `src/app/partners/page.tsx`, `src/app/suppliers/[id]/page.tsx`,

@@ -159,8 +159,10 @@ export function JobTradesProvider({ children }: { children: ReactNode }) {
       setJobTrades((prev) => prev.map((l) => (l.id === id ? { ...l, ...patch } : l)));
       if (backend !== "supabase") return;
       try {
+        const prevRow = previous.find((l) => l.id === id);
+        if (!prevRow) return;
+        const merged = { ...prevRow, ...patch };
         const sb = getSupabase();
-        const merged = { ...previous.find((l) => l.id === id), ...patch } as JobTrade;
         const { error: upErr } = await sb
           .from(JOB_TRADES_TABLE)
           .update(jobTradeToRow(merged))

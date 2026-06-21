@@ -162,8 +162,10 @@ export function PartnerPeopleProvider({ children }: { children: ReactNode }) {
       setPeople((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
       if (backend !== "supabase") return;
       try {
+        const prevRow = previous.find((p) => p.id === id);
+        if (!prevRow) return;
+        const merged = { ...prevRow, ...patch };
         const sb = getSupabase();
-        const merged = { ...previous.find((p) => p.id === id), ...patch } as PartnerPerson;
         const { error: upErr } = await sb
           .from(PARTNER_PEOPLE_TABLE)
           .update(partnerPersonToRow(merged))

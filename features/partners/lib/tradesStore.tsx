@@ -181,8 +181,10 @@ export function TradesProvider({ children }: { children: ReactNode }) {
       );
       if (backend !== "supabase") return;
       try {
+        const prevRow = previous.find((t) => t.id === id);
+        if (!prevRow) return;
+        const merged = { ...prevRow, ...patch };
         const sb = getSupabase();
-        const merged = { ...previous.find((t) => t.id === id), ...patch } as Trade;
         const { error: upErr } = await sb
           .from(TRADES_TABLE)
           .update(tradeToRow(merged))

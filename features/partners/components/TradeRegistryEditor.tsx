@@ -55,11 +55,15 @@ export function TradeRegistryEditor() {
 
   function move(trade: Trade, dir: -1 | 1) {
     const idx = active.findIndex((t) => t.id === trade.id);
-    const swap = active[idx + dir];
-    if (!swap) return;
-    // Swap sort_order with the neighbour.
-    void updateTrade(trade.id, { sortOrder: swap.sortOrder });
-    void updateTrade(swap.id, { sortOrder: trade.sortOrder });
+    const target = idx + dir;
+    if (target < 0 || target >= active.length) return;
+    // Reorder by array position, then renumber 0..n-1. Robust to duplicate
+    // sort_order values (a plain neighbour-swap silently no-ops on a tie).
+    const reordered = [...active];
+    [reordered[idx], reordered[target]] = [reordered[target], reordered[idx]];
+    reordered.forEach((t, i) => {
+      if (t.sortOrder !== i) void updateTrade(t.id, { sortOrder: i });
+    });
   }
 
   function addTrade() {

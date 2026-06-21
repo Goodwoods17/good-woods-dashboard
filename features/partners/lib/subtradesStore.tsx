@@ -159,8 +159,10 @@ export function SubtradesProvider({ children }: { children: ReactNode }) {
       );
       if (backend !== "supabase") return;
       try {
+        const prevRow = previous.find((s) => s.id === id);
+        if (!prevRow) return;
+        const merged = { ...prevRow, ...patch };
         const sb = getSupabase();
-        const merged = { ...previous.find((s) => s.id === id), ...patch } as Subtrade;
         const { error: upErr } = await sb
           .from(SUBTRADES_TABLE)
           .update(subtradeToRow(merged))
