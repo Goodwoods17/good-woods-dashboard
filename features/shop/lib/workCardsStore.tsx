@@ -74,7 +74,7 @@ function localSave(cards: WorkCard[]) {
   if (typeof window === "undefined") return;
   try { window.localStorage.setItem(LS_KEY, JSON.stringify(cards)); } catch { /* silent */ }
 }
-function newId(): string { return `wc_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`; }
+function newId(): string { return crypto.randomUUID(); }
 
 export function WorkCardsProvider({ children }: { children: ReactNode }) {
   const isSb = hasSupabase();
