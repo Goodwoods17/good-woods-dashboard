@@ -37,7 +37,7 @@ export type LabourOperation = {
   driverUnit: DriverUnit | null;
   active: boolean;
 };
-export type LabourWorker = { id: string; name: string; active: boolean };
+export type LabourWorker = { id: string; name: string; active: boolean }; // exported for WorkCardItem + shop consumers
 export type LabourSession = {
   id: string;
   operationId: string | null;
