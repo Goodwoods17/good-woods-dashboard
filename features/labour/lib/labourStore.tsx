@@ -555,8 +555,11 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     (sessionId: string, patch: { startedAt?: string; accumulatedMs?: number; quantity?: number | null }) => {
       setSessions((prev) => prev.map((s) => (s.id === sessionId
         ? { ...s,
-            startedAt: patch.startedAt ?? s.startedAt,
-            accumulatedMs: patch.accumulatedMs ?? s.accumulatedMs,
+            // Guard on !== undefined (not ??) so a partial patch matches the
+            // snake_case write below exactly: an omitted field keeps the old
+            // value; a provided 0 / null is honoured, never silently dropped.
+            startedAt: patch.startedAt !== undefined ? patch.startedAt : s.startedAt,
+            accumulatedMs: patch.accumulatedMs !== undefined ? patch.accumulatedMs : s.accumulatedMs,
             quantity: patch.quantity !== undefined ? patch.quantity : s.quantity }
         : s)));
       if (isSb) {
