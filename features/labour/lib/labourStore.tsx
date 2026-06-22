@@ -246,6 +246,7 @@ type LabourContextValue = {
   resumeTimer: (sessionId: string) => void;
   stopTimer: (sessionId: string, quantity?: number | null) => void;
   deleteSession: (sessionId: string) => void;
+  updateSession: (sessionId: string, patch: { startedAt?: string; accumulatedMs?: number; quantity?: number | null }) => void;
   // Operations
   addOperation: (name: string, categoryId: string | null) => void;
   updateOperation: (id: string, patch: Partial<LabourOperation>) => void;
@@ -550,6 +551,27 @@ export function LabourProvider({ children }: { children: ReactNode }) {
     [isSb, sb]
   );
 
+  const updateSession = useCallback(
+    (sessionId: string, patch: { startedAt?: string; accumulatedMs?: number; quantity?: number | null }) => {
+      setSessions((prev) => prev.map((s) => (s.id === sessionId
+        ? { ...s,
+            startedAt: patch.startedAt ?? s.startedAt,
+            accumulatedMs: patch.accumulatedMs ?? s.accumulatedMs,
+            quantity: patch.quantity !== undefined ? patch.quantity : s.quantity }
+        : s)));
+      if (isSb) {
+        const row: Record<string, unknown> = {};
+        if (patch.startedAt !== undefined) row.started_at = patch.startedAt;
+        if (patch.accumulatedMs !== undefined) row.accumulated_ms = patch.accumulatedMs;
+        if (patch.quantity !== undefined) row.quantity = patch.quantity;
+        if (Object.keys(row).length > 0) {
+          void sb().from("labour_sessions").update(row).eq("id", sessionId).then(({ error: e }) => e && setError(formatError(e)));
+        }
+      }
+    },
+    [isSb, sb]
+  );
+
   // ─ Operations ─
   const addOperation = useCallback(
     (name: string, categoryId: string | null) => {
@@ -794,6 +816,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       resumeTimer,
       stopTimer,
       deleteSession,
+      updateSession,
       addOperation,
       updateOperation,
       removeOperation,
@@ -824,6 +847,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       resumeTimer,
       stopTimer,
       deleteSession,
+      updateSession,
       addOperation,
       updateOperation,
       removeOperation,
