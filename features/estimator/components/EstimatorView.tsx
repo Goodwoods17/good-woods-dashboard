@@ -33,6 +33,8 @@ import {
 } from "@features/estimator/lib/totals";
 import { logPricesFromEstimate } from "@features/catalog/lib/priceHistory";
 import { useCatalog, type CatalogCabinetType } from "@features/catalog/lib/catalogStore";
+import { useLabour } from "@features/labour/lib/labourStore";
+import { buildCostCodeRegistry } from "@features/job-costing/lib/costCodes";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
 import {
   deriveCostCodeBudget,
@@ -106,6 +108,8 @@ export function EstimatorView() {
   const { createJob, jobs } = useJobs();
   const { settings } = useWorkspaceSettings();
   const { cabinetTypes, itemsWithOffers } = useCatalog();
+  const { operations } = useLabour();
+  const codeRegistry = useMemo(() => buildCostCodeRegistry(operations), [operations]);
 
   // Flattened catalog for Mozaik BOM matching (name → surfaced price + supplier).
   const catalogLite = useMemo<CatalogLite[]>(
@@ -381,12 +385,14 @@ export function EstimatorView() {
         activeTemplate.costCodeSet ?? FULL_BUILD_CODE_SET,
         cabinetSummary,
         settings.labourRates,
+        codeRegistry,
         { qtyByCode: budgetQtyByCode, minutesByCode: budgetMinutesByCode }
       ),
     [
       activeTemplate.costCodeSet,
       cabinetSummary,
       settings.labourRates,
+      codeRegistry,
       budgetQtyByCode,
       budgetMinutesByCode,
     ]
@@ -530,6 +536,7 @@ export function EstimatorView() {
           })),
           codes,
           settings.labourRates,
+          codeRegistry,
           budgetMinutesByCode
         );
         const sum = rb.reduce((s, r) => s + r.budget.totalAmount, 0);
