@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { Play, AlertTriangle, Check } from "lucide-react";
+import { Play, AlertTriangle, Check, X } from "lucide-react";
 import { useLabour, type LabourWorker } from "@features/labour/lib/labourStore";
 import { TaskTimer } from "@features/labour/components/TaskTimer";
 import { suggestedMinutes } from "@features/labour/lib/pace";
@@ -10,6 +10,13 @@ export function WorkCardItem({ card, workers, now }: { card: WorkCard; workers: 
   const { startTimer, stopTimer, pauseTimer, resumeTimer, running, sessions, operationById } = useLabour();
   const { updateCard } = useWorkCards();
   const [pickWorker, setPickWorker] = useState("");
+  const [flagging, setFlagging] = useState(false);
+  const [stuckReason, setStuckReason] = useState("");
+
+  function confirmStuck() {
+    updateCard(card.id, { status: "stuck", stuckReason: stuckReason.trim() || null });
+    setFlagging(false);
+  }
 
   // Sessions running against THIS card (many workers → many sessions).
   const cardRunning = running.filter((s) => s.cardId === card.id);
@@ -88,22 +95,58 @@ export function WorkCardItem({ card, workers, now }: { card: WorkCard; workers: 
         </div>
       )}
 
-      {/* Status actions */}
-      <div className="flex items-center gap-3 text-caption">
-        {card.status !== "done" && (
-          <button onClick={() => updateCard(card.id, { status: "done" })} className="inline-flex items-center gap-1 text-status-on-track">
-            <Check className="h-3 w-3" /> Mark done
-          </button>
-        )}
-        {card.status !== "stuck" ? (
+      {/* What a stuck card is waiting on, surfaced once captured. */}
+      {!flagging && card.status === "stuck" && card.stuckReason && (
+        <p className="text-caption text-status-at-risk">Waiting on: {card.stuckReason}</p>
+      )}
+
+      {/* Status actions. Flagging stuck reveals an inline reason input rather
+          than a native window.prompt — on-brand, dismissible, keyboard-driven. */}
+      {flagging ? (
+        <div className="flex items-center gap-2">
+          <input
+            autoFocus
+            value={stuckReason}
+            onChange={(e) => setStuckReason(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") confirmStuck();
+              if (e.key === "Escape") setFlagging(false);
+            }}
+            placeholder="What's it waiting on?"
+            aria-label="What's it waiting on?"
+            className="min-w-0 flex-1 rounded-md border border-border bg-surface-muted px-2 py-1 text-sm text-text-primary placeholder:text-text-tertiary"
+          />
           <button
-            onClick={() => { const r = window.prompt("What's it waiting on?") ?? ""; updateCard(card.id, { status: "stuck", stuckReason: r }); }}
-            className="text-status-at-risk"
-          >Flag stuck</button>
-        ) : (
-          <button onClick={() => updateCard(card.id, { status: "doing", stuckReason: null })} className="text-text-tertiary">Unstick</button>
-        )}
-      </div>
+            onClick={confirmStuck}
+            className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ink-pill px-3 py-1 text-caption font-medium text-white transition-colors duration-fast hover:bg-accent-active"
+          >
+            <AlertTriangle className="h-3 w-3" /> Mark stuck
+          </button>
+          <button
+            onClick={() => setFlagging(false)}
+            aria-label="Cancel"
+            className="shrink-0 rounded-md p-1 text-text-tertiary transition-colors duration-fast hover:text-text-primary"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 text-caption">
+          {card.status !== "done" && (
+            <button onClick={() => updateCard(card.id, { status: "done" })} className="inline-flex items-center gap-1 text-status-on-track">
+              <Check className="h-3 w-3" /> Mark done
+            </button>
+          )}
+          {card.status !== "stuck" ? (
+            <button
+              onClick={() => { setStuckReason(card.stuckReason ?? ""); setFlagging(true); }}
+              className="text-status-at-risk"
+            >Flag stuck</button>
+          ) : (
+            <button onClick={() => updateCard(card.id, { status: "doing", stuckReason: null })} className="text-text-tertiary">Unstick</button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

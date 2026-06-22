@@ -27,9 +27,12 @@ function EntryRow({
   primary,
   opCode,
   isEditing,
+  isConfirmingDelete,
   session,
   onToggleEdit,
-  onDelete,
+  onRequestDelete,
+  onConfirmDelete,
+  onCancelDelete,
   updateSession,
   onClose,
 }: {
@@ -37,9 +40,12 @@ function EntryRow({
   primary: string;
   opCode: string;
   isEditing: boolean;
+  isConfirmingDelete: boolean;
   session: LabourSession | undefined;
   onToggleEdit: () => void;
-  onDelete: () => void;
+  onRequestDelete: () => void;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
   updateSession: UpdateSession;
   onClose: () => void;
 }) {
@@ -51,27 +57,53 @@ function EntryRow({
           <span className="shrink-0 font-mono text-xs text-text-tertiary">{opCode}</span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
-          <span className="font-mono text-xs tabular-nums text-text-secondary">
-            {formatDuration(entry.ms)}
-          </span>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              aria-label="Edit entry"
-              onClick={onToggleEdit}
-              className="rounded-md p-1 text-text-tertiary transition-colors duration-fast hover:bg-surface hover:text-text-primary"
-            >
-              <Pencil className="h-3.5 w-3.5" />
-            </button>
-            <button
-              type="button"
-              aria-label="Delete entry"
-              onClick={onDelete}
-              className="rounded-md p-1 text-text-tertiary transition-colors duration-fast hover:bg-surface hover:text-status-at-risk"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
-          </div>
+          {/* Inline delete confirm replaces a native window.confirm: the action
+              stays in place, on-brand, and reversible in one tap. */}
+          {isConfirmingDelete ? (
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-medium text-status-blocked">Delete?</span>
+              <button
+                type="button"
+                aria-label="Confirm delete"
+                onClick={onConfirmDelete}
+                className="rounded-md p-1.5 text-status-blocked transition-colors duration-fast hover:bg-status-blocked-soft"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                aria-label="Keep entry"
+                onClick={onCancelDelete}
+                className="rounded-md p-1.5 text-text-tertiary transition-colors duration-fast hover:bg-surface hover:text-text-primary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          ) : (
+            <>
+              <span className="font-mono text-xs tabular-nums text-text-secondary">
+                {formatDuration(entry.ms)}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Edit entry"
+                  onClick={onToggleEdit}
+                  className="rounded-md p-1.5 text-text-tertiary transition-colors duration-fast hover:bg-surface hover:text-text-primary"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button
+                  type="button"
+                  aria-label="Delete entry"
+                  onClick={onRequestDelete}
+                  className="rounded-md p-1.5 text-text-tertiary transition-colors duration-fast hover:bg-surface hover:text-status-at-risk"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
       {isEditing && session && (
@@ -173,6 +205,7 @@ export function TimeCardsView() {
   const { jobs } = useJobs();
   const [lens, setLens] = useState<Lens>("employee");
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
   const { byWorkerDay, byJobDay } = useMemo(() => buildTimeCards(sessions), [sessions]);
 
@@ -199,11 +232,21 @@ export function TimeCardsView() {
         primary={primary}
         opCode={opCode}
         isEditing={isEditing}
+        isConfirmingDelete={confirmingId === entry.sessionId}
         session={session}
-        onToggleEdit={() => setEditingId(isEditing ? null : entry.sessionId)}
-        onDelete={() => {
-          if (window.confirm("Delete this time entry?")) deleteSession(entry.sessionId);
+        onToggleEdit={() => {
+          setConfirmingId(null);
+          setEditingId(isEditing ? null : entry.sessionId);
         }}
+        onRequestDelete={() => {
+          setEditingId(null);
+          setConfirmingId(entry.sessionId);
+        }}
+        onConfirmDelete={() => {
+          deleteSession(entry.sessionId);
+          setConfirmingId(null);
+        }}
+        onCancelDelete={() => setConfirmingId(null)}
         updateSession={updateSession}
         onClose={() => setEditingId(null)}
       />
