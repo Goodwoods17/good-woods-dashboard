@@ -42,6 +42,7 @@ export function TimeCardsView() {
             <button
               key={l}
               type="button"
+              aria-pressed={lens === l}
               onClick={() => setLens(l)}
               className={
                 lens === l
