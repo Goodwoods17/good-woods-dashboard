@@ -54,6 +54,11 @@ export const CANONICAL_COST_CODES: CostCodeDef[] = [
   { code: "INST-WALL", name: "Install wall cabinet", phaseId: "install", cabinetType: "wall", driver: "ea", defaultMinutes: 20 },
   { code: "INST-TALL", name: "Install tall cabinet", phaseId: "install", cabinetType: "tall", driver: "ea", defaultMinutes: 45 },
   { code: "INST-ISLAND", name: "Install island cabinet", phaseId: "install", cabinetType: "island", driver: "ea", defaultMinutes: 45 },
+  // ── Component install/assembly (ADR 0012 grill — Andrew adds more via /labour) ──
+  { code: "INST-INSERT", name: "Install insert / accessory", phaseId: "install", driver: "ea", defaultMinutes: 10 },
+  { code: "INST-ROLLOUT", name: "Install rollout / tray", phaseId: "install", driver: "ea", defaultMinutes: 8 },
+  { code: "HW-PULL", name: "Mount pulls / handles", phaseId: "install", driver: "ea", defaultMinutes: 4 },
+  { code: "FIT-DOOR", name: "Fit / hang doors + fronts", phaseId: "finishing", driver: "ea", defaultMinutes: 6 },
   // ── Design (flat) ──
   { code: "DSN", name: "Design / drafting", phaseId: "design", driver: null, defaultMinutes: 0 },
 ];
