@@ -42,7 +42,13 @@ Cost code is the thread; the template defines the set, the job supplies the coun
 
 **Goal:** drop a Mozaik export → auto-fill the draft estimate's cabinet counts + material BOM + labour breakdown, then re-price (Slice 1 machinery does the pricing).
 
-> **Big simplifier (2026-06-22): the Mozaik pricing template is adjustable.** Andrew can edit what Mozaik's CSV emits (e.g. drop the CNC machining-time line, add fields). So rather than reverse-engineer Mozaik's default export, **we co-design the exact CSV the app wants** and Andrew configures Mozaik to produce it — a far simpler, more stable parser. Pending: Andrew's Mozaik help-doc on what the pricing template can output. The sample below is the *current* default; the target shape is TBD together.
+> **Big simplifier (2026-06-22): the Mozaik pricing template is adjustable.** Andrew can edit what Mozaik's CSV emits (e.g. drop the CNC machining-time line, add fields). So rather than reverse-engineer Mozaik's default export, **we co-design the exact CSV the app wants** and Andrew configures Mozaik to produce it — a far simpler, more stable parser. The sample below is the *current* default; the **co-designed target shape is now locked** in `docs/samples/mozaik-import-target-csv.md` (with a parser fixture `mozaik-import-target-sample.csv`).
+>
+> **CSV shape decided (Andrew, 2026-06-22):**
+> - Source template = Mozaik's existing **"Job Costing"** pricing template (Pricing tab → Export → CSV); the PDFs confirm it ships in the dropdown.
+> - **Cabinet quantity = BOTH** per type — a **count** row (`#`, drives the per-cabinet cost codes + timer) and a **linear-feet** row (`Ft`, size tag for the learning loop).
+> - **Per-room breakdown is preserved** — each room is its own sub-group on the estimate (own counts + budget lines) and the parser also rolls a job total. All rooms must be fully expanded in the export.
+> - **Machining (Hrs) line dropped**; in-house cut price = `# Sheets` × tracked min/sheet, Toolpath = their quote (ADR 0012 Cut make-vs-buy).
 
 ### The file (from `docs/samples/mozaik-export-sample.csv`)
 - Columns: `Description, QTY, Units (# / SqFt / Ft / C.Ft / Hrs / %), Amount (unit $), Total`.
@@ -91,10 +97,12 @@ Drop CSV on the estimator → parse → show review (counts, BOM, labour, unmatc
 
 ## Open items for Andrew's review
 1. ~~CNC mapping~~ — **resolved**: make-vs-buy (Toolpath vs in-house), above.
-2. The rest of the **Mozaik→cost-code mapping table** — right codes for the other rows?
-3. **Material name matching** — match Mozaik material names to catalog by exact name, or fuzzy + confirm? (Your catalog must hold them to re-price.)
-4. **Subtrades** — the Sub-Contractor rows (Plumbing/Electrician/Painter): auto-create `job_trades` lines, or just surface them? (Same shape as the Toolpath CNC trade-line.)
-5. Confirm **built-in default mapping + review screen** (vs a mapping table you maintain).
+2. ~~Cabinet quantity unit~~ — **resolved**: BOTH (count drives the budget, linear ft is a size tag).
+3. ~~Multi-room handling~~ — **resolved**: keep per-room breakdown + a job-total rollup.
+4. The rest of the **Mozaik→cost-code mapping table** — right codes for the other rows? (Strawman in `docs/samples/mozaik-import-target-csv.md`.)
+5. **Material name matching** — match Mozaik material names to catalog by exact name, or fuzzy + confirm? (Your catalog must hold them to re-price.) — *Slice-2 build decision.*
+6. **Subtrades** — the Sub-Contractor rows (Plumbing/Electrician/Painter): auto-create `job_trades` lines, or just surface them? — *Slice-2 build decision.*
+7. Confirm **built-in default mapping + review screen** (vs a mapping table you maintain). — *Slice-2 build decision.*
 
 ## Verification (per slice)
 - Slice 1: `tsc`/`lint`/`build`; create a template, load it on an estimate, enter counts, Save as Job → assert `job_cost_budgets` rows written; reconciliation note fires on drift.
