@@ -133,6 +133,30 @@ does the record that holds them.
   frozen budget, and the Budget-vs-Actual tab. Seeded with a starter set (mostly
   install/assembly operations); Andrew extends it as products are spec'd. The
   estimator/budget/P4 resolve codes from this **live registry** (ADR 0012).
+- **Work card** — a durable **task on the shop-floor board** on a specific Project.
+  Required: a **Phase** (its column) and a **title/description**. Optional: a **Cost
+  code** (the precise costing anchor — when set, it fixes the phase) and an
+  **assignee** (who owns it). Carries `target_quantity`, a **status** (`todo →
+  doing → stuck → done`), and a **source** (`budget` / `template` / `manual`).
+  Seeded from the frozen **Budget** or a **Job template**, or hand-added by anyone
+  on the floor (description required) at job start or mid-job. **Sessions** are the
+  time events logged against a card; many workers can each log their own. A card's
+  phase is fixed by its code (when coded), so work **advances by status, not by
+  dragging between phase columns**. (Replaces the retired `shop_unit` — the
+  localStorage station prototype.)
+- **Uncoded card / "Needs a code" triage** — a Work card with no Cost code. Its
+  time still counts for timekeeping (the Session carries worker + job + duration)
+  and attributes to its **phase** as variance, but it is **invisible to the
+  per-code learning loop until coded**. Uncoded (and manual) cards surface in a
+  **"Needs a code"** queue; an **admin/foreman** assigns an existing code or
+  creates a new one — **code creation is admin-only** (in `/labour → Setup`, never
+  the floor terminal) to protect the code structure. Once coded, the task feeds
+  budget-vs-actual and the next bid.
+- **Stuck** — a Work-card status meaning the task **can't proceed** (waiting on
+  materials, a defect, a question). Surfaces in the shop-wide **"Needs attention"**
+  band — the Andon idea (visible problem, team helps), folded into the card.
+  *Distinct from* the pace band **"blocked"**, which means a running Session is
+  *over* its suggested time. Different axes: workflow vs pace.
 - **Driver** — an optional **unit of measure** a cost code's time scales with
   (sheet, board foot, board, linear foot…). A code *with* a driver tracks
   **minutes per unit** and estimates as `quantity × min/unit`; a code *without*

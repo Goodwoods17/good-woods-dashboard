@@ -1,7 +1,8 @@
 # Slice B — Shop-floor capture + daily time cards (Design)
 
 - **Date:** 2026-06-22 (brainstormed with Andrew)
-- **Status:** DRAFT — design approved by Andrew; next step is grill-with-docs (before planning).
+- **Status:** GRILLED (2026-06-22) — design + glossary hardened against the domain; ready
+  for Andrew's spec review, then writing-plans.
 - **Part of:** the P4 stack (`2026-06-22-cost-code-registry-and-p4-stack-design.md`, Slice B).
   This is the **capture** side — it produces the reliable per-code, per-worker labour
   **actuals** that P4 (Budget-vs-Actual) and P5 (P&L) consume.
@@ -41,15 +42,36 @@ quantity)`; plus **daily time cards** as hours roll-ups (per employee / per proj
    advance the job's milestone (a suggestion; the user confirms).
 6. **Corrections = simple edit/delete** of a session's start/end/quantity (today there's
    no edit-after-fact; hours accuracy needs it). No formal approval workflow in v1.
+7. **Clean `work_cards` (Supabase), retire the `shop_units` localStorage station
+   prototype** (grill). The two share almost nothing (job+code FKs vs a `jobCode` string;
+   Supabase vs localStorage; phases vs 4 stations). The old `/shop` board's code is
+   replaced; the `shop_units` table is left unused (drop in a later cleanup).
+8. **Andon → folded into the card** (grill). No separate issue stream. A card status
+   **`stuck`** (+ reason) flags "can't proceed"; **stuck cards surface in a "Needs
+   attention" band** on the shop-wide summary (Andon's visibility, one place for
+   problems). `stuck` is deliberately distinct from the pace band **`blocked`** (= a
+   running session over its suggested time) — workflow vs pace.
+9. **Code is OPTIONAL on a card; phase is required** (grill). The danger of an uncoded
+   task isn't lost time (timekeeping always captures it) — it's a recurring task never
+   earning a code, so estimates stay blind. Safety net: uncoded cards surface in a
+   **"Needs a code" triage**; an admin assigns/creates a code before the job closes →
+   then it feeds budget-vs-actual + the learning loop.
+10. **Two roles, enforced by UI placement (no logins):** the **floor terminal** can
+    create cards (description **required**), clock, mark stuck/done, and **pick from
+    existing codes or leave uncoded** — but **cannot create cost codes**. **Code creation
+    + triage are admin-only**, in `/labour → Setup` (Slice A), off the floor board — so
+    the code structure is protected without auth. Manual cards are flagged
+    (`source='manual'`).
 
 ## Data model (additive, RLS authenticated-only)
 
-- **`work_cards`** (new): `id`, `job_id text` (FK → jobs), `operation_id uuid` (FK →
-  `labour_operations` — the cost code; nullable for a non-coded task), `phase_id text`
-  (FK → `labour_categories`; set from the code's category, or chosen for a non-coded
-  card), `title text`, `target_quantity numeric` (nullable; from the budget), `assignee_id
-  uuid` (FK → `labour_workers`, nullable), `status text` check (`todo`/`doing`/`done`),
-  `source text` check (`budget`/`template`/`manual`), `sort int`, timestamps.
+- **`work_cards`** (new): `id`, `job_id text` (FK → jobs), `description text` **(required
+  — the "what")**, `phase_id text` **(required**, FK → `labour_categories` — the card's
+  column), `operation_id uuid` (FK → `labour_operations` — the cost code; **nullable** =
+  uncoded; when set, it fixes `phase_id`), `target_quantity numeric` (nullable; from the
+  budget), `assignee_id uuid` (FK → `labour_workers`, nullable), `status text` check
+  (`todo`/`doing`/`stuck`/`done`), `stuck_reason text` (nullable), `source text` check
+  (`budget`/`template`/`manual`), `sort int`, timestamps.
 - **`labour_sessions`**: add `card_id uuid` (nullable FK → work_cards). **Fix `job_id`
   `uuid` → `text` + real FK to `jobs(id)`** — the deferred §4.7 conversion. `worker_id`,
   `started_at`/`ended_at`, `quantity` already exist.
@@ -74,8 +96,11 @@ quantity)`; plus **daily time cards** as hours roll-ups (per employee / per proj
 
 ## The board (UI)
 
-- **Shop-wide summary** (`/shop` reworked): "Running now" (active sessions, who+what+pace)
-  and "My cards" (filter by worker). Entry points to drill into a job.
+- **Shop-wide summary** (`/shop` reworked): a **"Needs attention"** band (stuck cards +
+  reason) at top, then **"Running now"** (active sessions — who+what+pace) and **"My
+  cards"** (filter by worker). For the admin, a **"Needs a code"** band lists uncoded
+  cards with their description + an "assign code" action (existing codes only on the
+  board; new codes are created in `/labour`). Entry points to drill into a job.
 - **Per-job board:** the job's cards in the 6 phase columns; each card shows title, code,
   target, assignee, status, accumulated time, and the **pace timer** control.
 - Columns = the 6 phases (Design · Cut · Assembly · Finishing · Delivery · Install). Cards
@@ -116,12 +141,20 @@ pay rates (a later slice).
   a worker → Stop with a quantity → confirm a `labour_session` row tagged
   `(worker, job, code, card, qty)` → confirm it appears on that worker's daily time card.
 
-## Open items for the grill
+## Grill outcomes (resolved) + remaining minors
 
-- The `work_cards` vs the existing `shop_units` table — evolve `shop_units` or a clean new
-  `work_cards`? (Spec leaned "evolve or new"; the grill should decide against the domain.)
-- Terminology: "card" vs "task" vs "work unit" vs the existing `shop_unit` — sharpen in
-  `docs/domain.md`.
-- Does a non-coded card (no `operation_id`) belong, or must every card carry a code?
-- Milestone-nudge mechanics (where it surfaces).
-- The `job_id` conversion's handling of orphan rows.
+**Resolved in the grill (2026-06-22), captured above + in `docs/domain.md` (Work card,
+Uncoded card, Stuck):** clean `work_cards` + retire `shop_units`; Andon → `stuck` + "Needs
+attention"; code-optional + "Needs a code" triage; admin-only code creation (UI placement,
+no logins); manual cards require a description + are flagged.
+
+**Remaining minors (my calls unless you object):**
+- **`job_id` orphan rows:** during the uuid→text conversion, any `labour_sessions.job_id`
+  with no matching `jobs.id` → set null + report the count (don't fail the migration).
+- **Milestone nudge:** surfaces on the per-job board when every card in a phase is `done`
+  — a suggestion to advance that milestone; user confirms. Never automatic.
+- **WIP limits + DnD** from the old station board are dropped for v1 (advisory only;
+  revisit per phase later).
+- **`/labour` timers page stays** (ad-hoc timing + bottleneck analytics + code admin); the
+  card is the primary capture surface. The `shop_units` table is left unused (drop later).
+- **Change orders:** a later estimate's frozen budget seeds *additional* cards (additive).
