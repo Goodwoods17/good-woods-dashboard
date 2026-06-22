@@ -92,6 +92,14 @@ export async function saveJobBudget(
     if (error) throw error;
   }
 
+  // Seed shop-floor work cards from the frozen budget (Slice B). Non-fatal.
+  try {
+    const { seedWorkCardsFromBudget } = await import("./seedWorkCards");
+    await seedWorkCardsFromBudget(input.jobId, input.budget, codeToId);
+  } catch (e) {
+    console.warn("Failed to seed work cards:", e);
+  }
+
   return { estimateId, budgetRows: rows.length };
 }
 
