@@ -58,6 +58,7 @@ import { RoomsPanel } from "./RoomsPanel";
 import { TemplatePicker, TemplateChip } from "./TemplatePicker";
 import { MozaikImportModal } from "./MozaikImportModal";
 import type { MozaikDraft } from "@features/estimator/lib/mozaikImport";
+import type { BomMatch, CatalogLite } from "@features/estimator/lib/bomCatalogMatch";
 
 function newId(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -102,7 +103,20 @@ export function EstimatorView() {
   const router = useRouter();
   const { createJob, jobs } = useJobs();
   const { settings } = useWorkspaceSettings();
-  const { cabinetTypes } = useCatalog();
+  const { cabinetTypes, itemsWithOffers } = useCatalog();
+
+  // Flattened catalog for Mozaik BOM matching (name → surfaced price + supplier).
+  const catalogLite = useMemo<CatalogLite[]>(
+    () =>
+      itemsWithOffers.map((it) => ({
+        id: it.id,
+        name: it.name,
+        unit: it.unit,
+        unitPrice: it.surfacedPrice,
+        supplier: it.surfacedSupplierName,
+      })),
+    [itemsWithOffers]
+  );
 
   // Per-type Assembly/Install minutes, tuned by the shop's labour timers when
   // available, else the shipped defaults. Behaviour-preserving until a labour
@@ -438,27 +452,39 @@ export function EstimatorView() {
   // summary (which drives the cost-code budget), finishing sqft / sheets → the
   // cost-code quantity overrides, room names → Rooms, and the material BOM →
   // line items at $0 for catalog pricing (the app owns the money, ADR 0012).
-  function applyMozaikDraft(draft: MozaikDraft) {
+  function applyMozaikDraft(draft: MozaikDraft, matches: BomMatch[]) {
     setCabinetSummary(draft.cabinetSummary);
     setBudgetQtyByCode((prev) => ({ ...prev, ...draft.qtyByCode }));
     if (draft.roomNames.length > 0) {
       setRooms(draft.roomNames.map((n) => newRoom(n)));
     }
+    const matchByKey = new Map(
+      matches.map((m) => [m.line.name + "__" + m.line.unit, m])
+    );
     const bomLines: LineItem[] = [];
     for (const b of draft.bom) {
       const unit = mapMozaikUnit(b.unit);
       if (!unit) continue; // skip non-line units (lb / C.Ft) — they're metrics
+      const matched = matchByKey.get(b.name + "__" + b.unit)?.match ?? null;
+      const fuzzy = matchByKey.get(b.name + "__" + b.unit)?.confidence === "fuzzy";
       const isDoor = /door|panel/i.test(b.name);
       bomLines.push({
         id: newId("mz"),
         category: isDoor ? "Door materials & profiles" : "Casework",
         item: b.name,
-        description: "(from Mozaik — set price)",
+        description: matched
+          ? fuzzy
+            ? "(Mozaik → catalog — confirm match)"
+            : "(Mozaik → catalog)"
+          : "(from Mozaik — no catalog match, set price)",
         qty: b.qty,
         unit,
-        unitPrice: 0,
+        unitPrice: matched ? matched.unitPrice : 0,
         wastePct: 0,
         markupPct: settings.defaultMarkupPct,
+        catalogId: matched ? matched.id : undefined,
+        supplierSnapshot: matched ? matched.supplier : undefined,
+        unitPriceSnapshot: matched ? matched.unitPrice : undefined,
       });
     }
     if (bomLines.length > 0) setLines((prev) => [...prev, ...bomLines]);
@@ -603,8 +629,9 @@ export function EstimatorView() {
       />
       <MozaikImportModal
         open={mozaikOpen}
+        catalog={catalogLite}
         onClose={() => setMozaikOpen(false)}
-        onConfirm={(draft) => applyMozaikDraft(draft)}
+        onConfirm={(draft, matches) => applyMozaikDraft(draft, matches)}
       />
       {/* No persistence yet — silence unused var warning for AUTO_DERIVED_SECTIONS */}
       <span hidden>{AUTO_DERIVED_SECTIONS.length}</span>

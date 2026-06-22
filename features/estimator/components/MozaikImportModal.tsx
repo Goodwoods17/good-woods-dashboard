@@ -5,31 +5,44 @@
 // material BOM, warnings) → confirm fills the draft estimate. Reads quantities
 // only; the app re-prices (ADR 0012).
 
-import { useState, useCallback } from "react";
-import { UploadCloud, X, AlertTriangle } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { UploadCloud, X, AlertTriangle, Check } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { formatCAD } from "@shared/lib/format";
 import {
   parseMozaikCsv,
   mozaikToEstimateDraft,
   type MozaikDraft,
   type MozaikImport,
 } from "../lib/mozaikImport";
+import {
+  matchBomToCatalog,
+  type BomMatch,
+  type CatalogLite,
+} from "../lib/bomCatalogMatch";
 import { CABINET_TYPES, CABINET_TYPE_LABELS } from "../lib/types";
 
 export function MozaikImportModal({
   open,
+  catalog,
   onClose,
   onConfirm,
 }: {
   open: boolean;
+  catalog: CatalogLite[];
   onClose: () => void;
-  onConfirm: (draft: MozaikDraft, parsed: MozaikImport) => void;
+  onConfirm: (draft: MozaikDraft, matches: BomMatch[]) => void;
 }) {
   const [parsed, setParsed] = useState<MozaikImport | null>(null);
   const [draft, setDraft] = useState<MozaikDraft | null>(null);
   const [fileName, setFileName] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
   const [dragOver, setDragOver] = useState(false);
+
+  const matches = useMemo(
+    () => (draft ? matchBomToCatalog(draft.bom, catalog) : []),
+    [draft, catalog],
+  );
 
   const ingest = useCallback(async (file: File) => {
     setError(null);
@@ -120,7 +133,7 @@ export function MozaikImportModal({
               />
             </label>
           ) : (
-            <ReviewBody draft={draft} parsed={parsed!} fileName={fileName} />
+            <ReviewBody draft={draft} parsed={parsed!} fileName={fileName} matches={matches} />
           )}
 
           {error && (
@@ -140,7 +153,7 @@ export function MozaikImportModal({
             </button>
             <button
               onClick={() => {
-                onConfirm(draft, parsed!);
+                onConfirm(draft, matches);
                 reset();
                 onClose();
               }}
@@ -159,11 +172,15 @@ function ReviewBody({
   draft,
   parsed,
   fileName,
+  matches,
 }: {
   draft: MozaikDraft;
   parsed: MozaikImport;
   fileName: string;
+  matches: BomMatch[];
 }) {
+  const matchByName = new Map(matches.map((m) => [m.line.name + "__" + m.line.unit, m]));
+  const matchedCount = matches.filter((m) => m.match).length;
   return (
     <div className="space-y-4">
       <p className="text-caption text-text-tertiary">
@@ -232,18 +249,41 @@ function ReviewBody({
       {/* BOM */}
       <div>
         <h3 className="text-caption uppercase tracking-[0.04em] text-text-tertiary mb-1">
-          Material BOM ({draft.bom.length}) — priced from your catalog
+          Material BOM ({draft.bom.length}) — {matchedCount} matched to catalog,{" "}
+          {draft.bom.length - matchedCount} to price by hand
         </h3>
         <div className="border border-border rounded-md max-h-44 overflow-y-auto divide-y divide-border">
-          {draft.bom.map((b, i) => (
-            <div key={i} className="flex items-center justify-between px-3 py-1 text-sm">
-              <span className="text-text-secondary truncate">{b.name}</span>
-              <span className="tabular-nums text-text-tertiary shrink-0 ml-3">
-                {b.qty} {b.unit}
-              </span>
-            </div>
-          ))}
+          {draft.bom.map((b, i) => {
+            const m = matchByName.get(b.name + "__" + b.unit);
+            const matched = m?.match ?? null;
+            return (
+              <div key={i} className="flex items-center justify-between px-3 py-1 text-sm gap-3">
+                <span className="text-text-secondary truncate">{b.name}</span>
+                <span className="flex items-center gap-2 shrink-0">
+                  {matched ? (
+                    <span className="inline-flex items-center gap-1 text-caption text-status-on-track">
+                      <Check className="h-3 w-3" strokeWidth={2} />
+                      {formatCAD(matched.unitPrice)}
+                      {m!.confidence === "fuzzy" && (
+                        <span className="text-text-tertiary">?</span>
+                      )}
+                    </span>
+                  ) : (
+                    <span className="text-caption text-status-at-risk">no match</span>
+                  )}
+                  <span className="tabular-nums text-text-tertiary w-16 text-right">
+                    {b.qty} {b.unit}
+                  </span>
+                </span>
+              </div>
+            );
+          })}
         </div>
+        <p className="text-caption text-text-tertiary mt-1">
+          Matched lines import with the catalog price; a{" "}
+          <span className="text-text-tertiary">?</span> is a fuzzy name match to
+          confirm. Unmatched lines come in at $0 to price or add to the catalog.
+        </p>
       </div>
     </div>
   );
