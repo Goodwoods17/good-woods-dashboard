@@ -104,7 +104,13 @@ does the record that holds them.
 - **Trade-line** — a single trade a project *needs*, listed on the project. It
   may be unassigned ("needed, no one booked yet") or filled by a specific
   subtrade. A project has many trade-lines; planning them before the work starts
-  is normal. The thing you add with the "Add trade" button.
+  is normal. The thing you add with the "Add trade" button. **Phase-tagged** (a
+  Toolpath cut → CNC/Cut; a countertop → Install) and carries a **cost** plus
+  **schedule dates** (e.g. a countertop's template date + install date), so a
+  trade-line feeds **both** the project schedule (its dates land on the timeline)
+  and **budget-vs-actual** (its `cost` is the subtrade budget *for its phase*; the
+  matching subtrade cost-actual is the actual). Subtrade variance is therefore
+  **per-phase**, unlike materials (job-level).
 
 ## Workflow & costing
 
@@ -120,7 +126,13 @@ does the record that holds them.
 - **Cost code** — an Operation (a named unit of shop work) that carries a
   short, unique `code` (e.g. `ASM-BASE`). The shared key that lets budgeted
   vs. actual labour be compared across the estimate, the live timers, and
-  the job. Nests under a Phase.
+  the job. **Nests under a Phase (required)** — the phase is its home column on
+  the shop-floor kanban, so each code can become a task card there. Cost codes
+  are **user-managed data** — added/edited in `/labour → Setup → Cost codes`,
+  not hardcoded; a new code added there flows automatically into estimates, the
+  frozen budget, and the Budget-vs-Actual tab. Seeded with a starter set (mostly
+  install/assembly operations); Andrew extends it as products are spec'd. The
+  estimator/budget/P4 resolve codes from this **live registry** (ADR 0012).
 - **Driver** — an optional **unit of measure** a cost code's time scales with
   (sheet, board foot, board, linear foot…). A code *with* a driver tracks
   **minutes per unit** and estimates as `quantity × min/unit`; a code *without*
@@ -150,8 +162,13 @@ does the record that holds them.
   (80–100%), **over** (>100%); the timer's colour language (sage / amber / red),
   reusing the status tones.
 - **Budget** — the planned cost frozen on a Job when an estimate is saved:
-  per cost code for labour (budgeted minutes × phase rate), per phase for
-  materials. The baseline actuals are measured against.
+  **per cost code for labour** (budgeted minutes × phase rate), plus a **single
+  job-level material figure** (the estimate's material total). Materials are a
+  *fixed* estimate, not budgeted per phase — a sheet or a door isn't owned by one
+  labour phase. Buying more later (an error/replacement, or under-estimated yield)
+  shows as **material variance** against that one number. The baseline actuals are
+  measured against. (ADR 0012 / P4: labour carries the per-code variance detail;
+  material is job-level.)
 - **Cost-actual** — an incurred job cost as it lands: in-house labour (from
   timer Sessions), or a logged **Supplier** (material) or **Subtrade**
   payment, optionally attributed to the Partner paid. Distinct from the
