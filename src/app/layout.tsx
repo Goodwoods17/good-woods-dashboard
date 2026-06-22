@@ -8,7 +8,7 @@ import { JobsProvider } from "@features/jobs/lib/jobsStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
-import { ShopProvider } from "@features/shop/lib/shopStore";
+import { WorkCardsProvider } from "@features/shop/lib/workCardsStore";
 import { RefaceProvider } from "@features/reface/lib/refaceStore";
 import { LabourProvider } from "@features/labour/lib/labourStore";
 import { TradesProvider } from "@features/partners/lib/tradesStore";
@@ -49,7 +49,7 @@ export default function RootLayout({
               <ContactsProvider>
                 <DocumentsProvider>
                   <CatalogProvider>
-                    <ShopProvider>
+                    <WorkCardsProvider>
                       <RefaceProvider>
                         <LabourProvider>
                           <TradesProvider>
@@ -63,7 +63,7 @@ export default function RootLayout({
                           </TradesProvider>
                         </LabourProvider>
                       </RefaceProvider>
-                    </ShopProvider>
+                    </WorkCardsProvider>
                   </CatalogProvider>
                 </DocumentsProvider>
               </ContactsProvider>
