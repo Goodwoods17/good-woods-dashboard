@@ -157,6 +157,15 @@ does the record that holds them.
   band — the Andon idea (visible problem, team helps), folded into the card.
   *Distinct from* the pace band **"blocked"**, which means a running Session is
   *over* its suggested time. Different axes: workflow vs pace.
+- **External blocker** — the **project** is waiting on an **outside party** (a Contact —
+  client/homeowner/designer/architect/GC — or a supplier/subtrade) before work can
+  continue: client sign-off on shop drawings, designer-approved handles, a permit. Unlike
+  a **Stuck** Work card (an *internal* shop task the crew can unstick), an external blocker
+  is **out of the shop's hands** and blocks at the **project / phase** level. Recorded with
+  *who* we're waiting on, *since when* (so it ages — "stalled 6 days"), and *which phase it
+  gates*; it drives the job's `blocker` + `health = blocked`, surfacing in the Hitlist,
+  Schedule, briefing, and pipeline, and on the shop board's gated phase. A milestone won't
+  advance while an external blocker gates it. (Structured `job_blockers` table — Slice B2.)
 - **Driver** — an optional **unit of measure** a cost code's time scales with
   (sheet, board foot, board, linear foot…). A code *with* a driver tracks
   **minutes per unit** and estimates as `quantity × min/unit`; a code *without*

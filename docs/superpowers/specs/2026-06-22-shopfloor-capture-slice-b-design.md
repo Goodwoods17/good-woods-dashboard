@@ -132,6 +132,24 @@ optional), **per-code** (`operation_id`), and **per-worker**. Actual labour-$ in
 Σ session-hours × the code's snapshot rate (Slice A/P4 decision); per-employee $ waits for
 pay rates (a later slice).
 
+## Adjacent — external blockers (Slice B2, its own slice)
+
+A **`stuck` card is internal** (the crew can unstick it). A project waiting on an **outside
+party** (client sign-off, designer-approved handles, a permit) is a different concept — an
+**external blocker** — and belongs at the project level (see `docs/domain.md`). Decision:
+build it as **its own small slice (B2)** because a job can have several at once, each needs
+*who* + *since* (aging) + *which phase it gates* + history, and it leans on the **jobs**
+feature (`jobs.blocker`/`health`/Hitlist/briefing) more than the shop board.
+
+- **B2 builds:** a `job_blockers` table (`job_id`, `reason`, `waiting_on_contact_id`
+  nullable + `waiting_on_label`, `gated_phase_id` nullable, `raised_at`, `resolved_at`);
+  it derives the job's `blocker` text + `health`; add/resolve UI; surfacing in Hitlist /
+  Schedule / briefing / pipeline; the milestone-advance gate.
+- **Slice B (now) only displays them read-only:** the shop board's gated phase shows
+  "⏳ externally blocked — waiting on [party], Nd" by reading the existing `job.blocker` /
+  `health`. No `job_blockers` write path in Slice B. (B2 sequence: independent of the
+  P4 critical path — do it alongside B or right after.)
+
 ## Verification
 
 - Migrations validated via the transactional dry-run; the `job_id` conversion proven on a
