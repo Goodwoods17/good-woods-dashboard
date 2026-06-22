@@ -6,9 +6,10 @@ import { cn } from "@shared/lib/utils";
 import { useLabour } from "@features/labour/lib/labourStore";
 import { TimersBoard } from "./TimersBoard";
 import { BottleneckAnalytics } from "./BottleneckAnalytics";
+import { TimeCardsView } from "./TimeCardsView";
 import { LabourSetup } from "./LabourSetup";
 
-type Tab = "timers" | "analytics" | "setup";
+type Tab = "timers" | "analytics" | "timecards" | "setup";
 
 export function LabourView() {
   const { running, suggestions, loading, error } = useLabour();
@@ -17,6 +18,7 @@ export function LabourView() {
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "timers", label: "Timers", count: running.length || undefined },
     { key: "analytics", label: "Bottlenecks", count: suggestions.length || undefined },
+    { key: "timecards", label: "Time cards" },
     { key: "setup", label: "Setup" },
   ];
 
@@ -71,6 +73,8 @@ export function LabourView() {
           <TimersBoard />
         ) : tab === "analytics" ? (
           <BottleneckAnalytics />
+        ) : tab === "timecards" ? (
+          <TimeCardsView />
         ) : (
           <LabourSetup />
         )}
