@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ArrowDownRight, ArrowUpRight } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, ExternalLink } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { getStaleness, type PriceDelta } from "@features/catalog/lib/priceHistory";
+import type { CatalogKind } from "@features/catalog/lib/catalogStore";
 
 /**
  * Auto-growing text cell: wraps long values onto extra lines (growing the row
@@ -36,7 +37,9 @@ export function AutoText({
       placeholder={placeholder}
       onChange={(e) => onChange(e.target.value)}
       className={cn(
-        "w-full resize-none overflow-hidden break-words rounded-md bg-transparent px-2 py-1 text-sm leading-snug text-text-primary placeholder:text-text-tertiary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft",
+        // break-normal keeps whole words intact: narrow columns wrap at spaces
+        // (growing the row taller) instead of splitting a word mid-letter.
+        "w-full resize-none overflow-hidden break-normal [overflow-wrap:normal] rounded-md bg-transparent px-2 py-1 text-sm leading-snug text-text-primary placeholder:text-text-tertiary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft",
         className
       )}
     />
@@ -116,6 +119,61 @@ export function PreferredBadge() {
     <span className="inline-flex items-center gap-0.5 rounded-full bg-accent-soft px-1.5 py-0.5 text-micro font-medium text-accent">
       ★ preferred
     </span>
+  );
+}
+
+const KIND_LABEL: Record<CatalogKind, string> = {
+  material: "Material",
+  hardware: "Hardware",
+  door: "Door",
+  finish: "Finish",
+  insert: "Insert",
+  labour: "Labour",
+  service: "Service",
+};
+
+/**
+ * Quiet, monochrome kind tag. Differentiation rides on the word (a11y: never
+ * colour alone), not a SaaS-style coloured pill — so a hinge reads apart from a
+ * sheet at a glance without turning the table into a traffic-light.
+ */
+export function KindBadge({ kind }: { kind: CatalogKind }) {
+  return (
+    <span className="inline-flex items-center whitespace-nowrap rounded-full bg-surface-sunken px-2 py-0.5 text-micro font-medium uppercase tracking-wide text-text-tertiary">
+      {KIND_LABEL[kind]}
+    </span>
+  );
+}
+
+/**
+ * Item-level spec / manufacturer link (distinct from an offer's buy URL).
+ * Inline-editable like every other cell; when set, an external-link icon opens
+ * it in a new tab.
+ */
+export function LinkCell({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const v = value.trim();
+  const href = v ? (/^https?:\/\//i.test(v) ? v : `https://${v}`) : "";
+  return (
+    <div className="flex items-center gap-0.5">
+      <input
+        type="url"
+        value={value}
+        placeholder="—"
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full min-w-0 rounded-md bg-transparent px-2 py-1 text-xs text-text-secondary placeholder:text-text-tertiary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
+      />
+      {href && (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer"
+          title={`Open ${v}`}
+          className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-accent transition-colors duration-fast hover:bg-accent-soft/40"
+        >
+          <ExternalLink className="h-3.5 w-3.5" strokeWidth={2} />
+        </a>
+      )}
+    </div>
   );
 }
 

@@ -22,6 +22,7 @@ import {
   type CompanyInfo,
 } from "@features/jobs/lib/invoice";
 import { hasSupabase, getSupabase } from "@shared/lib/supabase";
+import { useAuth } from "@shared/lib/authStore";
 import { formatError } from "@shared/lib/formatError";
 
 // Workspace-wide editable settings used by the estimator, invoicing, and other
@@ -105,6 +106,8 @@ function localSave(s: WorkspaceSettings) {
 
 export function WorkspaceSettingsProvider({ children }: { children: ReactNode }) {
   const backend = hasSupabase() ? "supabase" : "localStorage";
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
   const [settings, setSettings] = useState<WorkspaceSettings>(DEFAULT_WORKSPACE_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,6 +131,14 @@ export function WorkspaceSettingsProvider({ children }: { children: ReactNode })
           setSettings(localLoad());
           setLoading(false);
         }
+        return;
+      }
+      // Supabase backend: wait for auth, then require a signed-in user. The
+      // anon SELECT (and the first-run seed insert) hit RLS and 401 on the
+      // unauthenticated /login page, where this provider still mounts.
+      if (authLoading) return;
+      if (!userId) {
+        if (!cancelled) setLoading(false);
         return;
       }
       try {
@@ -156,7 +167,7 @@ export function WorkspaceSettingsProvider({ children }: { children: ReactNode })
     return () => {
       cancelled = true;
     };
-  }, [backend]);
+  }, [backend, userId, authLoading]);
 
   // Persist on change (debounced for Supabase, immediate for localStorage).
   const persist = useCallback(
