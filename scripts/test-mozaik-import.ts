@@ -15,7 +15,10 @@ import {
   derivePerRoomBudgets,
   FULL_BUILD_CODE_SET,
 } from "../features/job-costing/lib/budget";
+import { registryFromDefs, CANONICAL_COST_CODES } from "../features/job-costing/lib/costCodes";
 import { DEFAULT_LABOUR_RATES } from "../features/estimator/lib/types";
+
+const REG = registryFromDefs(CANONICAL_COST_CODES);
 
 let passed = 0;
 function check(label: string, fn: () => void) {
@@ -166,12 +169,14 @@ check("Σ(per-room budgets) reconciles to the job-level budget", () => {
     FULL_BUILD_CODE_SET,
     draft.cabinetSummary,
     DEFAULT_LABOUR_RATES,
+    REG,
     { qtyByCode: draft.qtyByCode },
   );
   const perRoom = derivePerRoomBudgets(
     draft.perRoom.map((r) => ({ name: r.name, cabinets: r.cabinetSummary, qtyByCode: r.qtyByCode })),
     FULL_BUILD_CODE_SET,
     DEFAULT_LABOUR_RATES,
+    REG,
   );
   const sum = perRoom.reduce((s, r) => s + r.budget.totalAmount, 0);
   near(sum, jobLevel.totalAmount, 0.05);
@@ -182,6 +187,16 @@ check("Σ(per-room budgets) reconciles to the job-level budget", () => {
     closet.budget.rows.find((r) => r.code === "ASM-BASE")?.quantity ?? 0,
     0,
   );
+});
+
+check("Mozaik counts feed the component cost codes", () => {
+  const k = byRoom["Kitchen"];
+  assert.equal(k.metrics.inserts, 2); // garbage + bottle pullout (from a # Inserts row)
+  // draft job-level qtyByCode
+  assert.equal(draft.qtyByCode["HW-PULL"], 35 + 11); // kitchen 35 + vanity 11
+  assert.equal(draft.qtyByCode["INST-ROLLOUT"], 4); // kitchen rollouts (+0 trays)
+  assert.equal(draft.qtyByCode["FIT-DOOR"], 40); // kitchen 29 + vanity 11
+  assert.ok(draft.qtyByCode["INST-INSERT"] >= 2);
 });
 
 check("a collapsed room (total only, no detail) raises a warning", () => {

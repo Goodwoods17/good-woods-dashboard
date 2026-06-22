@@ -44,9 +44,9 @@ Order is informational; the parser keys on the (normalized) label, not position.
 | `# Wall Finished Ends` | `#` | " |
 | `# Tall Finished Ends` | `#` | " |
 | `# Openings` | `#` | masking / finishing detail |
-| `# Base Doors` | `#` | base/tall door finishing + install (separate rate from wall) |
-| `# Wall Doors` | `#` | wall door finishing + install |
-| `# Drawer Fronts` | `#` | finishing + install |
+| `# Base Doors` | `#` | `FIT-DOOR` qty (partial) — base/tall door finishing + install (separate rate from wall) |
+| `# Wall Doors` | `#` | `FIT-DOOR` qty (partial) — wall door finishing + install |
+| `# Drawer Fronts` | `#` | `FIT-DOOR` qty (partial) — finishing + install (`FIT-DOOR` = base + wall doors + drawer fronts) |
 | `# Drawer Boxes` | `#` | assembly + hardware |
 | `# Shelves` | `#` | shelf install |
 | `# Appliances` | `#` | appliance install / moving labour |
@@ -54,12 +54,15 @@ Order is informational; the parser keys on the (normalized) label, not position.
 ### Hardware-mount & accessory labour (per-unit drivers → cost codes + learning loop)
 | Label | Units | → App |
 |---|---|---|
-| `# Pulls` | `#` | pull-mount / install labour |
+| `# Pulls` | `#` | `HW-PULL` qty — pull-mount / install labour |
 | `# Hinges` | `#` | hinge-bore / mount labour |
 | `# Guides` | `#` | guide-mount labour |
-| `# Rollout Shelves` | `#` | rollout assembly + mount labour |
-| `# Tray Boxes` | `#` | tray assembly labour |
+| `# Rollout Shelves` | `#` | `INST-ROLLOUT` qty (+ `# Tray Boxes`) — rollout assembly + mount labour |
+| `# Tray Boxes` | `#` | `INST-ROLLOUT` qty (added to `# Rollout Shelves`) — tray assembly labour |
+| `# Inserts` | `#` | `INST-INSERT` qty — insert/accessory install count (Garbage/Bottle pullouts, etc.) |
 | `# Closet Rods` | `#` | closet-rod install (closet jobs) |
+
+Component-code mapping (ADR 0012 grill): `# Inserts (count) → INST-INSERT`; `# Rollout Shelves + # Tray Boxes → INST-ROLLOUT`; `# Pulls → HW-PULL`; `# Base Doors + # Wall Doors + # Drawer Fronts → FIT-DOOR` (the component cost codes, ADR 0012 grill).
 
 ### Finishing
 | `Finished Area` | `SqFt` | `FIN-SPRAY` qty |

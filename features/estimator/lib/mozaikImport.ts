@@ -33,6 +33,7 @@ export type MozaikMetrics = {
   guides?: number;
   rolloutShelves?: number;
   trayBoxes?: number;
+  inserts?: number;
   closetRods?: number;
   countertopSqft?: number;
   countertopLf?: number;
@@ -139,6 +140,7 @@ const METRIC_KEYS: Record<string, keyof MozaikMetrics> = {
   "# guides": "guides",
   "# rollout shelves": "rolloutShelves",
   "# tray boxes": "trayBoxes",
+  "# inserts": "inserts",
   "# closet rods": "closetRods",
   "# counter joints": "counterJoints",
   "# counter radius": "counterRadius",
@@ -296,6 +298,10 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
   let finishedAreaSqft = 0;
   let sheets = 0;
   let pulls = 0;
+  let inserts = 0;
+  let rollouts = 0;
+  let pullsCount = 0;
+  let fitDoors = 0;
   const bom: MozaikBomLine[] = [];
   const perRoom: MozaikRoomDraft[] = [];
 
@@ -310,6 +316,13 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
     finishedAreaSqft += room.metrics.finishedAreaSqft ?? 0;
     sheets += room.metrics.sheets ?? 0;
     pulls += room.metrics.pulls ?? 0;
+    inserts += room.metrics.inserts ?? 0;
+    rollouts += (room.metrics.rolloutShelves ?? 0) + (room.metrics.trayBoxes ?? 0);
+    pullsCount += room.metrics.pulls ?? 0;
+    fitDoors +=
+      (room.metrics.baseDoors ?? 0) +
+      (room.metrics.wallDoors ?? 0) +
+      (room.metrics.drawerFronts ?? 0);
     bom.push(...room.bom);
     perRoom.push({
       name: room.name,
@@ -317,6 +330,13 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
       qtyByCode: {
         "FIN-SPRAY": round2(room.metrics.finishedAreaSqft ?? 0),
         "CUT-SHEET": room.metrics.sheets ?? 0,
+        "INST-INSERT": room.metrics.inserts ?? 0,
+        "INST-ROLLOUT": (room.metrics.rolloutShelves ?? 0) + (room.metrics.trayBoxes ?? 0),
+        "HW-PULL": room.metrics.pulls ?? 0,
+        "FIT-DOOR":
+          (room.metrics.baseDoors ?? 0) +
+          (room.metrics.wallDoors ?? 0) +
+          (room.metrics.drawerFronts ?? 0),
       },
     });
   }
@@ -334,6 +354,10 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
     qtyByCode: {
       "FIN-SPRAY": round2(finishedAreaSqft),
       "CUT-SHEET": sheets,
+      "INST-INSERT": inserts,
+      "INST-ROLLOUT": rollouts,
+      "HW-PULL": pullsCount,
+      "FIT-DOOR": fitDoors,
     },
     bom: mergeBom(bom),
     roomNames: imported.rooms.map((r) => r.name),
