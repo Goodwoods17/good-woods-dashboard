@@ -36,4 +36,13 @@ check("DEL-LOAD is the documented total-cabinet-count code", () => {
   assert.ok(TOTAL_CABINET_COUNT_CODES.has("DEL-LOAD"));
 });
 
+check("soft-deleted (inactive) operations are excluded from the registry", () => {
+  const reg = buildCostCodeRegistry([
+    { id: "1", name: "Live", categoryId: "assembly", cabinetType: null, defaultMinutes: 10, code: "LIVE-1", driverUnit: null, active: true } as any,
+    { id: "2", name: "Retired", categoryId: "assembly", cabinetType: null, defaultMinutes: 10, code: "DEAD-1", driverUnit: null, active: false } as any,
+  ]);
+  assert.equal(reg.has("LIVE-1"), true);
+  assert.equal(reg.has("DEAD-1"), false);
+});
+
 console.log(`\n${passed} checks passed.`);

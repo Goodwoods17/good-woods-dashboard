@@ -115,6 +115,7 @@ const PHASE_IDS = new Set<string>(PHASE_ORDER);
 export function buildCostCodeRegistry(ops: LabourOperation[]): CostCodeRegistry {
   const reg: CostCodeRegistry = new Map();
   for (const op of ops) {
+    if (op.active === false) continue;
     if (!op.code) continue;
     if (!op.categoryId || !PHASE_IDS.has(op.categoryId)) continue;
     reg.set(op.code, {
