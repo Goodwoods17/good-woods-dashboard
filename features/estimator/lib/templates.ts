@@ -30,7 +30,11 @@ export type EstimateTemplate = {
 // Keep in lockstep with CANONICAL_COST_CODES (costCodes.ts owns the truth).
 const ASM = ["ASM-BASE", "ASM-WALL", "ASM-TALL", "ASM-ISLAND"];
 const INST = ["INST-BASE", "INST-WALL", "INST-TALL", "INST-ISLAND"];
-const FULL_BUILD_CODES = ["DSN", "CUT-SHEET", ...ASM, "FIN-SPRAY", "DEL-LOAD", ...INST];
+// Component install/assembly codes (ADR 0012 grill) — fed by the Mozaik import's
+// # inserts / # rollouts / # pulls / # doors counts. A code only budgets if it's in
+// the active template's set, so the templates that install components must list them.
+const COMPONENT = ["INST-INSERT", "INST-ROLLOUT", "HW-PULL", "FIT-DOOR"];
+const FULL_BUILD_CODES = ["DSN", "CUT-SHEET", ...ASM, "FIN-SPRAY", "DEL-LOAD", ...INST, ...COMPONENT];
 
 export const FULL_BUILD_ID = "tpl_full_build";
 export const REFACE_ID = "tpl_reface";
@@ -60,7 +64,7 @@ export const BUILT_IN_TEMPLATES: EstimateTemplate[] = [
       "install",
       "deficiencies",
     ],
-    costCodeSet: ["FIN-SPRAY", "DEL-LOAD", ...INST],
+    costCodeSet: ["FIN-SPRAY", "DEL-LOAD", ...INST, "FIT-DOOR", "HW-PULL"],
     isBuiltIn: true,
   },
   {
@@ -68,7 +72,7 @@ export const BUILT_IN_TEMPLATES: EstimateTemplate[] = [
     name: "Install only",
     description: "Sub-out install service. Delivery + install + touch-ups.",
     activeSections: ["prework", "delivery", "install", "deficiencies"],
-    costCodeSet: ["DEL-LOAD", ...INST],
+    costCodeSet: ["DEL-LOAD", ...INST, "INST-INSERT", "INST-ROLLOUT", "HW-PULL"],
     isBuiltIn: true,
   },
   {
