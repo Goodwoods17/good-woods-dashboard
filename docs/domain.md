@@ -128,6 +128,27 @@ does the record that holds them.
   `ea/sqft/lf/bf` plus `sheet`/`board`) so per-unit averages stay comparable. A
   timer Session on a driven code records the `quantity` done, enabling
   physical-%-complete projection. Maps to quantity on a QuickBooks item line.
+- **Session** — one timer run of a Cost code by a Worker on a Project (optional).
+  Measures **active time** (below). The unit the shop-floor timer attaches to;
+  one **open** Session per worker (starting a new one auto-stops their previous).
+  Maps to a QuickBooks **Time Activity** (ADR 0011).
+- **Active time** — a Session's hands-on duration, **pauses excluded**. The basis
+  for a cost code's historical average, the in-house labour Cost-actual, and pace.
+  Wall-clock start→stop is *not* used. Banked across pause/resume; the full active
+  total is fixed on Stop (ADR 0011).
+- **Pause** — a within-sitting break in a Session (lunch, interruption); resumes
+  the same Session and does not count toward active time. Switching to another
+  cost code, or ending the day, is a **Stop** + a new Session later — never a pause.
+- **Target quantity** — for a driven Cost code, the planned units entered on
+  *Start* (the "Y" that yields a suggested time). Distinct from `quantity`, the
+  actual units done, entered on *Stop*.
+- **Suggested time** — the "should take about" target shown on a running timer:
+  the outlier-trimmed historical average (per-unit × target quantity for driven
+  codes) → else the Budget's bid estimate → else the operation's hand-set default.
+  Drives the pace colour.
+- **Pace** — active time ÷ suggested time, banded **on-track** (<80%), **at-risk**
+  (80–100%), **over** (>100%); the timer's colour language (sage / amber / red),
+  reusing the status tones.
 - **Budget** — the planned cost frozen on a Job when an estimate is saved:
   per cost code for labour (budgeted minutes × phase rate), per phase for
   materials. The baseline actuals are measured against.

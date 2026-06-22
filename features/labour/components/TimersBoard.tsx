@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Play, Square, Trash2, Clock } from "lucide-react";
+import { Play, Trash2, Clock } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import {
@@ -11,7 +11,9 @@ import {
   formatDuration,
   type LabourSession,
 } from "@features/labour/lib/labourStore";
-import { DRIVER_UNIT_LABELS, type DriverUnit } from "@features/job-costing/lib/types";
+import { suggestedMinutes } from "@features/labour/lib/pace";
+import { DRIVER_UNIT_LABELS } from "@features/job-costing/lib/types";
+import { TaskTimer } from "./TaskTimer";
 
 export function TimersBoard() {
   const {
@@ -23,10 +25,15 @@ export function TimersBoard() {
     running,
     sessions,
     startTimer,
+    pauseTimer,
+    resumeTimer,
     stopTimer,
     deleteSession,
   } = useLabour();
   const { jobs } = useJobs();
+
+  // One shared clock for every running card (avoids N intervals).
+  const now = useNow();
 
   const activeOps = useMemo(() => operations.filter((o) => o.active), [operations]);
   const activeWorkers = useMemo(() => workers.filter((w) => w.active), [workers]);
@@ -34,6 +41,21 @@ export function TimersBoard() {
   const [operationId, setOperationId] = useState("");
   const [workerId, setWorkerId] = useState("");
   const [jobId, setJobId] = useState("");
+  const [targetQty, setTargetQty] = useState("");
+
+  const selectedDriver = operationId ? (operationById.get(operationId)?.driverUnit ?? null) : null;
+
+  // Completed Sessions per operation, for the suggested-time average.
+  const completedByOp = useMemo(() => {
+    const m = new Map<string, LabourSession[]>();
+    for (const s of sessions) {
+      if (!s.operationId || s.endedAt === null) continue;
+      const arr = m.get(s.operationId) ?? [];
+      arr.push(s);
+      m.set(s.operationId, arr);
+    }
+    return m;
+  }, [sessions]);
 
   const opLabel = (id: string) => {
     const o = operationById.get(id);
@@ -91,12 +113,35 @@ export function TimersBoard() {
               ))}
             </Select>
           </Labeled>
+          {selectedDriver && (
+            <Labeled
+              label={`Target ${DRIVER_UNIT_LABELS[selectedDriver]}`}
+              className="min-w-[7rem]"
+            >
+              <input
+                type="number"
+                inputMode="decimal"
+                min={0}
+                value={targetQty}
+                onChange={(e) => setTargetQty(e.target.value)}
+                placeholder="0"
+                className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm tabular-nums text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-soft"
+              />
+            </Labeled>
+          )}
           <button
             type="button"
             disabled={!canStart}
             onClick={() => {
-              startTimer({ operationId, workerId: workerId || null, jobId: jobId || null });
+              startTimer({
+                operationId,
+                workerId: workerId || null,
+                jobId: jobId || null,
+                targetQuantity:
+                  selectedDriver && targetQty.trim() !== "" ? Number(targetQty) : null,
+              });
               setJobId("");
+              setTargetQty("");
             }}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-colors duration-fast",
@@ -131,20 +176,34 @@ export function TimersBoard() {
           </p>
         ) : (
           <div className="grid gap-2 sm:grid-cols-2">
-            {running.map((s) => (
-              <RunningCard
-                key={s.id}
-                session={s}
-                title={opLabel(s.operationId ?? "")}
-                worker={s.workerId ? (workerById.get(s.workerId)?.name ?? null) : null}
-                category={s.categoryId ? (categoryById.get(s.categoryId)?.label ?? null) : null}
-                job={jobLabel(s.jobId)}
-                driverUnit={
-                  s.operationId ? (operationById.get(s.operationId)?.driverUnit ?? null) : null
-                }
-                onStop={(quantity) => stopTimer(s.id, quantity)}
-              />
-            ))}
+            {running.map((s) => {
+              const op = s.operationId ? operationById.get(s.operationId) : undefined;
+              const completed = s.operationId ? (completedByOp.get(s.operationId) ?? []) : [];
+              const suggested = op
+                ? suggestedMinutes(op, completed, s.targetQuantity, null)
+                : { minutes: null, source: null, sampleCount: 0 };
+              return (
+                <TaskTimer
+                  key={s.id}
+                  session={s}
+                  title={opLabel(s.operationId ?? "")}
+                  meta={{
+                    category: s.categoryId ? (categoryById.get(s.categoryId)?.label ?? null) : null,
+                    worker: s.workerId ? (workerById.get(s.workerId)?.name ?? null) : null,
+                    job: jobLabel(s.jobId),
+                  }}
+                  driverUnit={op?.driverUnit ?? null}
+                  suggested={suggested}
+                  // Bid estimate comes from job_cost_budgets, populated by job-costing P3.
+                  // Best-effort + often empty until then (grilled); show historical only.
+                  estimateMinutes={null}
+                  now={now}
+                  onPause={() => pauseTimer(s.id)}
+                  onResume={() => resumeTimer(s.id)}
+                  onStop={(quantity) => stopTimer(s.id, quantity)}
+                />
+              );
+            })}
           </div>
         )}
       </section>
@@ -180,94 +239,6 @@ export function TimersBoard() {
             ))}
           </ul>
         </section>
-      )}
-    </div>
-  );
-}
-
-function RunningCard({
-  session,
-  title,
-  worker,
-  category,
-  job,
-  driverUnit,
-  onStop,
-}: {
-  session: LabourSession;
-  title: string;
-  worker: string | null;
-  category: string | null;
-  job: string | null;
-  driverUnit: DriverUnit | null;
-  onStop: (quantity?: number | null) => void;
-}) {
-  const now = useNow();
-  // Driven codes ask "how many?" before stopping, so per-unit averages build up.
-  const [confirming, setConfirming] = useState(false);
-  const [qty, setQty] = useState("");
-
-  const stop = () => {
-    if (driverUnit && !confirming) {
-      setConfirming(true);
-      return;
-    }
-    if (driverUnit) {
-      const n = qty.trim() === "" ? null : Number(qty);
-      onStop(typeof n === "number" && Number.isFinite(n) ? n : null);
-    } else {
-      onStop();
-    }
-  };
-
-  return (
-    <div className="rounded-xl border border-accent-soft bg-accent-soft/20 p-3">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="truncate font-medium text-text-primary">{title}</div>
-          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-text-tertiary">
-            {category && <span className="rounded-full bg-surface px-1.5 py-0.5">{category}</span>}
-            {worker && <span>{worker}</span>}
-            {job && <span className="truncate">· {job}</span>}
-          </div>
-        </div>
-        {!confirming && (
-          <button
-            type="button"
-            onClick={stop}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-pill px-3 py-1.5 text-xs font-medium text-white transition-opacity duration-fast hover:opacity-90"
-          >
-            <Square className="h-3 w-3" strokeWidth={2} fill="currentColor" />
-            Stop
-          </button>
-        )}
-      </div>
-      <div className="mt-2 font-mono text-2xl font-medium tabular-nums text-text-primary">
-        {formatDuration(durationMs(session, now), true)}
-      </div>
-      {confirming && driverUnit && (
-        <div className="mt-2 flex items-center gap-2 border-t border-accent-soft pt-2">
-          <input
-            type="number"
-            inputMode="decimal"
-            min={0}
-            autoFocus
-            value={qty}
-            onChange={(e) => setQty(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && stop()}
-            placeholder="0"
-            className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm tabular-nums text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-soft"
-          />
-          <span className="text-xs text-text-tertiary">{DRIVER_UNIT_LABELS[driverUnit]} done</span>
-          <button
-            type="button"
-            onClick={stop}
-            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-pill px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
-          >
-            <Square className="h-3 w-3" strokeWidth={2} fill="currentColor" />
-            Stop
-          </button>
-        </div>
       )}
     </div>
   );
