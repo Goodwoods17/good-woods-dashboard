@@ -37,7 +37,9 @@ import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEsti
 import {
   deriveCostCodeBudget,
   reconcileBudgetVsQuote,
+  derivePerRoomBudgets,
   FULL_BUILD_CODE_SET,
+  type RoomBudget,
 } from "@features/job-costing/lib/budget";
 import { saveJobBudget } from "@features/job-costing/lib/saveBudget";
 import { CostCodesPanel } from "@features/job-costing/components/CostCodesPanel";
@@ -57,7 +59,7 @@ import { DeficienciesBlock } from "./DeficienciesBlock";
 import { RoomsPanel } from "./RoomsPanel";
 import { TemplatePicker, TemplateChip } from "./TemplatePicker";
 import { MozaikImportModal } from "./MozaikImportModal";
-import type { MozaikDraft } from "@features/estimator/lib/mozaikImport";
+import type { MozaikDraft, MozaikRoomDraft } from "@features/estimator/lib/mozaikImport";
 import type { BomMatch, CatalogLite } from "@features/estimator/lib/bomCatalogMatch";
 
 function newId(prefix: string): string {
@@ -153,6 +155,9 @@ export function EstimatorView() {
   // sqft, cut sheets) and minute tuning before the budget freezes at save.
   const [budgetQtyByCode, setBudgetQtyByCode] = useState<Record<string, number>>({});
   const [budgetMinutesByCode, setBudgetMinutesByCode] = useState<Record<string, number>>({});
+  // Per-room cabinet snapshot from a Mozaik import — lets Save-as-Job split the
+  // frozen budget by room (null for manual estimates).
+  const [mozaikPerRoom, setMozaikPerRoom] = useState<MozaikRoomDraft[] | null>(null);
 
   const activeSectionIds = activeTemplate.activeSections;
   const overheadPct = settings.defaultOverheadPct;
@@ -455,6 +460,7 @@ export function EstimatorView() {
   function applyMozaikDraft(draft: MozaikDraft, matches: BomMatch[]) {
     setCabinetSummary(draft.cabinetSummary);
     setBudgetQtyByCode((prev) => ({ ...prev, ...draft.qtyByCode }));
+    setMozaikPerRoom(draft.perRoom.length > 0 ? draft.perRoom : null);
     if (draft.roomNames.length > 0) {
       setRooms(draft.roomNames.map((n) => newRoom(n)));
     }
@@ -509,10 +515,31 @@ export function EstimatorView() {
     // baseline for budget-vs-actual. Non-fatal: a costing hiccup shouldn't
     // strand the user on a half-saved estimate.
     try {
+      // Split the budget by room when a Mozaik per-room snapshot is present AND
+      // it still reconciles to the job-level budget (i.e. counts weren't edited
+      // since import). Minute tuning flows through; count edits fall back to a
+      // single job-level budget so the frozen rows always match the panel.
+      let perRoom: RoomBudget[] | undefined;
+      if (mozaikPerRoom && mozaikPerRoom.length > 0) {
+        const codes = activeTemplate.costCodeSet ?? FULL_BUILD_CODE_SET;
+        const rb = derivePerRoomBudgets(
+          mozaikPerRoom.map((r) => ({
+            name: r.name,
+            cabinets: r.cabinetSummary,
+            qtyByCode: r.qtyByCode,
+          })),
+          codes,
+          settings.labourRates,
+          budgetMinutesByCode
+        );
+        const sum = rb.reduce((s, r) => s + r.budget.totalAmount, 0);
+        if (Math.abs(sum - costCodeBudget.totalAmount) < 0.5) perRoom = rb;
+      }
       await saveJobBudget({
         jobId: job.id,
         quotedTotal: totals.quoted,
         budget: costCodeBudget,
+        perRoom,
       });
     } catch (e) {
       console.warn("Failed to write job cost budget:", e);

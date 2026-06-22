@@ -10,6 +10,12 @@ import {
   parseCsvLine,
   mozaikToEstimateDraft,
 } from "../features/estimator/lib/mozaikImport";
+import {
+  deriveCostCodeBudget,
+  derivePerRoomBudgets,
+  FULL_BUILD_CODE_SET,
+} from "../features/job-costing/lib/budget";
+import { DEFAULT_LABOUR_RATES } from "../features/estimator/lib/types";
 
 let passed = 0;
 function check(label: string, fn: () => void) {
@@ -145,6 +151,37 @@ check("draft merges identical BOM lines across rooms", () => {
   assert.equal(doorCount!.qty, 22); // 17 + 5
   const doorSqft = draft.bom.find((b) => b.name === "MDF Flat Panel Door" && b.unit === "SqFt");
   near(doorSqft!.qty, 55.1); // 42.7 + 12.4
+});
+
+// ── Per-room budget split ──
+check("draft carries a per-room breakdown (3 rooms)", () => {
+  assert.equal(draft.perRoom.length, 3);
+  const kitchen = draft.perRoom.find((r) => r.name === "Kitchen")!;
+  assert.equal(kitchen.cabinetSummary.base.count, 13);
+  assert.equal(kitchen.qtyByCode["CUT-SHEET"], 20);
+});
+
+check("Σ(per-room budgets) reconciles to the job-level budget", () => {
+  const jobLevel = deriveCostCodeBudget(
+    FULL_BUILD_CODE_SET,
+    draft.cabinetSummary,
+    DEFAULT_LABOUR_RATES,
+    { qtyByCode: draft.qtyByCode },
+  );
+  const perRoom = derivePerRoomBudgets(
+    draft.perRoom.map((r) => ({ name: r.name, cabinets: r.cabinetSummary, qtyByCode: r.qtyByCode })),
+    FULL_BUILD_CODE_SET,
+    DEFAULT_LABOUR_RATES,
+  );
+  const sum = perRoom.reduce((s, r) => s + r.budget.totalAmount, 0);
+  near(sum, jobLevel.totalAmount, 0.05);
+  // Linen Closet should carry only tall assembly/install (+ finishing/cut).
+  const closet = perRoom.find((r) => r.roomLabel === "Linen Closet")!;
+  assert.ok(closet.budget.totalAmount > 0);
+  assert.equal(
+    closet.budget.rows.find((r) => r.code === "ASM-BASE")?.quantity ?? 0,
+    0,
+  );
 });
 
 check("a collapsed room (total only, no detail) raises a warning", () => {

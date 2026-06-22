@@ -269,11 +269,20 @@ function finalizeRoom(room: MozaikRoom, warnings: string[]) {
 // today, so the summary is the job total and rooms[] carry the breakdown for
 // the review screen + Room tags. (Per-room budget lines are a follow-on.)
 
+// A single room's cabinet counts + cost-code quantities, ready to derive a
+// per-room budget (ADR 0012 Slice 2 follow-on — per-room budget lines).
+export type MozaikRoomDraft = {
+  name: string;
+  cabinetSummary: CabinetSummary;
+  qtyByCode: Record<string, number>; // FIN-SPRAY (sqft) + CUT-SHEET (sheets) for this room
+};
+
 export type MozaikDraft = {
   cabinetSummary: CabinetSummary;
-  qtyByCode: Record<string, number>; // FIN-SPRAY, CUT-SHEET
+  qtyByCode: Record<string, number>; // FIN-SPRAY, CUT-SHEET (job total)
   bom: MozaikBomLine[]; // merged across rooms
   roomNames: string[];
+  perRoom: MozaikRoomDraft[]; // the per-room breakdown (job total = sum)
   warnings: string[];
   totals: {
     cabinets: Record<CabinetTypeId, { count: number; linearFt: number }>;
@@ -288,16 +297,28 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
   let sheets = 0;
   let pulls = 0;
   const bom: MozaikBomLine[] = [];
+  const perRoom: MozaikRoomDraft[] = [];
 
   for (const room of imported.rooms) {
+    const roomSummary = emptyCabinetSummary();
     for (const t of ["base", "wall", "tall", "island"] as CabinetTypeId[]) {
       summary[t].count += room.cabinets[t].count;
       summary[t].linearFt += room.cabinets[t].linearFt;
+      roomSummary[t] = { count: room.cabinets[t].count, linearFt: room.cabinets[t].linearFt };
     }
+    roomSummary.pulls = room.metrics.pulls ?? 0;
     finishedAreaSqft += room.metrics.finishedAreaSqft ?? 0;
     sheets += room.metrics.sheets ?? 0;
     pulls += room.metrics.pulls ?? 0;
     bom.push(...room.bom);
+    perRoom.push({
+      name: room.name,
+      cabinetSummary: roomSummary,
+      qtyByCode: {
+        "FIN-SPRAY": round2(room.metrics.finishedAreaSqft ?? 0),
+        "CUT-SHEET": room.metrics.sheets ?? 0,
+      },
+    });
   }
   summary.pulls = pulls;
 
@@ -316,6 +337,7 @@ export function mozaikToEstimateDraft(imported: MozaikImport): MozaikDraft {
     },
     bom: mergeBom(bom),
     roomNames: imported.rooms.map((r) => r.name),
+    perRoom,
     warnings: imported.warnings,
     totals: {
       cabinets: totalsCabinets,

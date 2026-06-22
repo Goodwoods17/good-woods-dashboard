@@ -121,6 +121,33 @@ export function reconcileBudgetVsQuote(
   };
 }
 
+// Per-room budgets (ADR 0012 Slice 2 follow-on). Derive a labour budget for each
+// room from its own cabinet counts + cost-code quantities, so the frozen budget
+// can be split by room. The job total is the sum (same codes/rates/minutes), so
+// Σ(perRoom) reconciles to the job-level deriveCostCodeBudget.
+export type RoomBudgetInput = {
+  name: string;
+  cabinets: CabinetSummary;
+  qtyByCode?: Record<string, number>;
+};
+
+export type RoomBudget = { roomLabel: string; budget: CostCodeBudget };
+
+export function derivePerRoomBudgets(
+  rooms: RoomBudgetInput[],
+  codes: string[],
+  rates: LabourRates,
+  minutesByCode: Record<string, number> = {},
+): RoomBudget[] {
+  return rooms.map((room) => ({
+    roomLabel: room.name,
+    budget: deriveCostCodeBudget(codes, room.cabinets, rates, {
+      qtyByCode: room.qtyByCode ?? {},
+      minutesByCode,
+    }),
+  }));
+}
+
 // The default code set for a job that uses every phase — used when a template
 // doesn't pin its own set (back-compat) and as the "Full custom build" set.
 export const FULL_BUILD_CODE_SET: string[] = CANONICAL_COST_CODES.map((c) => c.code);

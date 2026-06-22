@@ -10,12 +10,16 @@
 // (localStorage mode) — the budget is a server-only concept.
 
 import { hasSupabase, getSupabase } from "@shared/lib/supabase";
-import type { CostCodeBudget } from "./budget";
+import type { CostCodeBudget, CostCodeBudgetRow, RoomBudget } from "./budget";
 
 export type SaveJobBudgetInput = {
   jobId: string;
   quotedTotal: number;
   budget: CostCodeBudget;
+  // When present (a Mozaik per-room import), the budget is written split by room
+  // (room_label set per line); Σ(perRoom) equals `budget`. Absent → one
+  // job-level set (room_label null).
+  perRoom?: RoomBudget[];
   estimateLabel?: string; // "Original" | "Change order 1"
   estimateDate?: string; // ISO yyyy-mm-dd; defaults to today
 };
@@ -55,21 +59,33 @@ export async function saveJobBudget(
     (ops as { id: string; code: string }[]).map((o) => [o.code, o.id]),
   );
 
-  // 3. One labour budget row per code that actually carries time/cost.
-  const rows = input.budget.rows
-    .filter((r) => r.budgetedMinutes > 0 || r.amount > 0)
-    .map((r, i) => ({
-      job_id: input.jobId,
-      estimate_id: estimateId,
-      code_id: codeToId.get(r.code) ?? null,
-      phase_id: r.phaseId,
-      kind: "labour" as const,
-      budgeted_quantity: r.driver ? r.quantity : null,
-      budgeted_minutes: round2(r.budgetedMinutes),
-      rate: r.rate,
-      budgeted_amount: round2(r.amount),
-      sort: i,
-    }));
+  // 3. One labour budget row per code that carries time/cost. Split by room
+  // when a per-room breakdown is supplied, else a single job-level set.
+  const sources: { roomLabel: string | null; rows: CostCodeBudgetRow[] }[] =
+    input.perRoom && input.perRoom.length > 0
+      ? input.perRoom.map((r) => ({ roomLabel: r.roomLabel, rows: r.budget.rows }))
+      : [{ roomLabel: null, rows: input.budget.rows }];
+
+  let sort = 0;
+  const rows: Record<string, unknown>[] = [];
+  for (const src of sources) {
+    for (const r of src.rows) {
+      if (!(r.budgetedMinutes > 0 || r.amount > 0)) continue;
+      rows.push({
+        job_id: input.jobId,
+        estimate_id: estimateId,
+        code_id: codeToId.get(r.code) ?? null,
+        phase_id: r.phaseId,
+        room_label: src.roomLabel,
+        kind: "labour" as const,
+        budgeted_quantity: r.driver ? r.quantity : null,
+        budgeted_minutes: round2(r.budgetedMinutes),
+        rate: r.rate,
+        budgeted_amount: round2(r.amount),
+        sort: sort++,
+      });
+    }
+  }
 
   if (rows.length > 0) {
     const { error } = await sb.from("job_cost_budgets").insert(rows);

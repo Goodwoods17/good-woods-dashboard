@@ -36,10 +36,11 @@ features/job-costing/
     ├── costCodes.ts   CANONICAL_COST_CODES (the unified-template catalog),
     │                  phase labels/order, rateForPhase — mirrors the seed
     ├── budget.ts      deriveCostCodeBudget (counts → budget rows) +
-    │                  reconcileBudgetVsQuote. Pure; tested by
-    │                  scripts/test-job-costing-budget.ts
+    │                  reconcileBudgetVsQuote + derivePerRoomBudgets. Pure;
+    │                  tested by scripts/test-job-costing-budget.ts
     └── saveBudget.ts  saveJobBudget: writes job_estimates + job_cost_budgets
-                       (labour rows) at Save-as-Job
+                       (labour rows) at Save-as-Job — split by room_label when a
+                       Mozaik per-room snapshot is passed, else job-level
 ```
 
 The Budget-vs-Actual tab and the `/pnl` rollup arrive in P4–P5.
@@ -54,6 +55,12 @@ by `20260622130000_seed_cost_codes.sql` (idempotent upsert keyed by `code`).
 `CANONICAL_COST_CODES` (TS) and that seed must stay in lockstep. Save-as-Job
 freezes the labour budget; **material/subtrade budget rows are deferred** (materials
 land with the Mozaik BOM in Slice 2; subtrades read live from `job_trades`).
+
+**Slice 2 follow-ons (shipped):** (1) a Mozaik import splits the frozen budget by
+room — `job_cost_budgets.room_label` (migration `20260622140000`), written from the
+import's per-room snapshot only when it still reconciles to the job-level budget
+(count edits fall back to job-level). (2) BOM lines name-match the catalog on import
+(`features/estimator/lib/bomCatalogMatch.ts`) so they carry real prices, not $0.
 
 ## Cross-feature seams
 
