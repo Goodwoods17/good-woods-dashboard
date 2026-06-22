@@ -6,11 +6,11 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { cn } from "@shared/lib/utils";
 
 const STAGE_HINTS: Record<MilestoneStage, string> = {
-  sold: "Quote accepted, deposit captured, drawings signed off",
-  materials: "Sheets, hardware, finish materials ordered + landed",
-  cut: "Boxes / doors / drawer fronts cut and labelled",
-  assemble: "Carcasses + drawers assembled, hardware bored",
-  finish: "Spray, sand, top-coat — 100% cure before pack",
+  design: "Client sign-off on approved shop drawings, contract & estimate",
+  cnc: "Sheet goods cut, parts machined and labelled",
+  assembly: "Carcasses + drawers assembled, hardware bored",
+  finishing: "Spray, sand, top-coat — 100% cure before pack",
+  delivery: "All parts delivered to site",
   install: "On site, scribed, levelled, hardware adjusted, walk-through",
 };
 

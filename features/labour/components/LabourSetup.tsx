@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { CABINET_TYPES, type CabinetTypeId } from "@features/estimator/lib/types";
+import { DRIVER_UNITS, DRIVER_UNIT_LABELS, type DriverUnit } from "@features/job-costing/lib/types";
 import { useLabour } from "@features/labour/lib/labourStore";
 
 /**
@@ -33,12 +34,24 @@ export function LabourSetup() {
   return (
     <div className="space-y-4">
       {/* Operations */}
-      <Panel title="Operations" hint="The work items time is logged against.">
+      <Panel
+        title="Cost codes"
+        hint="The work items time is logged against. Give each a short code; set a driver for per-unit tasks (e.g. minutes per sheet)."
+      >
         <ul className="divide-y divide-border-faint">
           {operations
             .filter((o) => o.active)
             .map((o) => (
               <li key={o.id} className="group flex flex-wrap items-center gap-2 py-2">
+                <input
+                  value={o.code ?? ""}
+                  onChange={(e) =>
+                    updateOperation(o.id, { code: e.target.value.trim().toUpperCase() || null })
+                  }
+                  placeholder="CODE"
+                  title="Cost code — the marker tying estimate, timer, and actuals"
+                  className="w-24 shrink-0 rounded-md bg-transparent px-2 py-1 font-mono text-xs uppercase tracking-wide text-text-secondary placeholder:text-text-tertiary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
+                />
                 <input
                   value={o.name}
                   onChange={(e) => updateOperation(o.id, { name: e.target.value })}
@@ -70,6 +83,23 @@ export function LabourSetup() {
                   {CABINET_TYPES.map((t) => (
                     <option key={t} value={t}>
                       {t}
+                    </option>
+                  ))}
+                </select>
+                <select
+                  value={o.driverUnit ?? ""}
+                  onChange={(e) =>
+                    updateOperation(o.id, {
+                      driverUnit: (e.target.value || null) as DriverUnit | null,
+                    })
+                  }
+                  title="Driver — set if this task's time scales with a unit (per-unit averages)"
+                  className="rounded-md bg-transparent px-1 py-1 text-xs text-text-tertiary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
+                >
+                  <option value="">— flat —</option>
+                  {DRIVER_UNITS.map((u) => (
+                    <option key={u} value={u}>
+                      per {DRIVER_UNIT_LABELS[u]}
                     </option>
                   ))}
                 </select>

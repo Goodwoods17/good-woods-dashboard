@@ -9,12 +9,20 @@ A named unit of shop work that time is logged against — e.g. "Assemble
 base cabinet", "Spray finish (per batch)", "Install — uppers". The
 granular thing the bottleneck finder ranks. Editable/addable at runtime.
 
-## Category
+## Phase
 
-A rollup bucket an operation belongs to — Design · CNC/Cut · Assembly ·
-Finishing · Delivery · Install (the workflow-aligned six, editable). The
-**primary axis** the bottleneck view groups by. Mirrors the estimator's
+The canonical term for a workflow bucket an operation belongs to — Design ·
+CNC/Cut · Assembly · Finishing · Delivery · Install (the workflow-aligned
+six, editable). The **primary axis** the bottleneck view groups by, and the
+parent of a **cost code** in job costing. Mirrors the estimator's
 labour-bearing sections so actuals map back to quoted minutes.
+
+> Stored in the `labour_categories` table (`category_id` columns).
+> "Category" is the legacy table name; **"phase" is the word we use** in
+> docs, UI, and new code (resolved 2026-06-20). A job's `MilestoneStage` is
+> realigned to these six phases 1:1 (ADR 0008), so the current milestone
+> doubles as the phase-complete signal. Still distinct from `PipelineStatus`
+> (the sales pipeline).
 
 ## Session
 

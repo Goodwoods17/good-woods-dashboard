@@ -20,6 +20,7 @@ import {
 import { hasSupabase, getSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import type { CabinetTypeId } from "@features/estimator/lib/types";
+import type { DriverUnit } from "@features/job-costing/lib/types";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 
@@ -30,6 +31,10 @@ export type LabourOperation = {
   categoryId: string | null;
   cabinetType: CabinetTypeId | null;
   defaultMinutes: number | null;
+  // Cost-code fields (P1 schema): `code` is the marker tying estimate <-> timer
+  // <-> actuals; `driverUnit` set = time scales per unit (minutes ÷ unit).
+  code: string | null;
+  driverUnit: DriverUnit | null;
   active: boolean;
 };
 export type LabourWorker = { id: string; name: string; active: boolean };
@@ -41,6 +46,7 @@ export type LabourSession = {
   jobId: string | null;
   startedAt: string;
   endedAt: string | null; // null = running
+  quantity: number | null; // units done this run for a driven code (captured on Stop)
   note: string | null;
 };
 
@@ -57,6 +63,8 @@ export type OperationStat = {
   totalMs: number;
   avgMs: number;
   running: number; // currently-running sessions
+  totalQuantity: number; // Σ session quantity (driven codes)
+  avgMinutesPerUnit: number | null; // minutes ÷ unit for driven codes (else null)
 };
 export type CategoryStat = {
   category: LabourCategory;
@@ -94,21 +102,32 @@ const op = (
   name: string,
   categoryId: string,
   cabinetType: CabinetTypeId | null = null,
-  defaultMinutes: number | null = null
-): LabourOperation => ({ id, name, categoryId, cabinetType, defaultMinutes, active: true });
+  defaultMinutes: number | null = null,
+  code: string | null = null,
+  driverUnit: DriverUnit | null = null
+): LabourOperation => ({
+  id,
+  name,
+  categoryId,
+  cabinetType,
+  defaultMinutes,
+  code,
+  driverUnit,
+  active: true,
+});
 
 const SEED_OPERATIONS: LabourOperation[] = [
-  op("o-base", "Assemble base cabinet", "assembly", "base", 60),
-  op("o-wall", "Assemble wall cabinet", "assembly", "wall", 45),
-  op("o-tall", "Assemble tall / pantry", "assembly", "tall", 90),
-  op("o-island", "Assemble island", "assembly", "island", 90),
-  op("o-cnc", "CNC cut sheet goods", "cnc"),
-  op("o-edge", "Edgeband + prep", "cnc"),
-  op("o-spray", "Spray finish (per batch)", "finishing"),
-  op("o-load", "Load truck", "delivery"),
-  op("o-inst-up", "Install — uppers", "install"),
-  op("o-inst-base", "Install — bases", "install"),
-  op("o-design", "Design / measure", "design"),
+  op("o-base", "Assemble base cabinet", "assembly", "base", 60, "ASM-BASE"),
+  op("o-wall", "Assemble wall cabinet", "assembly", "wall", 45, "ASM-WALL"),
+  op("o-tall", "Assemble tall / pantry", "assembly", "tall", 90, "ASM-TALL"),
+  op("o-island", "Assemble island", "assembly", "island", 90, "ASM-ISL"),
+  op("o-cnc", "CNC cut sheet goods", "cnc", null, null, "CNC-CUT", "sheet"),
+  op("o-edge", "Edgeband + prep", "cnc", null, null, "CNC-EDGE"),
+  op("o-spray", "Spray finish (per batch)", "finishing", null, null, "FIN-SPRAY"),
+  op("o-load", "Load truck", "delivery", null, null, "DEL-LOAD"),
+  op("o-inst-up", "Install — uppers", "install", null, null, "INST-UP"),
+  op("o-inst-base", "Install — bases", "install", null, null, "INST-BASE"),
+  op("o-design", "Design / measure", "design", null, null, "DSGN"),
 ];
 
 const SEED_WORKERS: LabourWorker[] = [{ id: "w-andrew", name: "Andrew", active: true }];
@@ -130,6 +149,8 @@ type OperationRow = {
   category_id: string | null;
   cabinet_type: CabinetTypeId | null;
   default_minutes: number | string | null;
+  code: string | null;
+  driver_unit: DriverUnit | null;
   active: boolean;
 };
 type WorkerRow = { id: string; name: string; active: boolean };
@@ -141,6 +162,7 @@ type SessionRow = {
   job_id: string | null;
   started_at: string;
   ended_at: string | null;
+  quantity: number | string | null;
   note: string | null;
 };
 type CabinetTypeRow = { id: CabinetTypeId; assembly_minutes: number | string };
@@ -160,6 +182,8 @@ const rowToOperation = (r: OperationRow): LabourOperation => ({
   categoryId: r.category_id,
   cabinetType: r.cabinet_type,
   defaultMinutes: numOrNull(r.default_minutes),
+  code: r.code ?? null,
+  driverUnit: r.driver_unit ?? null,
   active: r.active,
 });
 const rowToWorker = (r: WorkerRow): LabourWorker => ({ id: r.id, name: r.name, active: r.active });
@@ -171,6 +195,7 @@ const rowToSession = (r: SessionRow): LabourSession => ({
   jobId: r.job_id,
   startedAt: r.started_at,
   endedAt: r.ended_at,
+  quantity: numOrNull(r.quantity),
   note: r.note,
 });
 
@@ -190,7 +215,7 @@ type LabourContextValue = {
     workerId: string | null;
     jobId?: string | null;
   }) => void;
-  stopTimer: (sessionId: string) => void;
+  stopTimer: (sessionId: string, quantity?: number | null) => void;
   deleteSession: (sessionId: string) => void;
   // Operations
   addOperation: (name: string, categoryId: string | null) => void;
@@ -319,6 +344,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         jobId: input.jobId ?? null,
         startedAt: NOW(),
         endedAt: null,
+        quantity: null,
         note: null,
       };
       setSessions((prev) => [session, ...prev]);
@@ -340,13 +366,21 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   );
 
   const stopTimer = useCallback(
-    (sessionId: string) => {
+    (sessionId: string, quantity?: number | null) => {
       const endedAt = NOW();
-      setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, endedAt } : s)));
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === sessionId
+            ? { ...s, endedAt, quantity: quantity === undefined ? s.quantity : quantity }
+            : s
+        )
+      );
       if (isSb) {
+        const update: Record<string, unknown> = { ended_at: endedAt };
+        if (quantity !== undefined) update.quantity = quantity;
         void sb()
           .from("labour_sessions")
-          .update({ ended_at: endedAt })
+          .update(update)
           .eq("id", sessionId)
           .then(({ error: e }) => e && setError(formatError(e)));
       }
@@ -377,6 +411,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         categoryId,
         cabinetType: null,
         defaultMinutes: null,
+        code: null,
+        driverUnit: null,
         active: true,
       };
       setOperations((prev) => [...prev, created]);
@@ -399,6 +435,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         if (patch.categoryId !== undefined) row.category_id = patch.categoryId;
         if (patch.cabinetType !== undefined) row.cabinet_type = patch.cabinetType;
         if (patch.defaultMinutes !== undefined) row.default_minutes = patch.defaultMinutes;
+        if (patch.code !== undefined) row.code = patch.code;
+        if (patch.driverUnit !== undefined) row.driver_unit = patch.driverUnit;
         if (patch.active !== undefined) row.active = patch.active;
         void sb()
           .from("labour_operations")
@@ -494,21 +532,25 @@ export function LabourProvider({ children }: { children: ReactNode }) {
 
   // ─ Analytics (completed sessions only) ─
   const operationStats = useMemo<OperationStat[]>(() => {
-    const byOp = new Map<string, { total: number; count: number; running: number }>();
+    const byOp = new Map<string, { total: number; count: number; running: number; qty: number }>();
     for (const s of sessions) {
       if (!s.operationId) continue;
-      const agg = byOp.get(s.operationId) ?? { total: 0, count: 0, running: 0 };
+      const agg = byOp.get(s.operationId) ?? { total: 0, count: 0, running: 0, qty: 0 };
       if (s.endedAt === null) agg.running += 1;
       else {
         agg.total += durationMs(s);
         agg.count += 1;
+        if (s.quantity != null) agg.qty += s.quantity;
       }
       byOp.set(s.operationId, agg);
     }
     return operations
       .filter((o) => o.active)
       .map((operation) => {
-        const agg = byOp.get(operation.id) ?? { total: 0, count: 0, running: 0 };
+        const agg = byOp.get(operation.id) ?? { total: 0, count: 0, running: 0, qty: 0 };
+        // Per-unit average only means something for a driven code with logged units.
+        const avgMinutesPerUnit =
+          operation.driverUnit && agg.qty > 0 ? agg.total / 60000 / agg.qty : null;
         return {
           operation,
           category: operation.categoryId ? (categoryById.get(operation.categoryId) ?? null) : null,
@@ -516,6 +558,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           totalMs: agg.total,
           avgMs: agg.count > 0 ? agg.total / agg.count : 0,
           running: agg.running,
+          totalQuantity: agg.qty,
+          avgMinutesPerUnit,
         };
       })
       .sort((a, b) => b.totalMs - a.totalMs);

@@ -15,19 +15,19 @@ export type HealthStatus =
   | "paused";
 
 export type MilestoneStage =
-  | "sold"
-  | "materials"
-  | "cut"
-  | "assemble"
-  | "finish"
+  | "design"
+  | "cnc"
+  | "assembly"
+  | "finishing"
+  | "delivery"
   | "install";
 
 export const MILESTONE_STAGES: { key: MilestoneStage; label: string }[] = [
-  { key: "sold", label: "Sold" },
-  { key: "materials", label: "Materials" },
-  { key: "cut", label: "Cut" },
-  { key: "assemble", label: "Assemble" },
-  { key: "finish", label: "Finish" },
+  { key: "design", label: "Design" },
+  { key: "cnc", label: "CNC / Cut" },
+  { key: "assembly", label: "Assembly" },
+  { key: "finishing", label: "Finishing" },
+  { key: "delivery", label: "Delivery" },
   { key: "install", label: "Install" },
 ];
 

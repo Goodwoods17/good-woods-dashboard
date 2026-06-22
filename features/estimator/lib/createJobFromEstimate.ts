@@ -170,7 +170,7 @@ export function createJobFromEstimate(input: Input): Job {
     template: "full_project",
     pipelineStatus: "sold",
     healthStatus: "on_track",
-    currentMilestone: "sold",
+    currentMilestone: "design",
     installDate: installDate.toISOString().slice(0, 10),
     revenue: round2(totals.quoted),
     costs,

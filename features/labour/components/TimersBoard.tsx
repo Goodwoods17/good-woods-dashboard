@@ -11,6 +11,7 @@ import {
   formatDuration,
   type LabourSession,
 } from "@features/labour/lib/labourStore";
+import { DRIVER_UNIT_LABELS, type DriverUnit } from "@features/job-costing/lib/types";
 
 export function TimersBoard() {
   const {
@@ -138,7 +139,10 @@ export function TimersBoard() {
                 worker={s.workerId ? (workerById.get(s.workerId)?.name ?? null) : null}
                 category={s.categoryId ? (categoryById.get(s.categoryId)?.label ?? null) : null}
                 job={jobLabel(s.jobId)}
-                onStop={() => stopTimer(s.id)}
+                driverUnit={
+                  s.operationId ? (operationById.get(s.operationId)?.driverUnit ?? null) : null
+                }
+                onStop={(quantity) => stopTimer(s.id, quantity)}
               />
             ))}
           </div>
@@ -187,6 +191,7 @@ function RunningCard({
   worker,
   category,
   job,
+  driverUnit,
   onStop,
 }: {
   session: LabourSession;
@@ -194,9 +199,27 @@ function RunningCard({
   worker: string | null;
   category: string | null;
   job: string | null;
-  onStop: () => void;
+  driverUnit: DriverUnit | null;
+  onStop: (quantity?: number | null) => void;
 }) {
   const now = useNow();
+  // Driven codes ask "how many?" before stopping, so per-unit averages build up.
+  const [confirming, setConfirming] = useState(false);
+  const [qty, setQty] = useState("");
+
+  const stop = () => {
+    if (driverUnit && !confirming) {
+      setConfirming(true);
+      return;
+    }
+    if (driverUnit) {
+      const n = qty.trim() === "" ? null : Number(qty);
+      onStop(typeof n === "number" && Number.isFinite(n) ? n : null);
+    } else {
+      onStop();
+    }
+  };
+
   return (
     <div className="rounded-xl border border-accent-soft bg-accent-soft/20 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -208,18 +231,44 @@ function RunningCard({
             {job && <span className="truncate">· {job}</span>}
           </div>
         </div>
-        <button
-          type="button"
-          onClick={onStop}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-pill px-3 py-1.5 text-xs font-medium text-white transition-opacity duration-fast hover:opacity-90"
-        >
-          <Square className="h-3 w-3" strokeWidth={2} fill="currentColor" />
-          Stop
-        </button>
+        {!confirming && (
+          <button
+            type="button"
+            onClick={stop}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-pill px-3 py-1.5 text-xs font-medium text-white transition-opacity duration-fast hover:opacity-90"
+          >
+            <Square className="h-3 w-3" strokeWidth={2} fill="currentColor" />
+            Stop
+          </button>
+        )}
       </div>
       <div className="mt-2 font-mono text-2xl font-medium tabular-nums text-text-primary">
         {formatDuration(durationMs(session, now), true)}
       </div>
+      {confirming && driverUnit && (
+        <div className="mt-2 flex items-center gap-2 border-t border-accent-soft pt-2">
+          <input
+            type="number"
+            inputMode="decimal"
+            min={0}
+            autoFocus
+            value={qty}
+            onChange={(e) => setQty(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && stop()}
+            placeholder="0"
+            className="w-20 rounded-md border border-border bg-surface px-2 py-1 text-sm tabular-nums text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-soft"
+          />
+          <span className="text-xs text-text-tertiary">{DRIVER_UNIT_LABELS[driverUnit]} done</span>
+          <button
+            type="button"
+            onClick={stop}
+            className="ml-auto inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-ink-pill px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
+          >
+            <Square className="h-3 w-3" strokeWidth={2} fill="currentColor" />
+            Stop
+          </button>
+        </div>
+      )}
     </div>
   );
 }
