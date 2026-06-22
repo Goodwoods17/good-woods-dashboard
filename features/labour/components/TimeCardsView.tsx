@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Trash2, Check, X } from "lucide-react";
+import { Download, Pencil, Trash2, Check, X } from "lucide-react";
 import { useLabour, formatDuration, durationMs } from "@features/labour/lib/labourStore";
 import type { LabourSession } from "@features/labour/lib/labourStore";
 import { buildTimeCards } from "../lib/timeCards";
 import type { TimeCardEntry } from "../lib/timeCards";
+import { timeCardsToCsv } from "../lib/timeCardsCsv";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import type { Job } from "@shared/lib/types";
 
@@ -209,6 +210,26 @@ export function TimeCardsView() {
     );
   }
 
+  function exportCsv() {
+    if (typeof window === "undefined") return;
+    const entries =
+      lens === "employee"
+        ? byWorkerDay.flatMap((d) => d.entries)
+        : byJobDay.flatMap((d) => d.entries);
+    const csv = timeCardsToCsv(entries, {
+      worker: (id) => workerById.get(id ?? "")?.name ?? "Unassigned",
+      job: jobName,
+      code: (id) => operationById.get(id ?? "")?.code ?? "—",
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "time-cards.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   if (completedCount === 0) {
     return (
       <section className="rounded-2xl bg-surface p-8 text-center shadow-resting">
@@ -240,7 +261,14 @@ export function TimeCardsView() {
         </div>
 
         {/* Task 5: Export CSV button */}
-        <div>{/* Task 5: Export CSV */}</div>
+        <button
+          type="button"
+          onClick={exportCsv}
+          className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-3 py-1.5 text-sm font-medium text-text-secondary transition-colors duration-fast hover:text-text-primary"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Export CSV
+        </button>
       </div>
 
       {lens === "employee" && (
