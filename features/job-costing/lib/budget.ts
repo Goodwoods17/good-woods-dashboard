@@ -15,11 +15,13 @@
 
 import type { CabinetSummary, LabourRates } from "@features/estimator/lib/types";
 import { totalCabinetCount } from "@features/estimator/lib/types";
+import type { CabinetTypeId } from "@features/estimator/lib/types";
 import {
   CANONICAL_COST_CODES,
-  findCostCode,
   rateForPhase,
+  TOTAL_CABINET_COUNT_CODES,
   type CostCodeDef,
+  type CostCodeRegistry,
   type PhaseId,
 } from "./costCodes";
 
@@ -28,6 +30,7 @@ export type CostCodeBudgetRow = {
   name: string;
   phaseId: PhaseId;
   driver: CostCodeDef["driver"];
+  cabinetType?: CabinetTypeId;
   quantity: number; // resolved driver quantity (0 for flat codes)
   minutesPerUnit: number; // per-unit (driven) or total (flat) minutes used
   budgetedMinutes: number;
@@ -56,7 +59,7 @@ function resolveQuantity(
 ): number {
   if (override != null && override >= 0) return override;
   if (def.cabinetType) return nonNeg(cabinets[def.cabinetType]?.count ?? 0);
-  if (def.code === "DEL-LOAD") return totalCabinetCount(cabinets);
+  if (TOTAL_CABINET_COUNT_CODES.has(def.code)) return totalCabinetCount(cabinets);
   return 0; // other driven codes (sqft/sheets) need a manual/import qty
 }
 
@@ -64,14 +67,15 @@ export function deriveCostCodeBudget(
   codes: string[],
   cabinets: CabinetSummary,
   rates: LabourRates,
+  registry: CostCodeRegistry,
   options: DeriveBudgetOptions = {},
 ): CostCodeBudget {
   const { minutesByCode = {}, qtyByCode = {} } = options;
   const rows: CostCodeBudgetRow[] = [];
 
   for (const code of codes) {
-    const def = findCostCode(code);
-    if (!def) continue; // unknown code — skip rather than guess
+    const def = registry.get(code);
+    if (!def) continue; // unknown / unphased code — skip rather than guess
     const minutesPerUnit = nonNeg(minutesByCode[code] ?? def.defaultMinutes);
     const quantity = resolveQuantity(def, cabinets, qtyByCode[code]);
     const budgetedMinutes = def.driver ? quantity * minutesPerUnit : minutesPerUnit;
@@ -82,6 +86,7 @@ export function deriveCostCodeBudget(
       name: def.name,
       phaseId: def.phaseId,
       driver: def.driver,
+      cabinetType: def.cabinetType,
       quantity,
       minutesPerUnit,
       budgetedMinutes,
@@ -137,11 +142,12 @@ export function derivePerRoomBudgets(
   rooms: RoomBudgetInput[],
   codes: string[],
   rates: LabourRates,
+  registry: CostCodeRegistry,
   minutesByCode: Record<string, number> = {},
 ): RoomBudget[] {
   return rooms.map((room) => ({
     roomLabel: room.name,
-    budget: deriveCostCodeBudget(codes, room.cabinets, rates, {
+    budget: deriveCostCodeBudget(codes, room.cabinets, rates, registry, {
       qtyByCode: room.qtyByCode ?? {},
       minutesByCode,
     }),

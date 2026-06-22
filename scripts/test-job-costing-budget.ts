@@ -9,6 +9,9 @@ import {
   FULL_BUILD_CODE_SET,
 } from "../features/job-costing/lib/budget";
 import { emptyCabinetSummary, DEFAULT_LABOUR_RATES } from "../features/estimator/lib/types";
+import { registryFromDefs, CANONICAL_COST_CODES } from "../features/job-costing/lib/costCodes";
+
+const REG = registryFromDefs(CANONICAL_COST_CODES);
 
 let passed = 0;
 function check(label: string, fn: () => void) {
@@ -28,7 +31,7 @@ cabinets.base = { count: 13, linearFt: 69.14 };
 cabinets.wall = { count: 3, linearFt: 46.5 };
 cabinets.tall = { count: 6, linearFt: 16.25 };
 
-const budget = deriveCostCodeBudget(FULL_BUILD_CODE_SET, cabinets, DEFAULT_LABOUR_RATES);
+const budget = deriveCostCodeBudget(FULL_BUILD_CODE_SET, cabinets, DEFAULT_LABOUR_RATES, REG);
 const byCode = Object.fromEntries(budget.rows.map((r) => [r.code, r]));
 
 check("ASM-BASE: 13 × 60min @ $85 = $1105", () => {
@@ -57,7 +60,7 @@ check("FIN-SPRAY/CUT-SHEET default to 0 qty without an import/manual figure", ()
 });
 
 check("qtyByCode override drives non-cabinet codes (FIN-SPRAY 25.55 sqft)", () => {
-  const b = deriveCostCodeBudget(["FIN-SPRAY"], cabinets, DEFAULT_LABOUR_RATES, {
+  const b = deriveCostCodeBudget(["FIN-SPRAY"], cabinets, DEFAULT_LABOUR_RATES, REG, {
     qtyByCode: { "FIN-SPRAY": 25.55 },
   });
   near(b.rows[0].budgetedMinutes, 51.1); // 25.55 × 2
@@ -65,14 +68,14 @@ check("qtyByCode override drives non-cabinet codes (FIN-SPRAY 25.55 sqft)", () =
 });
 
 check("minutesByCode override changes the per-unit rate", () => {
-  const b = deriveCostCodeBudget(["ASM-BASE"], cabinets, DEFAULT_LABOUR_RATES, {
+  const b = deriveCostCodeBudget(["ASM-BASE"], cabinets, DEFAULT_LABOUR_RATES, REG, {
     minutesByCode: { "ASM-BASE": 72 }, // learning loop sharpened it
   });
   assert.equal(b.rows[0].budgetedMinutes, 13 * 72);
 });
 
 check("flat code (DSN) contributes minutes directly, no driver qty", () => {
-  const b = deriveCostCodeBudget(["DSN"], cabinets, DEFAULT_LABOUR_RATES, {
+  const b = deriveCostCodeBudget(["DSN"], cabinets, DEFAULT_LABOUR_RATES, REG, {
     minutesByCode: { DSN: 120 },
   });
   assert.equal(b.rows[0].quantity, 0);
@@ -81,7 +84,7 @@ check("flat code (DSN) contributes minutes directly, no driver qty", () => {
 });
 
 check("unknown codes are skipped, not guessed", () => {
-  const b = deriveCostCodeBudget(["NOPE-XYZ", "ASM-BASE"], cabinets, DEFAULT_LABOUR_RATES);
+  const b = deriveCostCodeBudget(["NOPE-XYZ", "ASM-BASE"], cabinets, DEFAULT_LABOUR_RATES, REG);
   assert.equal(b.rows.length, 1);
 });
 
@@ -95,6 +98,11 @@ check("reconciliation flags ≥10% drift vs the quote labour", () => {
 
 check("total labour budget sums the rows", () => {
   near(budget.totalAmount, 1105 + 191.25 + 765 + 155.8333 + 617.5 + 95 + 427.5, 0.05);
+});
+
+check("cabinet-driven rows carry cabinetType; non-cabinet rows don't", () => {
+  assert.equal(byCode["ASM-BASE"].cabinetType, "base");
+  assert.equal(byCode["CUT-SHEET"].cabinetType, undefined);
 });
 
 console.log(`\n${passed} checks passed.`);
