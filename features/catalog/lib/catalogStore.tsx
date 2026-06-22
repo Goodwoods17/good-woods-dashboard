@@ -13,6 +13,7 @@ import {
 import type { Unit } from "@features/estimator/lib/types";
 import type { SectionId } from "@features/estimator/lib/sections";
 import { hasSupabase, getSupabase } from "@shared/lib/supabase";
+import { useAuth } from "@shared/lib/authStore";
 import { formatError } from "@shared/lib/formatError";
 import {
   assembleCatalog,
@@ -60,7 +61,9 @@ export type CatalogItem = {
   kind: CatalogKind;
   name: string;
   link?: string; // item-level spec / manufacturer page (distinct from an offer's buy URL)
-  section: SectionId | null; // estimator section, when section-bound
+  section: SectionId | null; // estimator section, when section-bound (quote integration)
+  categoryId?: string | null; // user-defined catalog category (how the book is organized)
+  subcategoryId?: string | null; // user-defined sub-category under the category
   unit: Unit;
   unitPrice: number; // inline price: the surfaced fallback when there are no offers
   pricing?: unknown; // matrix or tiered pricing (jsonb passthrough); null = simple
@@ -70,6 +73,18 @@ export type CatalogItem = {
   active: boolean; // soft-delete: false keeps the row resolvable but out of the list
   priceUpdatedAt: string; // ISO timestamp
   notes?: string;
+};
+
+// The user-defined two-level taxonomy that organizes the price book by what
+// things ARE (Hardware → Hinges/Slides). parentId null = top-level category;
+// set = sub-category. `defaultKind` is the pricing behaviour new items here
+// inherit (procured kinds carry supplier offers; in-house kinds are single-price).
+export type CatalogCategory = {
+  id: string;
+  name: string;
+  parentId: string | null;
+  defaultKind: CatalogKind;
+  sortOrder: number;
 };
 
 // Back-compat projections. The Materials and Finishes tables, the
@@ -271,6 +286,40 @@ const SEED_OFFERS: CatalogOffer[] = [
   offer("in-cutlery", S_FRAMEWARE, 38, { productUrl: "https://www.frameware.ca" }),
 ].map((o, i) => ({ ...o, id: SEED_OFFER_ID(i) }));
 
+// Stable seed categories (one per kind, mirroring the SQL migration's seed) so
+// the localStorage fallback organizes by category too. Real categories are
+// Andrew's to add/rename in the UI.
+const C_MATERIALS = "33333333-3333-3333-3333-333333333301";
+const C_HARDWARE = "33333333-3333-3333-3333-333333333302";
+const C_DOORS = "33333333-3333-3333-3333-333333333303";
+const C_FINISHES = "33333333-3333-3333-3333-333333333304";
+const C_INSERTS = "33333333-3333-3333-3333-333333333305";
+const C_SERVICES = "33333333-3333-3333-3333-333333333306";
+
+const SEED_CATEGORIES: CatalogCategory[] = [
+  { id: C_MATERIALS, name: "Materials", parentId: null, defaultKind: "material", sortOrder: 1 },
+  { id: C_HARDWARE, name: "Hardware", parentId: null, defaultKind: "hardware", sortOrder: 2 },
+  { id: C_DOORS, name: "Doors", parentId: null, defaultKind: "door", sortOrder: 3 },
+  { id: C_FINISHES, name: "Finishes", parentId: null, defaultKind: "finish", sortOrder: 4 },
+  { id: C_INSERTS, name: "Inserts", parentId: null, defaultKind: "insert", sortOrder: 5 },
+  { id: C_SERVICES, name: "Services", parentId: null, defaultKind: "service", sortOrder: 6 },
+];
+
+const KIND_TO_SEED_CAT: Partial<Record<CatalogKind, string>> = {
+  material: C_MATERIALS,
+  hardware: C_HARDWARE,
+  door: C_DOORS,
+  finish: C_FINISHES,
+  insert: C_INSERTS,
+  service: C_SERVICES,
+};
+
+// File each seed item under its kind's category (the migration does the same
+// server-side for the live DB).
+for (const it of SEED_ITEMS) {
+  it.categoryId = KIND_TO_SEED_CAT[it.kind] ?? null;
+}
+
 // Small builders to keep the seed readable.
 function item(
   id: string,
@@ -339,7 +388,7 @@ function offer(
 
 const TABLE = "catalog_items";
 const LS_KEY = "gw_catalog_v1";
-const SCHEMA = 4;
+const SCHEMA = 5;
 
 // ─── Cabinet-type minute defaults ───────────────────────────────────────
 // Per-cabinet-type Assembly/Install/Delivery-loading minutes the estimator
@@ -388,6 +437,34 @@ const SEED_CABINET_TYPES: CatalogCabinetType[] = [
   { id: "island", label: "Island", assemblyMinutes: 90, installMinutes: 45, loadingMinutes: 7 },
 ];
 
+// ─── Row mapping (categories) ───────────────────────────────────────────
+
+const CATEGORIES_TABLE = "catalog_categories";
+
+type CategoryRow = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  default_kind: CatalogKind;
+  sort_order: number;
+};
+
+const rowToCategory = (r: CategoryRow): CatalogCategory => ({
+  id: r.id,
+  name: r.name,
+  parentId: r.parent_id,
+  defaultKind: r.default_kind,
+  sortOrder: Number(r.sort_order),
+});
+
+const categoryToRow = (c: CatalogCategory): CategoryRow => ({
+  id: c.id,
+  name: c.name,
+  parent_id: c.parentId,
+  default_kind: c.defaultKind,
+  sort_order: c.sortOrder,
+});
+
 // ─── Row mapping (items) ────────────────────────────────────────────────
 
 type ItemRow = {
@@ -396,6 +473,8 @@ type ItemRow = {
   name: string;
   link: string | null;
   section: SectionId | null;
+  category_id: string | null;
+  subcategory_id: string | null;
   unit: Unit;
   unit_price: number;
   pricing: unknown | null;
@@ -414,6 +493,8 @@ function rowToItem(r: ItemRow): CatalogItem {
     name: r.name,
     link: r.link ?? undefined,
     section: r.section,
+    categoryId: r.category_id,
+    subcategoryId: r.subcategory_id,
     unit: r.unit,
     unitPrice: Number(r.unit_price),
     pricing: r.pricing ?? undefined,
@@ -433,6 +514,8 @@ function itemToRow(i: CatalogItem): ItemRow {
     name: i.name,
     link: i.link ?? null,
     section: i.section,
+    category_id: i.categoryId ?? null,
+    subcategory_id: i.subcategoryId ?? null,
     unit: i.unit,
     unit_price: i.unitPrice,
     pricing: i.pricing ?? null,
@@ -475,19 +558,22 @@ function toFinish(v: CatalogItemView): Finish {
 
 // ─── localStorage fallback (with v3 → v4 migration) ─────────────────────
 
-type PersistedV4 = {
-  schema: 4;
+type PersistedV5 = {
+  schema: 5;
   items: CatalogItem[];
   suppliers: CatalogSupplier[];
   offers: CatalogOffer[];
+  categories: CatalogCategory[];
 };
-// Loose shape covering the v4 blob, the older v3 { schema, items } blob (items
-// carried an inline `supplier`), and the oldest v2 { materials, finishes } blob.
+// Loose shape covering the v5 blob, the v4 blob (no categories), the older v3
+// { schema, items } blob (items carried an inline `supplier`), and the oldest v2
+// { materials, finishes } blob.
 type PersistedAny = {
   schema?: number;
   items?: (CatalogItem & { supplier?: string })[];
   suppliers?: CatalogSupplier[];
   offers?: CatalogOffer[];
+  categories?: CatalogCategory[];
   materials?: {
     id: string;
     name: string;
@@ -502,12 +588,18 @@ type PersistedAny = {
   finishes?: { id: string; name: string; coats: number; unitPrice: number; notes?: string }[];
 };
 
-type LocalState = { items: CatalogItem[]; suppliers: CatalogSupplier[]; offers: CatalogOffer[] };
+type LocalState = {
+  items: CatalogItem[];
+  suppliers: CatalogSupplier[];
+  offers: CatalogOffer[];
+  categories: CatalogCategory[];
+};
 
 const SEED_STATE: LocalState = {
   items: SEED_ITEMS,
   suppliers: SEED_SUPPLIERS,
   offers: SEED_OFFERS,
+  categories: SEED_CATEGORIES,
 };
 
 // Wrap an inline supplier+price (from a pre-offers blob) into one offer, minting
@@ -538,11 +630,12 @@ function localLoad(): LocalState {
     if (!raw) return SEED_STATE;
     const parsed = JSON.parse(raw) as PersistedAny;
 
-    if (parsed.schema === 4 && Array.isArray(parsed.items)) {
+    if ((parsed.schema === 5 || parsed.schema === 4) && Array.isArray(parsed.items)) {
       return {
         items: parsed.items as CatalogItem[],
         suppliers: parsed.suppliers ?? [],
         offers: parsed.offers ?? [],
+        categories: parsed.categories ?? SEED_CATEGORIES, // v4 blobs predate categories
       };
     }
     // v3 → v4: items carried an inline `supplier`; wrap those into offers.
@@ -555,7 +648,9 @@ function localLoad(): LocalState {
       const { suppliers, offers } = wrapInlineOffers(
         procured as { id: string; supplier?: string; unitPrice: number }[]
       );
-      return items.length > 0 ? { items, suppliers, offers } : SEED_STATE;
+      return items.length > 0
+        ? { items, suppliers, offers, categories: SEED_CATEGORIES }
+        : SEED_STATE;
     }
     // v2 { materials, finishes } → unified items + wrapped offers.
     if (Array.isArray(parsed.materials) || Array.isArray(parsed.finishes)) {
@@ -574,7 +669,9 @@ function localLoad(): LocalState {
       );
       const { suppliers, offers } = wrapInlineOffers(parsed.materials ?? []);
       const items = [...mats, ...fins];
-      return items.length > 0 ? { items, suppliers, offers } : SEED_STATE;
+      return items.length > 0
+        ? { items, suppliers, offers, categories: SEED_CATEGORIES }
+        : SEED_STATE;
     }
     return SEED_STATE;
   } catch {
@@ -585,7 +682,7 @@ function localLoad(): LocalState {
 function localSave(state: LocalState) {
   if (typeof window === "undefined") return;
   try {
-    const payload: PersistedV4 = { schema: SCHEMA, ...state };
+    const payload: PersistedV5 = { schema: 5, ...state };
     window.localStorage.setItem(LS_KEY, JSON.stringify(payload));
   } catch {
     /* silent */
@@ -623,6 +720,7 @@ type CatalogContextValue = {
   items: CatalogItem[]; // active items, the whole library
   itemsWithOffers: CatalogItemView[]; // active items + stitched offers + surfaced offer
   suppliers: CatalogSupplier[];
+  categories: CatalogCategory[]; // the user-defined category/sub-category taxonomy
   materials: Material[]; // material-like kinds with a section (back-compat)
   finishes: Finish[]; // finish kind (back-compat)
   cabinetTypes: CatalogCabinetType[]; // per-type labour minutes (estimator reads)
@@ -631,6 +729,19 @@ type CatalogContextValue = {
   addItem: (i: Omit<CatalogItem, "id" | "priceUpdatedAt" | "active">) => void;
   updateItem: (id: string, patch: Partial<CatalogItem>) => void;
   removeItem: (id: string) => void;
+  // Categories & sub-categories (the catalog's own organization)
+  addCategory: (
+    name: string,
+    parentId?: string | null,
+    defaultKind?: CatalogKind
+  ) => Promise<string>;
+  renameCategory: (id: string, name: string) => void;
+  removeCategory: (id: string) => void;
+  setItemCategory: (
+    itemId: string,
+    categoryId: string | null,
+    subcategoryId: string | null
+  ) => void;
   addMaterial: (m: Omit<Material, "id" | "priceUpdatedAt">) => void;
   updateMaterial: (id: string, patch: Partial<Material>) => void;
   removeMaterial: (id: string) => void;
@@ -652,9 +763,12 @@ const CatalogContext = createContext<CatalogContextValue | null>(null);
 
 export function CatalogProvider({ children }: { children: ReactNode }) {
   const backend = hasSupabase() ? "supabase" : "localStorage";
+  const { user, loading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
   const [all, setAll] = useState<CatalogItem[]>(SEED_ITEMS);
   const [suppliers, setSuppliers] = useState<CatalogSupplier[]>(SEED_SUPPLIERS);
   const [offers, setOffers] = useState<CatalogOffer[]>(SEED_OFFERS);
+  const [categories, setCategories] = useState<CatalogCategory[]>(SEED_CATEGORIES);
   const [cabinetTypes, setCabinetTypes] = useState<CatalogCabinetType[]>(SEED_CABINET_TYPES);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -662,6 +776,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   const allRef = useRef<CatalogItem[]>(SEED_ITEMS);
   const offersRef = useRef<CatalogOffer[]>(SEED_OFFERS);
   const suppliersRef = useRef<CatalogSupplier[]>(SEED_SUPPLIERS);
+  const categoriesRef = useRef<CatalogCategory[]>(SEED_CATEGORIES);
   useEffect(() => {
     allRef.current = all;
   }, [all]);
@@ -671,6 +786,9 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     suppliersRef.current = suppliers;
   }, [suppliers]);
+  useEffect(() => {
+    categoriesRef.current = categories;
+  }, [categories]);
 
   const pending = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -685,16 +803,27 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           setAll(loaded.items);
           setSuppliers(loaded.suppliers);
           setOffers(loaded.offers);
+          setCategories(loaded.categories);
           setLoading(false);
         }
         return;
       }
+      // Supabase backend: wait for auth to settle, then require a signed-in
+      // user before any read or seed-write. RLS rejects anonymous writes (the
+      // empty-DB seed upsert) with 401, and the unauthenticated /login page —
+      // where this provider still mounts — renders no catalog UI anyway.
+      if (authLoading) return;
+      if (!userId) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
       try {
         const sb = getSupabase();
-        const [itemsRes, offersRes, suppliersRes, cabsRes] = await Promise.all([
+        const [itemsRes, offersRes, suppliersRes, catsRes, cabsRes] = await Promise.all([
           sb.from(TABLE).select("*"),
           sb.from(OFFERS_TABLE).select("*"),
           sb.from(SUPPLIERS_TABLE).select("*"),
+          sb.from(CATEGORIES_TABLE).select("id, name, parent_id, default_kind, sort_order"),
           sb
             .from(CABINET_TYPES_TABLE)
             .select("id, label, assembly_minutes, install_minutes, loading_minutes"),
@@ -702,13 +831,26 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
         if (itemsRes.error) throw itemsRes.error;
         if (offersRes.error) throw offersRes.error;
         if (suppliersRes.error) throw suppliersRes.error;
+        if (catsRes.error) throw catsRes.error;
         if (cabsRes.error) throw cabsRes.error;
 
         let items = (itemsRes.data as ItemRow[] | null)?.map(rowToItem) ?? [];
         let supplierList = (suppliersRes.data as SupplierRow[] | null)?.map(rowToSupplier) ?? [];
         let offerList = (offersRes.data as OfferRow[] | null)?.map(rowToOffer) ?? [];
+        let categoryList = (catsRes.data as CategoryRow[] | null)?.map(rowToCategory) ?? [];
         const cabinetTypeList =
           (cabsRes.data as CabinetTypeRow[] | null)?.map(rowToCabinetType) ?? [];
+
+        // Seed categories first (FK target for item.category_id), then items.
+        if (categoryList.length === 0) {
+          await sb
+            .from(CATEGORIES_TABLE)
+            .upsert(SEED_CATEGORIES.map(categoryToRow), {
+              onConflict: "id",
+              ignoreDuplicates: true,
+            });
+          categoryList = SEED_CATEGORIES;
+        }
 
         // Seed an empty library. upsert+ignoreDuplicates keeps this idempotent
         // if the effect double-runs (React StrictMode in dev) — a repeat seed is
@@ -741,6 +883,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           setAll(items.sort(byName));
           setSuppliers(supplierList.sort(byName));
           setOffers(offerList);
+          setCategories(categoryList);
           // Empty only on a DB whose migration seed didn't run — keep the
           // seeded defaults (== the estimator's hardcoded fallback) rather
           // than blanking the minute table.
@@ -756,11 +899,12 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [backend]);
+  }, [backend, userId, authLoading]);
 
   useEffect(() => {
-    if (!loading && backend === "localStorage") localSave({ items: all, suppliers, offers });
-  }, [all, suppliers, offers, loading, backend]);
+    if (!loading && backend === "localStorage")
+      localSave({ items: all, suppliers, offers, categories });
+  }, [all, suppliers, offers, categories, loading, backend]);
 
   // Debounced per-key writer for inline edits (keys are namespaced so item and
   // offer ids never collide).
@@ -844,6 +988,90 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       }
     },
     [backend]
+  );
+
+  // ─ Categories & sub-categories ─
+  const addCategory = useCallback(
+    async (
+      name: string,
+      parentId: string | null = null,
+      defaultKind?: CatalogKind
+    ): Promise<string> => {
+      const trimmed = name.trim();
+      if (!trimmed) return "";
+      const siblings = categoriesRef.current.filter((c) => c.parentId === parentId);
+      const parent = parentId ? categoriesRef.current.find((c) => c.id === parentId) : null;
+      const created: CatalogCategory = {
+        id: newUuid(),
+        name: trimmed,
+        parentId,
+        defaultKind: defaultKind ?? parent?.defaultKind ?? "material",
+        sortOrder: siblings.reduce((m, c) => Math.max(m, c.sortOrder), 0) + 1,
+      };
+      setCategories((prev) => [...prev, created]);
+      if (backend === "supabase") {
+        const sb = getSupabase();
+        const { error: e } = await sb.from(CATEGORIES_TABLE).insert(categoryToRow(created));
+        if (e) setError(formatError(e));
+      }
+      return created.id;
+    },
+    [backend]
+  );
+
+  const renameCategory = useCallback(
+    (id: string, name: string) => {
+      setCategories((prev) => prev.map((c) => (c.id === id ? { ...c, name } : c)));
+      scheduleFlush(`category:${id}`, () => {
+        const row = categoriesRef.current.find((c) => c.id === id);
+        if (!row) return;
+        const sb = getSupabase();
+        void sb
+          .from(CATEGORIES_TABLE)
+          .update({ name: row.name })
+          .eq("id", id)
+          .then(({ error: e }) => e && setError(formatError(e)));
+      });
+    },
+    [scheduleFlush]
+  );
+
+  // Delete a category. The DB cascades sub-categories away and nulls the
+  // category/sub-category links on any items that referenced them; we mirror
+  // both locally so the UI updates without a refetch.
+  const removeCategory = useCallback(
+    (id: string) => {
+      const removed = new Set<string>([
+        id,
+        ...categoriesRef.current.filter((c) => c.parentId === id).map((c) => c.id),
+      ]);
+      setCategories((prev) => prev.filter((c) => !removed.has(c.id)));
+      setAll((prev) =>
+        prev.map((i) => {
+          const nextCat = i.categoryId && removed.has(i.categoryId) ? null : i.categoryId;
+          const nextSub = i.subcategoryId && removed.has(i.subcategoryId) ? null : i.subcategoryId;
+          return nextCat === i.categoryId && nextSub === i.subcategoryId
+            ? i
+            : { ...i, categoryId: nextCat, subcategoryId: nextSub };
+        })
+      );
+      if (backend === "supabase") {
+        const sb = getSupabase();
+        void sb
+          .from(CATEGORIES_TABLE)
+          .delete()
+          .eq("id", id)
+          .then(({ error: e }) => e && setError(formatError(e)));
+      }
+    },
+    [backend]
+  );
+
+  const setItemCategory = useCallback(
+    (itemId: string, categoryId: string | null, subcategoryId: string | null) => {
+      updateItem(itemId, { categoryId, subcategoryId });
+    },
+    [updateItem]
   );
 
   // ─ Suppliers ─
@@ -1048,13 +1276,18 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
     setAll(SEED_ITEMS);
     setSuppliers(SEED_SUPPLIERS);
     setOffers(SEED_OFFERS);
+    setCategories(SEED_CATEGORIES);
     if (backend === "supabase") {
       const sb = getSupabase();
       void (async () => {
-        // FK-safe order: offers → suppliers + items, then re-insert.
+        // FK-safe delete: offers → items → suppliers → categories; then re-insert
+        // categories → items → suppliers → offers (items ref categories; offers
+        // ref items + suppliers).
         await sb.from(OFFERS_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000");
-        await sb.from(SUPPLIERS_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000");
         await sb.from(TABLE).delete().neq("id", "");
+        await sb.from(SUPPLIERS_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        await sb.from(CATEGORIES_TABLE).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+        await sb.from(CATEGORIES_TABLE).insert(SEED_CATEGORIES.map(categoryToRow));
         await sb.from(TABLE).insert(SEED_ITEMS.map(itemToRow));
         await sb.from(SUPPLIERS_TABLE).insert(SEED_SUPPLIERS.map(supplierToRow));
         await sb.from(OFFERS_TABLE).insert(SEED_OFFERS.map(offerToRow));
@@ -1084,6 +1317,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       items: activeItems,
       itemsWithOffers,
       suppliers,
+      categories,
       materials,
       finishes,
       cabinetTypes,
@@ -1092,6 +1326,10 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       removeItem,
+      addCategory,
+      renameCategory,
+      removeCategory,
+      setItemCategory,
       addMaterial,
       updateMaterial,
       removeMaterial,
@@ -1111,6 +1349,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       activeItems,
       itemsWithOffers,
       suppliers,
+      categories,
       materials,
       finishes,
       cabinetTypes,
@@ -1119,6 +1358,10 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
       addItem,
       updateItem,
       removeItem,
+      addCategory,
+      renameCategory,
+      removeCategory,
+      setItemCategory,
       addMaterial,
       updateMaterial,
       removeMaterial,
