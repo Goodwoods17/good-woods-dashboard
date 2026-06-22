@@ -173,6 +173,19 @@ does the record that holds them.
 - **Invoice** — a light record of one revenue cycle on a project; its amount adds
   to the project's revenue. Maps to a QuickBooks **Invoice**. A project's total
   revenue = Σ its invoices.
+- **Job template** — a named, reusable definition of a *job type* (e.g. "Full
+  kitchen", "Install only", "Spray finishing only"). Defines which quote sections
+  show, the **set of cost codes** the job uses, and default overhead/markup. It
+  **references** cost codes (it does not copy them — codes stay in Labour). One
+  concept; supersedes the former split between estimator section-templates and the
+  P2b cost-code task templates (**ADR 0012**). A template carries the *task set*,
+  not fixed quantities — those come per-job (manual entry or a Mozaik import).
+- **Mozaik import** — dropping a Mozaik pricing-export CSV onto an estimate to
+  auto-fill the **cabinet counts, material BOM, and labour breakdown** (quantities
+  + structure only). The app **re-prices** with its own catalog + labour rates +
+  cost codes; Mozaik's dollar amounts are not used as the budget. Lands as a draft
+  estimate to review, then *Save as Job* freezes the budget (**ADR 0012**). Sample:
+  `docs/samples/mozaik-export-sample.csv`.
 - **QuickBooks mapping** — the costing model is shaped to map 1:1 onto QuickBooks
   for a future integration: Project→Project, Payer→Customer, Estimate→Estimate,
   Invoice→Invoice, **Phase→Class**, **Cost code→Item**, Worker→Employee,
