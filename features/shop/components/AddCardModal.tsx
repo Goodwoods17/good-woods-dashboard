@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Modal } from "@shared/components/ui/Modal";
 import { FieldStack, Field } from "@shared/components/forms/FormField";
 import { useWorkCards } from "../lib/workCardsStore";
@@ -23,6 +23,15 @@ export function AddCardModal({
   const [phaseId, setPhaseId] = useState("");
   const [operationId, setOperationId] = useState("");
   const [assigneeId, setAssigneeId] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setDescription("");
+      setPhaseId("");
+      setOperationId("");
+      setAssigneeId("");
+    }
+  }, [open]);
 
   if (!open) return null;
 

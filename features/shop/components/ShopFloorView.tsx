@@ -9,8 +9,9 @@ import { AddCardModal } from "./AddCardModal";
 
 export function ShopFloorView() {
   const { cards, updateCard } = useWorkCards();
-  const { running, workerById, operationById } = useLabour();
+  const { running, workerById, operationById, operations } = useLabour();
   const { jobs } = useJobs();
+  const codedOps = operations.filter((o) => o.code);
   const [jobId, setJobId] = useState<string>("");
   const [addOpen, setAddOpen] = useState(false);
 
@@ -54,6 +55,7 @@ export function ShopFloorView() {
             <h3 className="text-caption font-medium text-text-secondary mb-1">Needs a code ({uncoded.length})</h3>
             {uncoded.map((c) => (
               <UncodedRow key={c.id} description={c.description} job={jobName(c.jobId)}
+                codedOps={codedOps}
                 onAssign={(opId, phaseId) => updateCard(c.id, { operationId: opId, phaseId })} />
             ))}
             <p className="text-caption text-text-tertiary mt-1">Create new codes in /labour → Setup.</p>
@@ -80,19 +82,26 @@ export function ShopFloorView() {
   );
 }
 
-function UncodedRow({ description, job, onAssign }: { description: string; job: string; onAssign: (opId: string, phaseId: string) => void }) {
-  const { operations } = useLabour();
-  const coded = operations.filter((o) => o.code);
+type Operation = ReturnType<typeof useLabour>["operations"][number];
+
+function UncodedRow({ description, job, codedOps, onAssign }: {
+  description: string;
+  job: string;
+  codedOps: Operation[];
+  onAssign: (opId: string, phaseId: string) => void;
+}) {
+  const [selected, setSelected] = useState("");
   return (
     <div className="flex items-center justify-between gap-3 py-0.5 text-sm">
       <span className="text-text-secondary truncate">{description} · {job}</span>
-      <select defaultValue="" onChange={(e) => {
-          const op = coded.find((o) => o.id === e.target.value);
-          if (op && op.categoryId) onAssign(op.id, op.categoryId);
+      <select value={selected} onChange={(e) => {
+          const op = codedOps.find((o) => o.id === e.target.value);
+          if (op && op.categoryId) { onAssign(op.id, op.categoryId); setSelected(""); }
+          else setSelected(e.target.value);
         }}
         className="rounded-md bg-surface-muted border border-border px-2 py-1 text-caption text-text-primary">
         <option value="">Assign code…</option>
-        {coded.map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
+        {codedOps.map((o) => <option key={o.id} value={o.id}>{o.code} — {o.name}</option>)}
       </select>
     </div>
   );
