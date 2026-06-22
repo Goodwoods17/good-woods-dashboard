@@ -10,6 +10,7 @@
 
 import type { CabinetTypeId, LabourRates } from "@features/estimator/lib/types";
 import type { DriverUnit } from "./types";
+import type { LabourOperation } from "@features/labour/lib/labourStore";
 
 // Phase ids match `labour_categories.id` (design · cnc · assembly · finishing
 // · delivery · install). Per ADR 0012 the "cnc" phase reads as "Cut" for this
@@ -31,7 +32,9 @@ export type CostCodeDef = {
   defaultMinutes: number; // per-unit minutes (driven) or total minutes (flat)
 };
 
-// The canonical codes. Per-type minutes mirror the estimator's
+// Seed mirror only (NOT the runtime source — the estimator resolves from the
+// live registry, Slice A). Kept in lockstep with the seed migration; used for
+// the seed + tests. Per-type minutes mirror the estimator's
 // DEFAULT_ASSEMBLY/INSTALL_MINUTES so a fresh shop budgets identically to the
 // quote until the learning loop sharpens a code.
 export const CANONICAL_COST_CODES: CostCodeDef[] = [
@@ -92,4 +95,36 @@ export function rateForPhase(phaseId: PhaseId, rates: LabourRates): number {
     default:
       return rates.shopRate;
   }
+}
+
+export type CostCodeRegistry = Map<string, CostCodeDef>;
+
+// Codes whose driver quantity is the job's total cabinet count (loading is per
+// box). Documented set rather than an inline string check in resolveQuantity.
+export const TOTAL_CABINET_COUNT_CODES = new Set<string>(["DEL-LOAD"]);
+
+const PHASE_IDS = new Set<string>(PHASE_ORDER);
+
+// Build the live registry from the labour operations table. Only operations that
+// carry a `code` AND sit under one of the six phases become cost codes.
+export function buildCostCodeRegistry(ops: LabourOperation[]): CostCodeRegistry {
+  const reg: CostCodeRegistry = new Map();
+  for (const op of ops) {
+    if (!op.code) continue;
+    if (!op.categoryId || !PHASE_IDS.has(op.categoryId)) continue;
+    reg.set(op.code, {
+      code: op.code,
+      name: op.name,
+      phaseId: op.categoryId as PhaseId,
+      cabinetType: op.cabinetType ?? undefined,
+      driver: op.driverUnit ?? null,
+      defaultMinutes: op.defaultMinutes ?? 0,
+    });
+  }
+  return reg;
+}
+
+// A registry from CostCodeDef[] — used by tests and to mirror the seed.
+export function registryFromDefs(defs: CostCodeDef[]): CostCodeRegistry {
+  return new Map(defs.map((d) => [d.code, d]));
 }
