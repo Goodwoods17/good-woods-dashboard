@@ -33,8 +33,10 @@ features/job-costing/
 └── lib/
     ├── types.ts       DriverUnit, CostCodeTemplate(+Item), JobEstimate, JobInvoice,
     │                  JobCostBudget, JobCostActual
-    ├── costCodes.ts   CANONICAL_COST_CODES (the unified-template catalog),
-    │                  phase labels/order, rateForPhase — mirrors the seed
+    ├── costCodes.ts   CANONICAL_COST_CODES (SEED MIRROR only — not the runtime
+    │                  source), phase labels/order, rateForPhase, plus
+    │                  buildCostCodeRegistry / registryFromDefs / CostCodeRegistry /
+    │                  TOTAL_CABINET_COUNT_CODES (Slice A)
     ├── budget.ts      deriveCostCodeBudget (counts → budget rows) +
     │                  reconcileBudgetVsQuote + derivePerRoomBudgets. Pure;
     │                  tested by scripts/test-job-costing-budget.ts
@@ -61,6 +63,21 @@ room — `job_cost_budgets.room_label` (migration `20260622140000`), written fro
 import's per-room snapshot only when it still reconciles to the job-level budget
 (count edits fall back to job-level). (2) BOM lines name-match the catalog on import
 (`features/estimator/lib/bomCatalogMatch.ts`) so they carry real prices, not $0.
+
+### ADR 0012 grill — Slice A: cost codes are a LIVE registry (shipped on `feat/job-templates`)
+
+Cost codes are **user-managed data**, not a hardcoded list. Add/edit them in
+`/labour → Setup → Cost codes` (phase **required** on add — it's the code's shop-floor
+kanban column). The estimator/budget resolve codes from the live `labour_operations`
+registry: `EstimatorView` builds a `CostCodeRegistry` from `useLabour().operations` via
+`buildCostCodeRegistry` and threads it into `deriveCostCodeBudget`. `CANONICAL_COST_CODES`
+is now just the **seed mirror**. A code only budgets if it's in the active template's
+`costCodeSet`, so `templates.ts` lists the component codes in the templates that install
+them. **Implication:** the cost-code panel is now RLS-gated — it needs an authenticated
+session to populate (empty otherwise; graceful empty-state, but Save-as-Job doesn't block
+on an empty registry). Seeded 4 starter component codes (`INST-INSERT`, `INST-ROLLOUT`,
+`HW-PULL`, `FIT-DOOR`; migration `20260622195053`), fed by the Mozaik `# inserts /
+# rollouts+trays / # pulls / # doors+fronts` counts. Andrew extends the set from `/labour`.
 
 ## Cross-feature seams
 
