@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { UploadCloud } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useWorkspaceSettings } from "@shared/lib/workspaceSettings";
@@ -11,6 +12,7 @@ import {
   emptyDeficiencies,
   emptyPreWork,
   totalCabinetCount,
+  newRoom,
   DEFAULT_ASSEMBLY_MINUTES,
   DEFAULT_INSTALL_MINUTES,
   type CabinetTypeId,
@@ -54,6 +56,8 @@ import { DeliveryCalculator } from "./DeliveryCalculator";
 import { DeficienciesBlock } from "./DeficienciesBlock";
 import { RoomsPanel } from "./RoomsPanel";
 import { TemplatePicker, TemplateChip } from "./TemplatePicker";
+import { MozaikImportModal } from "./MozaikImportModal";
+import type { MozaikDraft } from "@features/estimator/lib/mozaikImport";
 
 function newId(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -116,6 +120,7 @@ export function EstimatorView() {
   const [project, setProject] = useState("");
   const [activeTemplate, setActiveTemplate] = useState<EstimateTemplate>(defaultTemplate());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [mozaikOpen, setMozaikOpen] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
 
   const [prework, setPrework] = useState<PreWorkState>(emptyPreWork());
@@ -429,6 +434,36 @@ export function EstimatorView() {
     };
   }
 
+  // Apply a parsed Mozaik draft (ADR 0012 Slice 2): cabinet counts → the
+  // summary (which drives the cost-code budget), finishing sqft / sheets → the
+  // cost-code quantity overrides, room names → Rooms, and the material BOM →
+  // line items at $0 for catalog pricing (the app owns the money, ADR 0012).
+  function applyMozaikDraft(draft: MozaikDraft) {
+    setCabinetSummary(draft.cabinetSummary);
+    setBudgetQtyByCode((prev) => ({ ...prev, ...draft.qtyByCode }));
+    if (draft.roomNames.length > 0) {
+      setRooms(draft.roomNames.map((n) => newRoom(n)));
+    }
+    const bomLines: LineItem[] = [];
+    for (const b of draft.bom) {
+      const unit = mapMozaikUnit(b.unit);
+      if (!unit) continue; // skip non-line units (lb / C.Ft) — they're metrics
+      const isDoor = /door|panel/i.test(b.name);
+      bomLines.push({
+        id: newId("mz"),
+        category: isDoor ? "Door materials & profiles" : "Casework",
+        item: b.name,
+        description: "(from Mozaik — set price)",
+        qty: b.qty,
+        unit,
+        unitPrice: 0,
+        wastePct: 0,
+        markupPct: settings.defaultMarkupPct,
+      });
+    }
+    if (bomLines.length > 0) setLines((prev) => [...prev, ...bomLines]);
+  }
+
   async function saveAsJob() {
     if (!client.trim() || !project.trim()) return;
     setSubmitting(true);
@@ -490,6 +525,13 @@ export function EstimatorView() {
               template={activeTemplate}
               onClickChange={() => setTemplatePickerOpen(true)}
             />
+            <button
+              onClick={() => setMozaikOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-caption text-text-secondary hover:border-text-tertiary hover:text-text-primary transition-colors duration-fast"
+            >
+              <UploadCloud className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Import Mozaik CSV
+            </button>
             <span className="text-caption text-text-tertiary">
               {activeTemplate.activeSections.length} section(s) active. Hidden sections won&apos;t
               price into this quote.
@@ -559,6 +601,11 @@ export function EstimatorView() {
         onPick={(tpl) => setActiveTemplate(tpl)}
         onClose={() => setTemplatePickerOpen(false)}
       />
+      <MozaikImportModal
+        open={mozaikOpen}
+        onClose={() => setMozaikOpen(false)}
+        onConfirm={(draft) => applyMozaikDraft(draft)}
+      />
       {/* No persistence yet — silence unused var warning for AUTO_DERIVED_SECTIONS */}
       <span hidden>{AUTO_DERIVED_SECTIONS.length}</span>
     </>
@@ -576,4 +623,14 @@ function assemblyBreakdownLabel(s: CabinetSummaryT): string {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// Map a Mozaik BOM unit to an estimator line unit. Returns null for units that
+// aren't line items (lb / C.Ft are room metrics, not BOM lines).
+function mapMozaikUnit(unit: string): LineItem["unit"] | null {
+  const u = unit.trim().toLowerCase();
+  if (u === "#" || u === "ea") return "ea";
+  if (u === "sqft") return "sqft";
+  if (u === "ft") return "lf";
+  return null;
 }
