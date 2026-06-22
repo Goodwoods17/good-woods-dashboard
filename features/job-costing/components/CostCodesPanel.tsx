@@ -15,13 +15,12 @@ import { formatCAD } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import type { CostCodeBudget } from "../lib/budget";
 import type { BudgetReconciliation } from "../lib/budget";
-import { PHASE_LABELS, PHASE_ORDER, findCostCode, type PhaseId } from "../lib/costCodes";
+import { PHASE_LABELS, PHASE_ORDER, TOTAL_CABINET_COUNT_CODES, type PhaseId } from "../lib/costCodes";
 
-function isQtyEditable(code: string): boolean {
-  const def = findCostCode(code);
-  if (!def) return false;
-  // Cabinet counts and the total-count loading code come from the summary.
-  return def.driver != null && !def.cabinetType && code !== "DEL-LOAD";
+function isQtyEditable(row: { code: string; driver: unknown; cabinetType?: string }): boolean {
+  // Cabinet counts (per type) and the total-count loading code come from the
+  // cabinet summary; everything else with a driver is editable.
+  return row.driver != null && !row.cabinetType && !TOTAL_CABINET_COUNT_CODES.has(row.code);
 }
 
 export function CostCodesPanel({
@@ -77,7 +76,7 @@ export function CostCodesPanel({
                 {PHASE_LABELS[phase]}
               </div>
               {rowsByPhase.get(phase)!.map((r) => {
-                const qtyEditable = isQtyEditable(r.code);
+                const qtyEditable = isQtyEditable(r);
                 return (
                   <div
                     key={r.code}
