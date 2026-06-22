@@ -27,12 +27,33 @@ live in `docs/domain.md`. UI craft direction:
 ```
 features/job-costing/
 ├── CLAUDE.md
+├── components/
+│   └── CostCodesPanel.tsx   estimator "Labour cost codes" block: budget rows by
+│                            phase, editable qty/minutes, reconciliation note
 └── lib/
-    └── types.ts   DriverUnit, CostCodeTemplate(+Item), JobEstimate, JobInvoice,
-                   JobCostBudget, JobCostActual
+    ├── types.ts       DriverUnit, CostCodeTemplate(+Item), JobEstimate, JobInvoice,
+    │                  JobCostBudget, JobCostActual
+    ├── costCodes.ts   CANONICAL_COST_CODES (the unified-template catalog),
+    │                  phase labels/order, rateForPhase — mirrors the seed
+    ├── budget.ts      deriveCostCodeBudget (counts → budget rows) +
+    │                  reconcileBudgetVsQuote. Pure; tested by
+    │                  scripts/test-job-costing-budget.ts
+    └── saveBudget.ts  saveJobBudget: writes job_estimates + job_cost_budgets
+                       (labour rows) at Save-as-Job
 ```
 
-Stores, the Budget-vs-Actual tab, and the `/pnl` rollup arrive in P2–P5.
+The Budget-vs-Actual tab and the `/pnl` rollup arrive in P4–P5.
+
+### ADR 0012 — unified Job template (Slice 1, shipped on `feat/job-templates`)
+
+The estimator's `EstimateTemplate` now carries a `costCodeSet` (string keys into
+`costCodes.ts`). The cabinet summary fills the driven quantities (ASM/INST per
+type, DEL-LOAD = total count); finishing sqft / cut sheets are manual now and
+Mozaik-filled in Slice 2. The canonical codes are seeded into `labour_operations`
+by `20260622130000_seed_cost_codes.sql` (idempotent upsert keyed by `code`).
+`CANONICAL_COST_CODES` (TS) and that seed must stay in lockstep. Save-as-Job
+freezes the labour budget; **material/subtrade budget rows are deferred** (materials
+land with the Mozaik BOM in Slice 2; subtrades read live from `job_trades`).
 
 ## Cross-feature seams
 

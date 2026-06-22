@@ -32,6 +32,13 @@ import {
 import { logPricesFromEstimate } from "@features/catalog/lib/priceHistory";
 import { useCatalog, type CatalogCabinetType } from "@features/catalog/lib/catalogStore";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
+import {
+  deriveCostCodeBudget,
+  reconcileBudgetVsQuote,
+  FULL_BUILD_CODE_SET,
+} from "@features/job-costing/lib/budget";
+import { saveJobBudget } from "@features/job-costing/lib/saveBudget";
+import { CostCodesPanel } from "@features/job-costing/components/CostCodesPanel";
 import { QUOTE_SECTIONS, type SectionId } from "@features/estimator/lib/sections";
 import {
   defaultTemplate,
@@ -121,6 +128,12 @@ export function EstimatorView() {
 
   const [lines, setLines] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Per-code overrides for the labour cost-code budget (ADR 0012). Cabinet
+  // counts auto-fill the driven quantities; these capture manual entry (finishing
+  // sqft, cut sheets) and minute tuning before the budget freezes at save.
+  const [budgetQtyByCode, setBudgetQtyByCode] = useState<Record<string, number>>({});
+  const [budgetMinutesByCode, setBudgetMinutesByCode] = useState<Record<string, number>>({});
 
   const activeSectionIds = activeTemplate.activeSections;
   const overheadPct = settings.defaultOverheadPct;
@@ -334,6 +347,31 @@ export function EstimatorView() {
     [prework, settings.labourRates]
   );
 
+  // The unified Job template's labour cost-code budget (ADR 0012 Slice 1):
+  // the template's code set, quantities filled from the cabinet counts, priced
+  // at the workspace labour rates. Reconciled against the quote's labour
+  // subtotal so a drift is visible before Save-as-Job freezes it.
+  const costCodeBudget = useMemo(
+    () =>
+      deriveCostCodeBudget(
+        activeTemplate.costCodeSet ?? FULL_BUILD_CODE_SET,
+        cabinetSummary,
+        settings.labourRates,
+        { qtyByCode: budgetQtyByCode, minutesByCode: budgetMinutesByCode }
+      ),
+    [
+      activeTemplate.costCodeSet,
+      cabinetSummary,
+      settings.labourRates,
+      budgetQtyByCode,
+      budgetMinutesByCode,
+    ]
+  );
+  const budgetReconciliation = useMemo(
+    () => reconcileBudgetVsQuote(costCodeBudget.totalAmount, totals.costs.labour),
+    [costCodeBudget.totalAmount, totals.costs.labour]
+  );
+
   // Quoted total BEFORE contingency, for the Deficiencies preview.
   const quotedPreContingency = totals.quoted - totals.contingency;
 
@@ -406,6 +444,18 @@ export function EstimatorView() {
       template: activeTemplate,
     });
     await createJob(job);
+    // Freeze the labour cost-code budget (ADR 0012 Slice 1) as the job's
+    // baseline for budget-vs-actual. Non-fatal: a costing hiccup shouldn't
+    // strand the user on a half-saved estimate.
+    try {
+      await saveJobBudget({
+        jobId: job.id,
+        quotedTotal: totals.quoted,
+        budget: costCodeBudget,
+      });
+    } catch (e) {
+      console.warn("Failed to write job cost budget:", e);
+    }
     // Append a price-history row for every catalogId-tagged line. Builds
     // the dataset behind the "Last bid: $X on Job #N" tooltip + 90-day
     // average comparisons. Failures are non-critical to job creation.
@@ -472,6 +522,19 @@ export function EstimatorView() {
             summary={cabinetSummary}
             rooms={rooms}
             onUpdate={(patch) => setCabinetSummary((prev) => ({ ...prev, ...patch }))}
+          />
+
+          <CostCodesPanel
+            budget={costCodeBudget}
+            reconciliation={budgetReconciliation}
+            qtyByCode={budgetQtyByCode}
+            minutesByCode={budgetMinutesByCode}
+            onQty={(code, qty) =>
+              setBudgetQtyByCode((prev) => ({ ...prev, [code]: qty }))
+            }
+            onMinutes={(code, minutes) =>
+              setBudgetMinutesByCode((prev) => ({ ...prev, [code]: minutes }))
+            }
           />
         </div>
 
