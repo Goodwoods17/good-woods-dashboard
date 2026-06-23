@@ -1,4 +1,4 @@
-import type { HealthStatus, Job, PipelineStatus } from "@shared/lib/types";
+import type { HealthStatus, Job, JobBlocker, PipelineStatus } from "@shared/lib/types";
 
 // Expected days-to-install that a job should still have when it enters each
 // pipeline stage. If the actual days-to-install is less than the stage's lead
@@ -38,9 +38,14 @@ export function daysToInstall(installDate: string, today: Date = new Date()): nu
 // Otherwise: if the job has less time-to-install than the stage expects,
 // it's at_risk; if it has less than half the stage's lead time (or is overdue
 // for a non-installing stage), it's blocked.
-export function deriveHealth(job: Job, today: Date = new Date()): HealthStatus {
+export function deriveHealth(
+  job: Job,
+  today: Date = new Date(),
+  activeBlockers: JobBlocker[] = []
+): HealthStatus {
   if (job.pipelineStatus === "complete") return "complete";
   if (job.healthStatus === "paused") return "paused";
+  if (activeBlockers.length > 0) return "blocked";
 
   const expected = STAGE_LEAD_DAYS[job.pipelineStatus];
   const actual = daysToInstall(job.installDate, today);

@@ -12,24 +12,16 @@ import {
   type DragStartEvent,
   DragOverlay,
 } from "@dnd-kit/core";
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
+import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useDroppable } from "@dnd-kit/core";
-import {
-  type Job,
-  type PipelineStatus,
-  PIPELINE_LABELS,
-  computeMargin,
-} from "@shared/lib/types";
+import { type Job, type PipelineStatus, PIPELINE_LABELS, computeMargin } from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { MarginCell } from "@shared/components/ui/MarginCell";
 import { deriveHealth } from "@features/jobs/lib/health";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 import { cn } from "@shared/lib/utils";
 
 const COLUMNS: PipelineStatus[] = [
@@ -107,13 +99,7 @@ export function KanbanBoard({ jobs }: { jobs: Job[] }) {
   );
 }
 
-function Column({
-  status,
-  jobs,
-}: {
-  status: PipelineStatus;
-  jobs: Job[];
-}) {
+function Column({ status, jobs }: { status: PipelineStatus; jobs: Job[] }) {
   const { setNodeRef, isOver } = useDroppable({ id: status });
   const totalValue = jobs.reduce((s, j) => s + j.revenue, 0);
 
@@ -130,9 +116,7 @@ function Column({
           <span className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
             {PIPELINE_LABELS[status]}
           </span>
-          <span className="text-xs text-text-tertiary tabular-nums">
-            {jobs.length}
-          </span>
+          <span className="text-xs text-text-tertiary tabular-nums">{jobs.length}</span>
         </div>
         {totalValue > 0 && (
           <span className="text-caption text-text-tertiary tabular-nums">
@@ -143,9 +127,7 @@ function Column({
       <SortableContext items={jobs.map((j) => j.id)} strategy={verticalListSortingStrategy}>
         <div className="flex-1 p-2 space-y-2">
           {jobs.length === 0 ? (
-            <div className="px-3 py-6 text-center text-xs text-text-tertiary">
-              Drop jobs here
-            </div>
+            <div className="px-3 py-6 text-center text-xs text-text-tertiary">Drop jobs here</div>
           ) : (
             jobs.map((job) => <SortableCard key={job.id} job={job} />)
           )}
@@ -156,14 +138,9 @@ function Column({
 }
 
 function SortableCard({ job }: { job: Job }) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: job.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: job.id,
+  });
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -179,8 +156,9 @@ function SortableCard({ job }: { job: Job }) {
 }
 
 function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
+  const { activeByJob } = useJobBlockers();
   const margin = computeMargin(job);
-  const health = deriveHealth(job);
+  const health = deriveHealth(job, new Date(), activeByJob.get(job.id) ?? []);
   return (
     <Link
       href={`/jobs/${job.id}`}
@@ -190,9 +168,7 @@ function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
       }}
       className={cn(
         "block bg-surface rounded-lg p-3 text-left transition-shadow duration-fast",
-        dragging
-          ? "shadow-modal cursor-grabbing"
-          : "shadow-resting hover:shadow-hover cursor-grab"
+        dragging ? "shadow-modal cursor-grabbing" : "shadow-resting hover:shadow-hover cursor-grab"
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -206,9 +182,7 @@ function CardSurface({ job, dragging }: { job: Job; dragging?: boolean }) {
       </div>
       <div className="text-xs text-text-secondary mb-3 truncate">{job.client}</div>
       <div className="flex items-center justify-between text-xs">
-        <span className="tabular-nums text-text-secondary">
-          {formatCAD(job.revenue)}
-        </span>
+        <span className="tabular-nums text-text-secondary">{formatCAD(job.revenue)}</span>
         <MarginCell margin={margin} />
       </div>
       <div className="text-caption text-text-tertiary tabular-nums mt-1.5 pt-1.5 border-t border-border-faint">

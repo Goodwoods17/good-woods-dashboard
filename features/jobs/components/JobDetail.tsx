@@ -2,15 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Calendar as CalendarIcon, CalendarPlus, Pause, Play } from "lucide-react";
-import { downloadJobICS } from "@features/jobs/lib/ics";
 import {
-  computeMargin,
-  PIPELINE_LABELS,
-  type PipelineStatus,
-} from "@shared/lib/types";
+  ArrowLeft,
+  MapPin,
+  Calendar as CalendarIcon,
+  CalendarPlus,
+  Pause,
+  Play,
+} from "lucide-react";
+import { downloadJobICS } from "@features/jobs/lib/ics";
+import { computeMargin, PIPELINE_LABELS, type PipelineStatus } from "@shared/lib/types";
 import { useJob, useJobs } from "@features/jobs/lib/jobsStore";
 import { deriveHealth } from "@features/jobs/lib/health";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
@@ -45,6 +49,7 @@ const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
 export function JobDetail({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   const { updateJob } = useJobs();
+  const { activeByJob } = useJobBlockers();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
 
   if (!job) return null;
@@ -55,7 +60,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
       : margin.band === "at_risk"
         ? "text-status-at-risk"
         : "text-status-blocked";
-  const derivedHealth = deriveHealth(job);
+  const derivedHealth = deriveHealth(job, new Date(), activeByJob.get(job.id) ?? []);
   const isPaused = job.healthStatus === "paused";
 
   return (
@@ -81,9 +86,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                   value: s,
                   label: PIPELINE_LABELS[s],
                 }))}
-                onChange={(next) =>
-                  updateJob(job.id, { pipelineStatus: next })
-                }
+                onChange={(next) => updateJob(job.id, { pipelineStatus: next })}
                 trigger={<StatusBadge status={job.pipelineStatus} />}
               />
               <HealthPill status={derivedHealth} />
@@ -119,9 +122,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 )}
               </button>
             </div>
-            <h1 className="font-serif text-headline font-medium text-text-primary">
-              {job.name}
-            </h1>
+            <h1 className="font-serif text-headline font-medium text-text-primary">{job.name}</h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary flex-wrap">
               <span>{job.client}</span>
               <span className="inline-flex items-center gap-1">
@@ -192,10 +193,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
       <div className="flex-1 px-8 py-6">
         {activeTab === "overview" && <OverviewTab job={job} />}
         {activeTab === "costs" && (
-          <CostsTab
-            job={job}
-            onChange={(updated) => updateJob(job.id, () => updated)}
-          />
+          <CostsTab job={job} onChange={(updated) => updateJob(job.id, () => updated)} />
         )}
         {activeTab === "tasks" && <TasksTab job={job} />}
         {activeTab === "activity" && <ActivityTab job={job} />}
