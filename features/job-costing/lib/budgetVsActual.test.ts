@@ -9,7 +9,6 @@ import {
   rowsToLabourBudget,
   sessionsToLabourActuals,
   materialActualTotal,
-  subtradeBudgetTotal,
   subtradeActualsByLine,
   rowsToSubtradeLines,
   subtradeLineProjected,
@@ -360,7 +359,6 @@ const actualRows = [
   { kind: "labour", amount: 200 }, // non-material → ignored
 ];
 
-const tradeRows = [{ cost: 500 }, { cost: 300 }];
 
 // Code-name resolver: maps "u1" → "Unassembly"
 const resolver = (id: string) => (id === "u1" ? "Unassembly" : undefined);
@@ -396,10 +394,6 @@ describe("row mappers", () => {
 
   it("materialActualTotal: sums only material rows → 1500", () => {
     expect(materialActualTotal(actualRows)).toBe(1500);
-  });
-
-  it("subtradeBudgetTotal: sums all cost fields → 800", () => {
-    expect(subtradeBudgetTotal(tradeRows)).toBe(800);
   });
 
   // End-to-end: feed mapped data into computeBudgetVsActual → labour actual-$ = 75

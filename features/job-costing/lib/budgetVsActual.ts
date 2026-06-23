@@ -167,15 +167,6 @@ export function materialActualTotal(rows: Record<string, unknown>[]): number {
   return total;
 }
 
-// Sums `cost` for all job_trades rows (subtrade budget).
-export function subtradeBudgetTotal(rows: Record<string, unknown>[]): number {
-  let total = 0;
-  for (const r of rows) {
-    total += Number(r.cost ?? 0);
-  }
-  return total;
-}
-
 // Sums `amount` of kind='subtrade' actuals, grouped by trade_line_id.
 // Rows with a null trade_line_id accumulate under UNASSIGNED_LINE so money is
 // never silently dropped.
