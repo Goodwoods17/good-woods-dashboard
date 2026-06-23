@@ -9,6 +9,7 @@ import { cn } from "@shared/lib/utils";
 import { useBudgetVsActual } from "@features/job-costing/lib/budgetVsActualStore";
 import { computeBudgetVsActual, marginTone } from "@features/job-costing/lib/budgetVsActual";
 import { TimelineView } from "@features/job-costing/components/bva/TimelineView";
+import { PhaseBarsView } from "@features/job-costing/components/bva/PhaseBarsView";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 type BvaView = "timeline" | "bars" | "pace";
@@ -136,7 +137,7 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
       {/* View placeholders (Tasks 5–7) */}
       <div className="rounded-xl bg-surface shadow-resting p-6">
         {activeView === "timeline" && <TimelineView bva={bva} job={job} />}
-        {activeView === "bars" && <div className="text-text-tertiary text-sm">Bars view</div>}
+        {activeView === "bars" && <PhaseBarsView bva={bva} />}
         {activeView === "pace" && <div className="text-text-tertiary text-sm">Pace view</div>}
       </div>
 
