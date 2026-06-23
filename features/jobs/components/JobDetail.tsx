@@ -20,6 +20,7 @@ import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
+import { BlockersCard } from "./BlockersCard";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
 import { ActivityTab } from "./ActivityTab";
@@ -164,6 +165,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
           current={job.currentMilestone}
           onChange={(stage) => updateJob(job.id, { currentMilestone: stage })}
         />
+        <BlockersCard jobId={job.id} />
       </header>
 
       <nav className="border-b border-border bg-surface px-8" aria-label="Job sections">
