@@ -84,6 +84,77 @@ function variancePct(variance: number, budget: number): number | null {
   return round1((variance / budget) * 100);
 }
 
+// ── Row→input mappers ────────────────────────────────────────────────────────
+
+// Maps raw `job_cost_budgets` rows (labour kind) to BudgetLine[].
+// codeName resolver comes from the labour_operations registry (Task 3 wires it).
+export function rowsToLabourBudget(
+  rows: Record<string, unknown>[],
+  codeName: (codeId: string) => string | undefined
+): BudgetLine[] {
+  return rows.map((r) => {
+    const codeId = r.code_id != null ? String(r.code_id) : null;
+    const resolvedName = (codeId != null && codeName(codeId)) || String(r.code_id ?? "—");
+    return {
+      phaseId: String(r.phase_id) as MilestoneStage,
+      codeId,
+      codeName: resolvedName,
+      budgetedMinutes: Number(r.budgeted_minutes ?? 0),
+      budgetedQuantity: r.budgeted_quantity == null ? null : Number(r.budgeted_quantity),
+      rate: Number(r.rate ?? 0),
+      budgetedAmount: Number(r.budgeted_amount ?? 0),
+    };
+  });
+}
+
+// Maps raw `labour_sessions` rows to LabourActual[].
+// Skips sessions with ended_at == null (still running).
+// Groups by category_id (phase) + operation_id (code); minutes = Σ accumulated_ms/60000.
+// quantity = sum of non-null quantity values, or null if none present.
+export function sessionsToLabourActuals(rows: Record<string, unknown>[]): LabourActual[] {
+  const map = new Map<
+    string,
+    { phaseId: MilestoneStage; codeId: string | null; minutes: number; quantity: number | null }
+  >();
+
+  for (const r of rows) {
+    if (r.ended_at == null) continue;
+    const phaseId = String(r.category_id) as MilestoneStage;
+    const codeId = r.operation_id != null ? String(r.operation_id) : null;
+    const key = `${phaseId}|${codeId ?? ""}`;
+    if (!map.has(key)) {
+      map.set(key, { phaseId, codeId, minutes: 0, quantity: null });
+    }
+    const slot = map.get(key)!;
+    slot.minutes += Number(r.accumulated_ms ?? 0) / 60000;
+    if (r.quantity != null) {
+      slot.quantity = (slot.quantity ?? 0) + Number(r.quantity);
+    }
+  }
+
+  return Array.from(map.values());
+}
+
+// Sums `amount` for all rows where kind === "material". Ignores other kinds.
+export function materialActualTotal(rows: Record<string, unknown>[]): number {
+  let total = 0;
+  for (const r of rows) {
+    if (r.kind === "material") {
+      total += Number(r.amount ?? 0);
+    }
+  }
+  return total;
+}
+
+// Sums `cost` for all job_trades rows (subtrade budget).
+export function subtradeBudgetTotal(rows: Record<string, unknown>[]): number {
+  let total = 0;
+  for (const r of rows) {
+    total += Number(r.cost ?? 0);
+  }
+  return total;
+}
+
 // ── Exported functions ────────────────────────────────────────────────────────
 
 // Current phase is in-progress, NOT complete.

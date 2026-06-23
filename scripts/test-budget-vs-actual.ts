@@ -7,6 +7,10 @@ import {
   projectedPhaseCost,
   marginTone,
   computeBudgetVsActual,
+  rowsToLabourBudget,
+  sessionsToLabourActuals,
+  materialActualTotal,
+  subtradeBudgetTotal,
 } from "../features/job-costing/lib/budgetVsActual";
 
 let passed = 0;
@@ -291,6 +295,120 @@ check("computeBudgetVsActual overrun: overhead+subtrade absent from clawback", (
   const result: BvaResult = computeBudgetVsActual(overrunInput);
   // clawback should still be 60, not 60+300+800
   assert.equal(result.clawback, 60);
+});
+
+// ── row mappers ──────────────────────────────────────────────────────────────
+
+// Fixtures (verbatim from task-2-brief.md)
+const budgetRows = [
+  {
+    phase_id: "design",
+    code_id: "u1",
+    kind: "labour",
+    budgeted_minutes: 120,
+    rate: 50,
+    budgeted_amount: 100,
+    budgeted_quantity: null,
+  },
+];
+
+// Three sessions for category_id:"design"/operation_id:"u1".
+// Session A: ended_at null → skipped. Sessions B + C: completed, same key →
+// minutes accumulate (30 + 60 = 90), genuinely exercising the grouping sum.
+const sessionRows = [
+  {
+    category_id: "design",
+    operation_id: "u1",
+    accumulated_ms: 3_600_000, // would be 60 min — but ended_at null → skipped
+    ended_at: null,
+    quantity: null,
+  },
+  {
+    category_id: "design",
+    operation_id: "u1",
+    accumulated_ms: 1_800_000, // 30 min, completed
+    ended_at: "2026-06-22T10:00:00Z",
+    quantity: null,
+  },
+  {
+    category_id: "design",
+    operation_id: "u1",
+    accumulated_ms: 3_600_000, // 60 min, completed → group sum = 90 min
+    ended_at: "2026-06-22T11:00:00Z",
+    quantity: null,
+  },
+];
+
+const actualRows = [
+  { kind: "material", amount: 1500 },
+  { kind: "labour", amount: 200 }, // non-material → ignored
+];
+
+const tradeRows = [{ cost: 500 }, { cost: 300 }];
+
+// Code-name resolver: maps "u1" → "Unassembly"
+const resolver = (id: string) => (id === "u1" ? "Unassembly" : undefined);
+
+check("rowsToLabourBudget: maps one budget row correctly", () => {
+  const lines = rowsToLabourBudget(budgetRows, resolver);
+  assert.equal(lines.length, 1);
+  const l = lines[0]!;
+  assert.equal(l.phaseId, "design");
+  assert.equal(l.codeId, "u1");
+  assert.equal(l.codeName, "Unassembly");
+  assert.equal(l.budgetedMinutes, 120);
+  assert.equal(l.budgetedQuantity, null);
+  assert.equal(l.rate, 50);
+  assert.equal(l.budgetedAmount, 100);
+});
+
+check("rowsToLabourBudget: falls back to code_id string when resolver returns undefined", () => {
+  const lines = rowsToLabourBudget(budgetRows, () => undefined);
+  assert.equal(lines[0]!.codeName, "u1");
+});
+
+check("sessionsToLabourActuals: skips session with ended_at null; sums 90 min", () => {
+  const actuals = sessionsToLabourActuals(sessionRows);
+  assert.equal(actuals.length, 1);
+  const a = actuals[0]!;
+  assert.equal(a.phaseId, "design");
+  assert.equal(a.codeId, "u1");
+  assert.equal(a.minutes, 90);
+  assert.equal(a.quantity, null);
+});
+
+check("materialActualTotal: sums only material rows → 1500", () => {
+  assert.equal(materialActualTotal(actualRows), 1500);
+});
+
+check("subtradeBudgetTotal: sums all cost fields → 800", () => {
+  assert.equal(subtradeBudgetTotal(tradeRows), 800);
+});
+
+// End-to-end: feed mapped data into computeBudgetVsActual → labour actual-$ = 75
+// (90 min @ rate 50 → 75; but budget rate=50 is on the BudgetLine, and the
+//  synthetic rate in the actual slot comes from the BudgetLine matched by codeId)
+check("computeBudgetVsActual via mapped data: labour actual-$ for design/u1 = 75", () => {
+  const lines = rowsToLabourBudget(budgetRows, resolver);
+  const actuals = sessionsToLabourActuals(sessionRows);
+  const input: BvaInput = {
+    labourBudget: lines,
+    labourActuals: actuals,
+    materialsBudget: 0,
+    materialsActual: materialActualTotal(actualRows),
+    subtradeBudget: subtradeBudgetTotal(tradeRows),
+    overhead: 0,
+    quotedMargin: 5000,
+    currentMilestone: "design",
+    pipelineComplete: false,
+  };
+  const result: BvaResult = computeBudgetVsActual(input);
+  const design = result.phases.find((p) => p.phaseId === "design");
+  assert.ok(design, "design phase present");
+  const code = design!.codes.find((c) => c.codeId === "u1");
+  assert.ok(code, "u1 code row present");
+  // 90 min / 60 * rate 50 = 75
+  assert.equal(code!.actual, 75);
 });
 
 console.log(`\n${passed} checks passed.`);
