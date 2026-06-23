@@ -49,25 +49,25 @@ export default function RootLayout({
             <JobsProvider>
               <ContactsProvider>
                 <JobBlockersProvider>
-                <DocumentsProvider>
-                  <CatalogProvider>
-                    <WorkCardsProvider>
-                      <RefaceProvider>
-                        <LabourProvider>
-                          <TradesProvider>
-                            <SubtradesProvider>
-                              <JobTradesProvider>
-                                <PartnerPeopleProvider>
-                                  <AppShell>{children}</AppShell>
-                                </PartnerPeopleProvider>
-                              </JobTradesProvider>
-                            </SubtradesProvider>
-                          </TradesProvider>
-                        </LabourProvider>
-                      </RefaceProvider>
-                    </WorkCardsProvider>
-                  </CatalogProvider>
-                </DocumentsProvider>
+                  <DocumentsProvider>
+                    <CatalogProvider>
+                      <WorkCardsProvider>
+                        <RefaceProvider>
+                          <LabourProvider>
+                            <TradesProvider>
+                              <SubtradesProvider>
+                                <JobTradesProvider>
+                                  <PartnerPeopleProvider>
+                                    <AppShell>{children}</AppShell>
+                                  </PartnerPeopleProvider>
+                                </JobTradesProvider>
+                              </SubtradesProvider>
+                            </TradesProvider>
+                          </LabourProvider>
+                        </RefaceProvider>
+                      </WorkCardsProvider>
+                    </CatalogProvider>
+                  </DocumentsProvider>
                 </JobBlockersProvider>
               </ContactsProvider>
             </JobsProvider>
