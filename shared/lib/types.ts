@@ -7,20 +7,9 @@ export type PipelineStatus =
   | "installing"
   | "complete";
 
-export type HealthStatus =
-  | "on_track"
-  | "at_risk"
-  | "blocked"
-  | "complete"
-  | "paused";
+export type HealthStatus = "on_track" | "at_risk" | "blocked" | "complete" | "paused";
 
-export type MilestoneStage =
-  | "design"
-  | "cnc"
-  | "assembly"
-  | "finishing"
-  | "delivery"
-  | "install";
+export type MilestoneStage = "design" | "cnc" | "assembly" | "finishing" | "delivery" | "install";
 
 export const MILESTONE_STAGES: { key: MilestoneStage; label: string }[] = [
   { key: "design", label: "Design" },
@@ -46,7 +35,6 @@ export type ActivityKind =
   | "revenue_edited"
   | "task_completed"
   | "note";
-
 
 export type Activity = {
   id: string;
@@ -119,12 +107,7 @@ export type JobSourcePreset = (typeof JOB_SOURCE_PRESETS)[number];
 
 export type PetType = "dog" | "cat" | "other";
 
-export type SiteContactRole =
-  | "homeowner"
-  | "property_manager"
-  | "super"
-  | "neighbour"
-  | "other";
+export type SiteContactRole = "homeowner" | "property_manager" | "super" | "neighbour" | "other";
 
 /**
  * Install-day intel for the crew. Mostly optional; the form leaves
@@ -273,7 +256,7 @@ export type JobBlocker = {
   waitingOnContactId: string | null;
   waitingOnLabel: string | null;
   gatedPhaseId: MilestoneStage | null;
-  raisedAt: string;       // ISO
+  raisedAt: string; // ISO
   resolvedAt: string | null;
 };
 

@@ -14,10 +14,13 @@ export function rowToBlocker(r: Record<string, unknown>): JobBlocker {
 }
 export function blockerToRow(b: JobBlocker): Record<string, unknown> {
   return {
-    id: b.id, job_id: b.jobId, reason: b.reason,
+    id: b.id,
+    job_id: b.jobId,
+    reason: b.reason,
     waiting_on_contact_id: b.waitingOnContactId,
     waiting_on_label: b.waitingOnLabel,
     gated_phase_id: b.gatedPhaseId,
-    raised_at: b.raisedAt, resolved_at: b.resolvedAt,
+    raised_at: b.raisedAt,
+    resolved_at: b.resolvedAt,
   };
 }
