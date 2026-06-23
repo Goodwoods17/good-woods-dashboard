@@ -3,7 +3,7 @@
 Estimate-vs-actual job costing: cost codes (labour operations under the 6
 phases) flow **estimate → job budget → live actuals → P&L rollup**, with a
 learning loop feeding historical averages back into bids. The point is to know
-*mid-job* whether a job is making money, in time to act this shift.
+_mid-job_ whether a job is making money, in time to act this shift.
 
 **Canonical design:** `docs/superpowers/specs/2026-06-20-cost-codes-job-costing-design.md`
 plus ADRs **0008** (milestones = phases), **0009** (budget-on-job), **0010**
@@ -19,8 +19,35 @@ live in `docs/domain.md`. UI craft direction:
   `supabase/migrations/20260620050000_cost_codes_schema.sql` is written but
   **NOT yet applied** to the shared DB (coordinate with the parallel session +
   a deploy). Types in `lib/types.ts`.
-- **P2–P6** — registry/templates in `/labour`, estimator panel, the
-  Budget-vs-Actual tab, `/pnl` rollup, the learning loop. See spec §10.
+- **P2–P3** — registry/templates in `/labour`, estimator panel. Done (ADR 0012 Slices A/1/2).
+- **P4** — the **Budget-vs-Actual tab** on `/jobs/[id]`. Done (labour + materials; ADR 0014).
+- **P5–P6** — `/pnl` open-jobs rollup + Burn-up/Projection views; the learning loop. See spec §10.
+
+### P4 — Budget-vs-Actual tab (ADR 0014)
+
+A "Budget vs Actual" tab on `/jobs/[id]` answers "is this job making money, mid-job?"
+
+- **Pure data layer** `lib/budgetVsActual.ts` (tested by `scripts/test-budget-vs-actual.ts`):
+  `computeBudgetVsActual(input)` → per-phase/per-code labour rollup + the margin math;
+  plus the row→input mappers (`rowsToLabourBudget`, `sessionsToLabourActuals`,
+  `materialActualTotal`, `subtradeBudgetTotal`).
+- **Loader** `lib/budgetVsActualStore.tsx` (`useBudgetVsActual(jobId)`) reads
+  `job_cost_budgets` (labour), `labour_sessions` (actuals), `job_cost_actuals`
+  (material), `job_trades` (subtrade budget); `logActual` writes a material actual.
+- **UI** `components/BudgetVsActualTab.tsx` + `components/bva/{TimelineView,PhaseBarsView,PaceMarginView}.tsx`.
+- **Structure (where a budget exists at that grain):** labour = per-phase + per-code
+  variance; materials = **job-level** budget (`job.costs` materials) vs logged actuals;
+  subtrades = **budget only** (`Σ job_trades.cost`, actuals deferred to Slice C);
+  overhead = job-level fixed.
+- **Margin is anchored to the quoted margin + tracked drift** (`computeMargin(job).marginAmount
+− labourDrift − materialDrift`), so it matches the Pipeline number and equals the quote
+  when there are no actuals. **Overhead is a silent constant** (no actual → cancels out of
+  Clawback). Labour actual-$ uses each budget row's **snapshot `rate`**. Header is labelled
+  **"(excl. subtrade actuals)"** until Slice C tags `job_trades` with phases.
+- **Data source:** estimator's _Save as Job_ (writes `job_cost_budgets`). Budget-less jobs
+  show an empty state pointing to the estimator (no backfill — ADR 0014).
+- **Smoke fixture:** `scripts/seed-bva-smoke.ts [jobId] [--clean]` seeds/cleans demo
+  budget+actuals on an example job (the dashboard holds only example jobs today).
 
 ## Where things live
 
@@ -77,7 +104,8 @@ them. **Implication:** the cost-code panel is now RLS-gated — it needs an auth
 session to populate (empty otherwise; graceful empty-state, but Save-as-Job doesn't block
 on an empty registry). Seeded 4 starter component codes (`INST-INSERT`, `INST-ROLLOUT`,
 `HW-PULL`, `FIT-DOOR`; migration `20260622195053`), fed by the Mozaik `# inserts /
-# rollouts+trays / # pulls / # doors+fronts` counts. Andrew extends the set from `/labour`.
+
+# rollouts+trays / # pulls / # doors+fronts`counts. Andrew extends the set from`/labour`.
 
 ## Cross-feature seams
 
@@ -89,9 +117,10 @@ on an empty registry). Seeded 4 starter component codes (`INST-INSERT`, `INST-RO
 ## Known schema wrinkle (read before the FK work)
 
 `jobs.id` is **`text`** (not uuid), so every job FK here is text (matching
-`job_trades`). The existing `labour_sessions.job_id` is **`uuid`** — upgrading it
-to a real nullable FK (spec §4.7) needs a `uuid → text` conversion on existing
-data first, in its own tested migration. Deferred from P1; do it with care.
+`job_trades`). `labour_sessions.job_id` is **also `text`** in the live DB (an
+earlier note here said `uuid`; that was stale — verified `text` via PostgREST
+2026-06-23 during P4), so it joins to `jobs.id` directly and P4's labour-actuals
+read needs no cast. (`labour_sessions.operation_id` is `uuid` = `job_cost_budgets.code_id`.)
 
 ## Non-goals (carried from the spec)
 
