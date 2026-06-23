@@ -10,6 +10,7 @@ import { useBudgetVsActual } from "@features/job-costing/lib/budgetVsActualStore
 import { computeBudgetVsActual, marginTone } from "@features/job-costing/lib/budgetVsActual";
 import { TimelineView } from "@features/job-costing/components/bva/TimelineView";
 import { PhaseBarsView } from "@features/job-costing/components/bva/PhaseBarsView";
+import { PaceMarginView } from "@features/job-costing/components/bva/PaceMarginView";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 type BvaView = "timeline" | "bars" | "pace";
@@ -138,7 +139,7 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
       <div className="rounded-xl bg-surface shadow-resting p-6">
         {activeView === "timeline" && <TimelineView bva={bva} job={job} />}
         {activeView === "bars" && <PhaseBarsView bva={bva} />}
-        {activeView === "pace" && <div className="text-text-tertiary text-sm">Pace view</div>}
+        {activeView === "pace" && <PaceMarginView bva={bva} job={job} />}
       </div>
 
       {/* Per-phase labour table */}
