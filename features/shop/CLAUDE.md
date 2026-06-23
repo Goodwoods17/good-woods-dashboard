@@ -24,6 +24,7 @@ A **work card** represents one chunk of work a single worker is executing right 
 Cards are seeded from the job budget (cost-code task templates) and can be added manually.
 
 Each card carries:
+
 - `jobCode` + `phaseId` + `costCode` — links to the job budget line
 - `workerId` — who is on it
 - `status`: `idle` | `in_progress` | `stuck` | `done`
@@ -34,6 +35,7 @@ Each card carries:
 ### Per-worker pace timer
 
 The pace timer (built in Slice B / `feat/labour-pace-timer`) lives on each card:
+
 - Start / pause / resume tracks real elapsed time
 - Compares elapsed vs `suggestedMins` and colours the pace indicator
   (green = on pace, amber = slightly over, red = blown)
@@ -50,6 +52,14 @@ The foreman sees them at a glance and can re-assign or unblock.
 Cards with no `costCode` yet (manually added or imported without a code)
 render with an amber badge. The office assigns a code before the card
 is included in job-costing reports.
+
+### External-blocker chips (read-only)
+
+`JobBoard` surfaces the job's active external blockers (from the jobs
+feature's `job_blockers` / `useJobBlockers`, ADR 0013): whole-job
+blockers as a chip under the job-name header, phase-specific blockers
+as a chip on the matching phase column. Read-only here — raise, resolve,
+and reopen happen on the Blockers card in `/jobs/[id]`.
 
 ### Seeding from the budget
 

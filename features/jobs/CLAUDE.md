@@ -44,8 +44,13 @@ features/jobs/
     ├── invoice.ts               (company/tax identity via getCompany()/getTaxRate(), set at runtime by workspace settings; computeInvoiceTotals, generateInvoicePdf)
     ├── jobs.ts                  (SEED_JOBS, getJob, etc.)
     ├── jobsRowMap.ts            (Supabase row ↔ Job conversion; internal to jobsStore)
-    └── jobsStore.tsx            (JobsProvider, useJobs, useJob)
+    ├── jobsStore.tsx            (JobsProvider, useJobs, useJob)
+    ├── jobBlockers.ts           (pure external-blocker derivation: blockerAgeDays, partyLabel, headline, externalBlockerChip, phaseGatingBlocker)
+    ├── jobBlockerRowMap.ts      (Supabase row ↔ JobBlocker conversion; internal to jobBlockersStore)
+    └── jobBlockersStore.tsx     (JobBlockersProvider, useJobBlockers — dual-mode CRUD + activeByJob/activeForJob)
 ```
+
+The Blockers card itself is `components/BlockersCard.tsx`.
 
 ## Domain notes
 
@@ -57,6 +62,24 @@ features/jobs/
   is "where it is in the funnel" (`new → sold → in_design → ...`),
   health is "is this on track" (`on_track | at_risk | blocked | ...`).
   See `shared/lib/types`.
+- **External blockers** (ADR 0013) are structured rows in the
+  `job_blockers` table (dual-mode via `jobBlockersStore`), and are the
+  **source of truth** for a job's externally-blocked state — health is
+  **derived on read**, not stored. `deriveHealth` takes an optional
+  `activeBlockers` arg and follows the precedence
+  `complete > paused > active-blocker → blocked > schedule`; any open
+  blocker makes a job rank to the top of the Hitlist and flips its chip
+  to "Waiting on {party} · {N}d" (real, not synthetic). Manage them on
+  the **Blockers card** in JobDetail (add / resolve / reopen + resolved
+  history). A blocker may gate a **specific phase** (`gatedPhaseId` =
+  one of the 6 `MilestoneStage` keys) or the **whole job**
+  (`gatedPhaseId = null`). Whole-job blockers flag health only;
+  **only a phase-specific blocker soft-gates that phase's milestone
+  advance** (inline "Advance anyway?" confirm in JobDetail + TasksTab —
+  it warns, never hard-blocks). Active blockers also surface read-only on
+  the `/shop` work board and as high-priority red items in the daily
+  briefing. The pure derivation lives in `lib/jobBlockers.ts`; aging
+  turns red at 7 days.
 - **Cost lines** (`materials | labour | overhead`) sum into total cost.
   Margin = revenue − cost. Margin % = margin / revenue.
 - **Activity** (timeline) is generated automatically by `diffActivity`
