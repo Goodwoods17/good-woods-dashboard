@@ -34,6 +34,7 @@ import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
 import { ActivityTab } from "./ActivityTab";
 import { TasksTab } from "./TasksTab";
+import { BudgetVsActualTab } from "@features/job-costing/components/BudgetVsActualTab";
 import { cn } from "@shared/lib/utils";
 
 const PIPELINE_OPTIONS: PipelineStatus[] = [
@@ -46,11 +47,12 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-type TabKey = "overview" | "tasks" | "files" | "costs" | "activity";
+type TabKey = "overview" | "tasks" | "files" | "costs" | "activity" | "budget";
 
 const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
   { key: "overview", label: "Overview", enabled: true },
   { key: "costs", label: "Costs", enabled: true },
+  { key: "budget", label: "Budget vs Actual", enabled: true },
   { key: "tasks", label: "Tasks", enabled: true },
   { key: "activity", label: "Activity", enabled: true },
   { key: "files", label: "Files", enabled: false },
@@ -247,6 +249,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
         {activeTab === "costs" && (
           <CostsTab job={job} onChange={(updated) => updateJob(job.id, () => updated)} />
         )}
+        {activeTab === "budget" && <BudgetVsActualTab job={job} />}
         {activeTab === "tasks" && <TasksTab job={job} />}
         {activeTab === "activity" && <ActivityTab job={job} />}
       </div>
