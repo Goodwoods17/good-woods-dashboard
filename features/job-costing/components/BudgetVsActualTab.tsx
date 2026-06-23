@@ -51,8 +51,8 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
     try {
       if (logKind === "subtrade") {
         if (!tradeLineId) return;
-        // Look up subtradeId from the raw data (subtradeLines comes from the hook).
-        const chosenLine = data?.subtradeLines.find((l) => l.lineId === tradeLineId);
+        // Look up subtradeId from the derived lines (bva is guaranteed present here).
+        const chosenLine = bva.other.subtrades.lines.find((l) => l.lineId === tradeLineId);
         await logActual({
           kind: "subtrade",
           tradeLineId,
@@ -522,7 +522,6 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
                 </thead>
                 <tbody className="divide-y divide-border">
                   {bva.other.subtrades.lines
-                    .filter((l) => l.lineId !== UNASSIGNED_LINE)
                     .map((l) => (
                       <tr key={l.lineId}>
                         <td className="py-2 pr-4 text-text-primary">{l.tradeName}</td>
