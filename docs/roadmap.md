@@ -5,15 +5,16 @@
 > **Maintain it:** whenever a slice ships, a PR merges, or scope changes during a session,
 > update this file in the same session. Verify claims against code/git, not memory.
 >
-> **Last verified:** 2026-06-23 (against `main` — Slice C is PR #17; PRs #9, #14 merged).
+> **Last verified:** 2026-06-23 (against `main` @ #18 — PRs #9, #14, #17, #18 all merged; 0 open PRs).
 
 ---
 
 ## Where we are (one line)
 
-All ~17 app surfaces are **built and live**. The active frontier is the **job-costing /
-Budget-vs-Actual spine** — the full cost-codes stack (A–D) has shipped; the remaining work
-is **P5 → P6**.
+All ~17 app surfaces are **built and live**. The full **job-costing / Budget-vs-Actual spine
+(cost-codes A–D)** has shipped, plus **CI + a security-hardening pass** (below). Remaining spine
+work is **P5 → P6**. The active build frontier is now the **per-feature Phase-2 backlog** (§4) —
+first up: **Reface forms/hinge** (in flight).
 
 ---
 
@@ -36,6 +37,7 @@ The deep work: a dependency chain ending in the **Budget-vs-Actual tab (P4)**, t
 shows real margin per job from captured budget + timer actuals.
 
 ### Shipped ✅
+
 - **P0** milestones realigned to the 6 phases (design·cnc·assembly·finishing·delivery·install)
 - **P1** cost-codes schema + types (6 tables, RLS) · **P2a** labour cost-code/driver fields + qty capture
 - **Slice 1** unified Job template + **Mozaik CSV import** (`MozaikImportModal` + `mozaikImport.ts`)
@@ -51,28 +53,36 @@ shows real margin per job from captured budget + timer actuals.
   Smoke fixture + Vitest math tests.
 - **Slice C** subtrade actuals per trade-line — no migration (ADR 0015). Per-line projection,
   done-lock, Unassigned bucket. All-in projected margin (caveat label removed). Material |
-  Subtrade toggle on "Log actual cost" form. `npm test` (Vitest) covers the math.
+  Subtrade toggle on "Log actual cost" form. `npm test` (Vitest) covers the math. (PR #17)
+- **P2b** cost-code task-template CRUD (`/labour` Templates tab) — (PR #9)
+
+### Infra / hardening ✅
+
+- **CI** — GitHub Actions (`.github/workflows/ci.yml`) runs tsc → lint → Vitest → build on every
+  PR to `main` and push to `main`. The repo's first automated gate. (PR #18)
+- **Security** — pinned `search_path = ''` on the 5 advisor-flagged functions
+  (`function_search_path_mutable` finding closed). (PR #18) · Known/intentional leftovers: the
+  `authenticated`-all RLS policies (single-tenant model) and the leaked-password-protection auth
+  toggle (off) — both WARN-level, out of scope.
 
 ### Remaining 🗂️ (build order)
+
 ```
-✅ PR #9   P2b task-template CRUD (/labour Templates tab) ... MERGED
 🗂️ P5      remaining P4 views + /pnl open-jobs rollup ...... not built
 🗂️ P6      learning loop (actuals → estimator task-template defaults) ... not built
 ```
+
 **Spec:** `docs/superpowers/specs/2026-06-22-cost-code-registry-and-p4-stack-design.md` (§5 Slice C, §6–8 P4 math).
 
 ---
 
 ## 3. Open PRs
 
-| PR | What | Status / action |
-|----|------|-----------------|
-| **#9** | P2b cost-code **task-template CRUD** (`/labour` Templates tab) | Built, gate-green — **merge it** (the `/labour` surface it touches is now settled) |
-| **#14** | Catalog **generic attributes editor + empty-category state** | Built + opus-reviewed READY + browser-smoked (seed mode). Isolated to `features/catalog`, no migration. Awaiting test/merge. |
+**None.** The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), and the
+CI/security pass (#18) are all merged to `main`; their branches are pruned.
 
-(PR #3 estimator-Mozaik = CLOSED. No other open feature PRs.)
-
-**In flight (uncommitted/unmerged branches):** `feat/budget-vs-actual` (the P4 capstone, another session) · `feat/catalog-surface-kinds` (= PR #14).
+**In flight:** `feat/reface-forms` (`gw-reface` worktree) — Reface end-panel/toe-kick forms +
+hinge-boring logic, in design.
 
 ---
 
@@ -82,7 +92,7 @@ Mostly **disjoint feature folders** → safe to build in parallel windows (see
 `parallel-dev-playbook` in memory).
 
 - **Estimator:** draft-estimate persistence · custom templates → Supabase · catalog pick-from · PDF quote export
-- **Inventory:** **stock-vs-job-needs (BOM)** — now *unblocked* (Mozaik import shipped the per-job BOM input)
+- **Inventory:** **stock-vs-job-needs (BOM)** — now _unblocked_ (Mozaik import shipped the per-job BOM input)
 - **Labour:** labour-$ per job (× rates) · per-worker throughput · install/loading nudges
 - **Shop:** Supabase realtime/persistence for the wall tablet (currently in-memory)
 - **Catalog:** ~~surface all kinds~~ DONE (category-based UI already surfaces all 7 kinds; generic per-item attributes editor + empty-category state = PR #14) · remaining: estimator pick-from integration
