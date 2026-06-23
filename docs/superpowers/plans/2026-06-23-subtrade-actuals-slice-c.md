@@ -10,7 +10,7 @@
 
 ## Global Constraints
 
-- **No new dependencies.** No test runner exists; verification is `npx tsc --noEmit` + `npm run lint` + `npm run build` + an authed browser smoke against the DoD (see spec). Copy the Slice D pattern.
+- **Testing (Andrew-approved 2026-06-23):** add **Vitest** for the pure logic layer (the money math), broad on *logic* (not jsdom component tests). Verification = `npm test` (Vitest) for the math + `npx tsc --noEmit` + `npm run lint` + `npm run build` + an authed **Playwright** browser smoke against the DoD for the feature/wiring. Task 0 sets up Vitest and ports Slice D's hand-rolled `scripts/test-budget-vs-actual.ts` into it; Task 1 is real test-first TDD on the subtrade math.
 - **No migration.** `job_cost_actuals` already has `kind='subtrade'`, `trade_line_id`, `partner_id`, `phase_id`, `actual_date`.
 - **House style for the pure layer:** no React, no `Set`/`Map` spread, pure functions only (file header rule in `budgetVsActual.ts`).
 - **Money:** format with `formatCAD` from `@shared/lib/format`. Never hand-roll currency.
@@ -31,6 +31,82 @@ This branch (`feat/subtrade-actuals`) is cut from main **before** PR #15 (Slice 
 
 ---
 
+### Task 0: Set up Vitest + port the existing math harness
+
+**Files:**
+- Modify: `package.json` (devDeps + scripts)
+- Create: `vitest.config.ts`
+- Create: `features/job-costing/lib/budgetVsActual.test.ts`
+- Delete: `scripts/test-budget-vs-actual.ts` (ported into the Vitest file)
+
+**Why:** Slice D shipped a comprehensive hand-rolled assertion harness for the margin math. Upgrade it to Vitest (watch mode, real diffs, `npm test`, the tool Andrew approved) and make `npm test` the math gate going forward. Set the config up **broad on logic** so any `*.test.ts` under `features/`/`shared/` is picked up — other logic files can be backfilled later (cheap follow-up).
+
+- [ ] **Step 1: Add Vitest + tsconfig-paths resolver.**
+
+```bash
+npm install -D vitest vite-tsconfig-paths
+```
+
+(`vite-tsconfig-paths` lets Vitest resolve the `@features`/`@shared` aliases that the pure files import, reusing `tsconfig.json` paths — no duplicate alias config. Type-only `@shared` imports are erased at runtime; `@features/.../costCodes` is a real value import that needs this.)
+
+- [ ] **Step 2: Add test scripts to `package.json`.**
+
+```json
+"test": "vitest run",
+"test:watch": "vitest"
+```
+
+- [ ] **Step 3: Create `vitest.config.ts`.**
+
+```ts
+import { defineConfig } from "vitest/config";
+import tsconfigPaths from "vite-tsconfig-paths";
+
+export default defineConfig({
+  plugins: [tsconfigPaths()],
+  test: {
+    include: ["features/**/*.test.ts", "shared/**/*.test.ts"],
+    environment: "node",
+  },
+});
+```
+
+- [ ] **Step 4: Port the harness into `features/job-costing/lib/budgetVsActual.test.ts`.**
+
+Translate every case in `scripts/test-budget-vs-actual.ts` to Vitest. Imports become local (`from "./budgetVsActual"`). Pattern: `check("x", () => { assert.equal(a, b) })` → `it("x", () => { expect(a).toBe(b) })`; wrap groups in `describe(...)`. Use the file header:
+
+```ts
+import { describe, it, expect } from "vitest";
+import type { BvaInput, BvaResult } from "./budgetVsActual";
+import {
+  phaseComplete, labourActualAmount, projectedPhaseCost, marginTone,
+  computeBudgetVsActual, rowsToLabourBudget, sessionsToLabourActuals,
+  materialActualTotal, subtradeBudgetTotal,
+} from "./budgetVsActual";
+```
+
+Port ALL existing assertions verbatim (same inputs/expected values) — they are the regression net for the existing labour/material math.
+
+- [ ] **Step 5: Delete the old harness.**
+
+```bash
+git rm scripts/test-budget-vs-actual.ts
+```
+
+- [ ] **Step 6: Run the suite green.**
+
+Run: `npm test`
+Expected: all ported cases PASS (same numbers as the old harness printed).
+
+- [ ] **Step 7: Commit.**
+
+```bash
+git add package.json package-lock.json vitest.config.ts features/job-costing/lib/budgetVsActual.test.ts
+git commit -m "test(job-costing): add Vitest; port BVA math harness from tsx script (Slice C)"
+```
+
+---
+
 ### Task 1: Pure data layer — subtrade types, mappers, per-line drift
 
 **Files:**
@@ -45,6 +121,103 @@ This branch (`feat/subtrade-actuals`) is cut from main **before** PR #15 (Slice 
   - `BvaInput.subtradeLines: SubtradeLine[]` (replaces `subtradeBudget: number`)
   - `OtherCosts.subtrades: { budget: number; actual: number; variance: number; variancePct: number | null; lines: SubtradeLine[] }`
   - `BvaResult.subtradeDrift: number`
+
+- [ ] **Step 0 (TDD — write failing tests first): add subtrade cases to `budgetVsActual.test.ts`.**
+
+Append these to the Vitest file from Task 0. They reference symbols this task will create, so they fail to compile/run until the implementation lands (that is the red state).
+
+```ts
+import {
+  subtradeActualsByLine, rowsToSubtradeLines, subtradeLineProjected,
+  UNASSIGNED_LINE, type SubtradeLine,
+} from "./budgetVsActual";
+
+describe("subtrade actuals (Slice C)", () => {
+  const tradeRows = [
+    { id: "L1", trade_id: "t-counter", subtrade_id: "s-stone", status: "booked", cost: 800 },
+    { id: "L2", trade_id: "t-elec", subtrade_id: null, status: "needed", cost: 600 },
+  ];
+  const tradeName = (id: string) => ({ "t-counter": "Countertop", "t-elec": "Electrical" }[id]);
+  const subName = (id: string) => ({ "s-stone": "Stoneworks" }[id]);
+
+  it("subtradeActualsByLine sums kind='subtrade' by trade_line_id; null → UNASSIGNED", () => {
+    const rows = [
+      { kind: "subtrade", trade_line_id: "L1", amount: 600 },
+      { kind: "subtrade", trade_line_id: "L1", amount: 400 },
+      { kind: "material", trade_line_id: "L1", amount: 999 }, // ignored
+      { kind: "subtrade", trade_line_id: null, amount: 50 },
+    ];
+    const by = subtradeActualsByLine(rows);
+    expect(by.L1).toBe(1000);
+    expect(by[UNASSIGNED_LINE]).toBe(50);
+  });
+
+  it("rowsToSubtradeLines builds one line per trade + resolves names + variance", () => {
+    const lines = rowsToSubtradeLines(tradeRows, { L1: 1000 }, tradeName, subName);
+    const l1 = lines.find((l) => l.lineId === "L1")!;
+    expect(l1.tradeName).toBe("Countertop");
+    expect(l1.subtradeName).toBe("Stoneworks");
+    expect(l1.subtradeId).toBe("s-stone");
+    expect(l1.budget).toBe(800);
+    expect(l1.actual).toBe(1000);
+    expect(l1.variance).toBe(200);
+    const l2 = lines.find((l) => l.lineId === "L2")!;
+    expect(l2.subtradeName).toBeNull();
+  });
+
+  it("rowsToSubtradeLines appends an Unassigned line when that bucket is non-zero", () => {
+    const lines = rowsToSubtradeLines(tradeRows, { [UNASSIGNED_LINE]: 75 }, tradeName, subName);
+    const u = lines.find((l) => l.lineId === UNASSIGNED_LINE)!;
+    expect(u.tradeName).toBe("Unassigned");
+    expect(u.actual).toBe(75);
+    expect(u.budget).toBe(0);
+  });
+
+  it("subtradeLineProjected: done → actual; open → max(actual,budget)", () => {
+    const done: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "done", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    expect(subtradeLineProjected(done, false)).toBe(1000);
+    const openUnder: SubtradeLine = { ...done, status: "booked", actual: 500 };
+    expect(subtradeLineProjected(openUnder, false)).toBe(800); // under-budget open → budget (0 drift)
+    const openOver: SubtradeLine = { ...done, status: "booked", actual: 900 };
+    expect(subtradeLineProjected(openOver, false)).toBe(900);
+  });
+
+  it("computeBudgetVsActual folds subtrade drift into projectedMargin + clawback", () => {
+    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    const result: BvaResult = computeBudgetVsActual({
+      labourBudget: [], labourActuals: [],
+      materialsBudget: 0, materialsActual: 0,
+      subtradeLines: [line],
+      overhead: 0, quotedMargin: 10000,
+      currentMilestone: "cnc", pipelineComplete: false,
+    });
+    expect(result.subtradeDrift).toBe(200); // projected 1000 − budget 800
+    expect(result.projectedMargin).toBe(9800); // 10000 − 0 − 0 − 200
+    expect(result.clawback).toBe(200);
+    expect(result.other.subtrades.budget).toBe(800);
+    expect(result.other.subtrades.actual).toBe(1000);
+    expect(result.other.subtrades.lines).toHaveLength(1);
+  });
+
+  it("under-budget open subtrade contributes zero drift", () => {
+    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 200, variance: -600, variancePct: -75 };
+    const result = computeBudgetVsActual({
+      labourBudget: [], labourActuals: [], materialsBudget: 0, materialsActual: 0,
+      subtradeLines: [line], overhead: 0, quotedMargin: 10000,
+      currentMilestone: "cnc", pipelineComplete: false,
+    });
+    expect(result.subtradeDrift).toBe(0);
+    expect(result.projectedMargin).toBe(10000);
+  });
+});
+```
+
+Note: the existing ported tests will also need their `subtradeBudget: N` inputs changed to `subtradeLines: []` (or a line list) as part of Step 5/8 below — update them when `BvaInput` changes so the whole suite compiles.
+
+- [ ] **Step 0b: Run tests to confirm they fail.**
+
+Run: `npm test`
+Expected: FAIL — `subtradeActualsByLine`/`rowsToSubtradeLines`/`subtradeLineProjected`/`UNASSIGNED_LINE` not exported; `subtradeLines` not on `BvaInput`.
 
 - [ ] **Step 1: Add the `SubtradeLine` type and the `UNASSIGNED_LINE` constant.**
 
@@ -215,16 +388,23 @@ subtrades: {
 
 Add `subtradeDrift,` to the returned object.
 
-- [ ] **Step 9: Type-check.**
+- [ ] **Step 9: Update the ported tests for the new `BvaInput` shape, then run green.**
+
+In `budgetVsActual.test.ts`, change every ported case that passes `subtradeBudget: N` to `subtradeLines: []` (the old cases asserted `other.subtrades.budget`; with no lines that is now `0`, so update those few expected values to `0`, or supply a one-line `subtradeLines` list matching the old budget — prefer the latter to preserve intent). Then:
+
+Run: `npm test`
+Expected: PASS — all ported cases + the new subtrade cases from Step 0 are green.
+
+- [ ] **Step 10: Type-check.**
 
 Run: `npx tsc --noEmit`
-Expected: PASS (callers in store/tab will still reference the old shape — those are Tasks 2/3; if tsc flags ONLY those two files, that is expected and they are fixed next. If it flags `budgetVsActual.ts` itself, fix before moving on.)
+Expected: PASS for `budgetVsActual.ts` + the test file. Callers in store/tab still reference the old shape — those are Tasks 2/3; if tsc flags ONLY those two files, that is expected.
 
-- [ ] **Step 10: Commit.**
+- [ ] **Step 11: Commit.**
 
 ```bash
-git add features/job-costing/lib/budgetVsActual.ts
-git commit -m "feat(job-costing): subtrade per-line types, mappers, and drift in BVA data layer (Slice C)"
+git add features/job-costing/lib/budgetVsActual.ts features/job-costing/lib/budgetVsActual.test.ts
+git commit -m "feat(job-costing): subtrade per-line types, mappers, and drift in BVA data layer + tests (Slice C)"
 ```
 
 ---
@@ -405,9 +585,11 @@ git commit -m "docs(job-costing): ADR 0015 subtrade actuals per-line; glossary +
 
 ---
 
-## Verification (workflow step 7 — authed browser smoke against DoD)
+## Verification (workflow step 7)
 
-Not a code task; run after Task 3 (Task 4 can follow). Restart `npm run dev` first if a `build` ran (it clobbers `.next` — see [[claude-smoke-test-user]]). Seed + log in:
+**Math gate (Vitest):** `npm test` — must be green (ported labour/material cases + new subtrade cases). This is the fast, exhaustive check on the numbers.
+
+**Feature gate (authed Playwright browser smoke against the DoD):** run after Task 3 (Task 4 can follow). Restart `npm run dev` first if a `build` ran (it clobbers `.next` — see [[claude-smoke-test-user]]). Log in by clicking the **Sign in button**, not Enter. Seed + log in:
 
 ```bash
 npx tsx scripts/seed-bva-smoke.ts 2        # seeds the $800 Countertop trade-line
