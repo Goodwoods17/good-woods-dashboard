@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { X } from "lucide-react";
 import { visibleAttrs, setAttr, removeAttr } from "@features/catalog/lib/attributes";
 import type { CatalogKind } from "@features/catalog/lib/catalogStore";
 
@@ -50,7 +51,7 @@ function Row({
         onClick={() => onChange(removeAttr(attributes, attrKey))}
         className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-text-tertiary transition-colors duration-fast hover:text-status-blocked"
       >
-        ✕
+        <X className="h-3.5 w-3.5" strokeWidth={2} />
       </button>
     </div>
   );
