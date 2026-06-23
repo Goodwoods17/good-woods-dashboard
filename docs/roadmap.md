@@ -5,15 +5,15 @@
 > **Maintain it:** whenever a slice ships, a PR merges, or scope changes during a session,
 > update this file in the same session. Verify claims against code/git, not memory.
 >
-> **Last verified:** 2026-06-23 (against `main` @ PR #13; PR #14 catalog-attributes open; `feat/budget-vs-actual` in flight).
+> **Last verified:** 2026-06-23 (against `main` — Slice C is PR #17; PRs #9, #14 merged).
 
 ---
 
 ## Where we are (one line)
 
 All ~17 app surfaces are **built and live**. The active frontier is the **job-costing /
-Budget-vs-Actual spine** — most of it has shipped; the remaining work is **Slice C → Slice D
-(the P4 tab) → P5 → P6**, plus merging PR #9.
+Budget-vs-Actual spine** — the full cost-codes stack (A–D) has shipped; the remaining work
+is **P5 → P6**.
 
 ---
 
@@ -46,15 +46,16 @@ shows real margin per job from captured budget + timer actuals.
 - **Slice B2** daily time cards (per-employee/per-project, edit, CSV)
 - **External blockers** (ADR 0013) — structured `job_blockers` drive derived health, soft phase
   gate, shop chips, briefing (PR #13)
+- **Slice D** ★ **Budget-vs-Actual tab** on `/jobs/[id]` — labour + materials (ADR 0014). Five
+  views: Timeline, Phase bars, Pace+margin. Margin/Clawback header anchored to quoted margin.
+  Smoke fixture + Vitest math tests.
+- **Slice C** subtrade actuals per trade-line — no migration (ADR 0015). Per-line projection,
+  done-lock, Unassigned bucket. All-in projected margin (caveat label removed). Material |
+  Subtrade toggle on "Log actual cost" form. `npm test` (Vitest) covers the math.
 
 ### Remaining 🗂️ (build order)
 ```
-🟡 PR #9   P2b task-template CRUD (/labour Templates tab) ... BUILT, just MERGE it
-🗂️ Slice C subtrades gain phase_id + schedule dates ........ not built (small; ADR 0007 §9 tie-in)
-🗂️ Slice D ★ BUDGET-VS-ACTUAL TAB on /jobs/[id] ........... not built — THE capstone
-              (math specced: 5 views + margin/clawback header; reads budget(1) + labour
-               actuals(B) + subtrade cost/phase(C) + job-level material; no Budget tab exists
-               on JobDetail yet — tabs are overview·tasks·files·costs·activity)
+✅ PR #9   P2b task-template CRUD (/labour Templates tab) ... MERGED
 🗂️ P5      remaining P4 views + /pnl open-jobs rollup ...... not built
 🗂️ P6      learning loop (actuals → estimator task-template defaults) ... not built
 ```
@@ -107,7 +108,9 @@ Carried over from the original prototype roadmap — revisit when the costing sp
 
 ADRs `docs/decisions/`: **0008** milestones=phases · **0009** budget-on-job · **0010**
 QuickBooks-ready costing · **0012** unified template + Mozaik · **0013** external blockers as
-derived source-of-truth. (0002/0003 = the build process: deliberate-plan-then-autonomous-build.)
+derived source-of-truth · **0014** BvA P4 scope + margin · **0015** subtrade actuals per
+trade-line (Slice C, supersedes 0014 subtrade deferral). (0002/0003 = the build process:
+deliberate-plan-then-autonomous-build.)
 
 ---
 

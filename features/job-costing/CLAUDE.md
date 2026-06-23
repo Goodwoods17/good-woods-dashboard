@@ -23,31 +23,48 @@ live in `docs/domain.md`. UI craft direction:
 - **P4** — the **Budget-vs-Actual tab** on `/jobs/[id]`. Done (labour + materials; ADR 0014).
 - **P5–P6** — `/pnl` open-jobs rollup + Burn-up/Projection views; the learning loop. See spec §10.
 
-### P4 — Budget-vs-Actual tab (ADR 0014)
+### P4 — Budget-vs-Actual tab (ADR 0014) + Slice C subtrade actuals (ADR 0015)
 
 A "Budget vs Actual" tab on `/jobs/[id]` answers "is this job making money, mid-job?"
 
-- **Pure data layer** `lib/budgetVsActual.ts` (tested by `scripts/test-budget-vs-actual.ts`):
+- **Pure data layer** `lib/budgetVsActual.ts` (tested by `npm test` / Vitest):
   `computeBudgetVsActual(input)` → per-phase/per-code labour rollup + the margin math;
   plus the row→input mappers (`rowsToLabourBudget`, `sessionsToLabourActuals`,
-  `materialActualTotal`, `subtradeBudgetTotal`).
+  `materialActualTotal`, `rowsToSubtradeLines`, `subtradeActualsByLine`).
 - **Loader** `lib/budgetVsActualStore.tsx` (`useBudgetVsActual(jobId)`) reads
   `job_cost_budgets` (labour), `labour_sessions` (actuals), `job_cost_actuals`
-  (material), `job_trades` (subtrade budget); `logActual` writes a material actual.
+  (material + subtrade), `job_trades` (subtrade budget + name embed); `logActual`
+  writes a material **or subtrade** actual (Material | Subtrade toggle in the UI).
 - **UI** `components/BudgetVsActualTab.tsx` + `components/bva/{TimelineView,PhaseBarsView,PaceMarginView}.tsx`.
 - **Structure (where a budget exists at that grain):** labour = per-phase + per-code
   variance; materials = **job-level** budget (`job.costs` materials) vs logged actuals;
-  subtrades = **budget only** (`Σ job_trades.cost`, actuals deferred to Slice C);
+  subtrades = **per trade-line** budget (`job_trades.cost`) vs logged actuals (ADR 0015);
   overhead = job-level fixed.
-- **Margin is anchored to the quoted margin + tracked drift** (`computeMargin(job).marginAmount
-− labourDrift − materialDrift`), so it matches the Pipeline number and equals the quote
-  when there are no actuals. **Overhead is a silent constant** (no actual → cancels out of
-  Clawback). Labour actual-$ uses each budget row's **snapshot `rate`**. Header is labelled
-  **"(excl. subtrade actuals)"** until Slice C tags `job_trades` with phases.
-- **Data source:** estimator's _Save as Job_ (writes `job_cost_budgets`). Budget-less jobs
-  show an empty state pointing to the estimator (no backfill — ADR 0014).
+- **Margin is all-in and anchored to quoted margin + tracked drift**
+  (`budgetedMargin − labourDrift − materialDrift − subtradeDrift`), matching the
+  Pipeline number. **Overhead is a silent constant** (cancels out of Clawback). Labour
+  actual-$ uses each budget row's **snapshot `rate`**. The `"(excl. subtrade actuals)"`
+  caveat label was **removed** in Slice C — projected margin is now fully all-in.
+- **Subtrade actuals — per trade-line (Slice C / ADR 0015).** No migration required:
+  `job_cost_actuals` already had `kind='subtrade'`, `trade_line_id`, `partner_id`.
+  A done trade-line (`status='done'`) locks projection to actual; an open line
+  projects to `max(actual, budget)` so under-budget open lines contribute zero drift.
+  A null-`trade_line_id` actual surfaces as an "Unassigned" line (never dropped).
+  Name resolution: `job_trades.select("*, trades(label), subtrades(name)")` — this
+  is the working PostgREST embed string (FK names verified on the live DB).
+- **Logging subtrade actuals:** use the "Log actual cost" form on the BvA tab →
+  toggle to "Subtrade" → pick a trade-line from the dropdown. The `logActual`
+  function in `budgetVsActualStore.tsx` writes `kind='subtrade'`, `trade_line_id`,
+  `partner_id` to `job_cost_actuals`.
+- **Data source:** estimator's _Save as Job_ (writes `job_cost_budgets`). Budget-less
+  jobs show an empty state pointing to the estimator (no backfill — ADR 0014).
 - **Smoke fixture:** `scripts/seed-bva-smoke.ts [jobId] [--clean]` seeds/cleans demo
-  budget+actuals on an example job (the dashboard holds only example jobs today).
+  budget + actuals including a **Countertop trade-line with an $800 subtrade budget**
+  on an example job. Use `npx tsx scripts/seed-bva-smoke.ts 2` to smoke job #2.
+- **Math tests:** `npm test` (Vitest) runs `features/job-costing/lib/budgetVsActual.test.ts`
+  — covers labour, material, and subtrade variance including per-line projection,
+  done-lock, under-budget open lines, multi-line totals, and the Unassigned bucket.
+  Run this before touching `budgetVsActual.ts` or `budgetVsActualStore.tsx`.
 
 ## Where things live
 

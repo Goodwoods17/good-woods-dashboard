@@ -208,18 +208,30 @@ doing → stuck → done`), and a **source** (`budget` / `template` / `manual`).
   timer Sessions), or a logged **Supplier** (material) or **Subtrade**
   payment, optionally attributed to the Partner paid. Distinct from the
   estimate's quoted cost and from the Budget.
+- **Subtrade actual** — a logged payment to a subtrade for work on a job;
+  a `job_cost_actuals` row with `kind = 'subtrade'`. Tied to the specific
+  **trade-line** it settles (`trade_line_id`) and optionally to the
+  **Partner** paid (`partner_id`). Logged via the "Log actual cost" form
+  on the Budget-vs-Actual tab (Material | Subtrade toggle). Multiple
+  actuals can accrue against one trade-line (e.g. deposit + final invoice).
 - **Projected margin** — the Budget-vs-Actual tab's headline: `revenue −
 projected job cost`, where projected cost locks completed phases to their
   **actual** and assumes open phases at least hit **budget** (overruns persist;
   driven codes project the overrun _now_ from pace). Anchored to the job's
   **quoted margin** (the same number shown on the Pipeline) and moved only by
-  _tracked drift_ (labour + material variance), so with no actuals it equals the
-  quote. **Overhead** is a silent constant inside it — subtracted so the figure
-  matches the app's all-in margin everywhere else, but it has no actual to track,
-  so it never appears as a variance row and cancels out of Clawback. **Subtrade
-  actuals are excluded** until trade-lines are phase-tagged (Slice C); the header
-  is labelled _"(excl. subtrade actuals)"_ and subtrades sit in the margin at
-  their **budget** (Σ `job_trades.cost`).
+  _tracked drift_ (labour + material + subtrade variance), so with no actuals it
+  equals the quote. **Overhead** is a silent constant inside it — subtracted so
+  the figure matches the app's all-in margin everywhere else, but it has no
+  actual to track, so it never appears as a variance row and cancels out of
+  Clawback. **Subtrade actuals are included** per trade-line (ADR 0015); an
+  open trade-line projects to `max(actual, budget)`, a done line locks to its
+  actual. The headline is all-in with no caveat label.
+- **Trade-line variance** — the difference between a trade-line's projected cost
+  and its budget (`max(actual, budget) − job_trades.cost` for an open line;
+  `actual − budget` for a done line). The sum across all trade-lines is
+  `subtradeDrift`, one of the three components of **Clawback**. An open
+  under-budget trade-line contributes zero drift (savings are withheld until
+  the line closes).
 - **Clawback** — `max(0, budgeted margin − projected margin)`: the dollars a job
   has drifted from its bid. Equals the sum of labour + material overruns (overhead
   and subtrade-budget cancel, being equal on both sides). Zero = on or under bid.
