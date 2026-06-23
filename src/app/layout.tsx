@@ -12,6 +12,7 @@ import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { WorkCardsProvider } from "@features/shop/lib/workCardsStore";
 import { RefaceProvider } from "@features/reface/lib/refaceStore";
 import { LabourProvider } from "@features/labour/lib/labourStore";
+import { CostCodeTemplatesProvider } from "@features/job-costing/lib/costCodeTemplatesStore";
 import { TradesProvider } from "@features/partners/lib/tradesStore";
 import { SubtradesProvider } from "@features/partners/lib/subtradesStore";
 import { JobTradesProvider } from "@features/partners/lib/jobTradesStore";
@@ -54,6 +55,7 @@ export default function RootLayout({
                       <WorkCardsProvider>
                         <RefaceProvider>
                           <LabourProvider>
+                            <CostCodeTemplatesProvider>
                             <TradesProvider>
                               <SubtradesProvider>
                                 <JobTradesProvider>
@@ -63,6 +65,7 @@ export default function RootLayout({
                                 </JobTradesProvider>
                               </SubtradesProvider>
                             </TradesProvider>
+                            </CostCodeTemplatesProvider>
                           </LabourProvider>
                         </RefaceProvider>
                       </WorkCardsProvider>

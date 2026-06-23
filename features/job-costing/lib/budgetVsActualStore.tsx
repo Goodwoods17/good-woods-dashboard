@@ -13,9 +13,11 @@ import {
   rowsToLabourBudget,
   sessionsToLabourActuals,
   materialActualTotal,
-  subtradeBudgetTotal,
+  subtradeActualsByLine,
+  rowsToSubtradeLines,
   type BudgetLine,
   type LabourActual,
+  type SubtradeLine,
 } from "@features/job-costing/lib/budgetVsActual";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -24,21 +26,19 @@ type BvaData = {
   labourBudget: BudgetLine[];
   labourActuals: LabourActual[];
   materialsActual: number;
-  subtradeBudget: number;
+  subtradeLines: SubtradeLine[];
 };
 
 const EMPTY_DATA: BvaData = {
   labourBudget: [],
   labourActuals: [],
   materialsActual: 0,
-  subtradeBudget: 0,
+  subtradeLines: [],
 };
 
-type LogActualInput = {
-  amount: number;
-  phaseId: MilestoneStage | null;
-  note: string;
-};
+export type LogActualInput =
+  | { kind: "material"; phaseId: MilestoneStage | null; amount: number; date?: string; note?: string }
+  | { kind: "subtrade"; tradeLineId: string; partnerId: string | null; amount: number; date?: string; note?: string };
 
 // ── Row shapes (internal) ─────────────────────────────────────────────────────
 
@@ -72,8 +72,8 @@ export function useBudgetVsActual(jobId: string): {
         sb.from("labour_operations").select("id, code, name"),
         sb.from("job_cost_budgets").select("*").eq("job_id", jobId).eq("kind", "labour"),
         sb.from("labour_sessions").select("*").eq("job_id", jobId),
-        sb.from("job_cost_actuals").select("*").eq("job_id", jobId).eq("kind", "material"),
-        sb.from("job_trades").select("*").eq("job_id", jobId),
+        sb.from("job_cost_actuals").select("*").eq("job_id", jobId),
+        sb.from("job_trades").select("*, trades(label), subtrades(name)").eq("job_id", jobId),
       ]);
 
       if (ops.error) throw ops.error;
@@ -87,14 +87,31 @@ export function useBudgetVsActual(jobId: string): {
       const opMap = new Map<string, string>(opRows.map((o) => [o.id, o.name ?? o.code ?? o.id]));
       const codeName = (id: string): string | undefined => opMap.get(id);
 
+      const tradeRows = (trades.data ?? []) as Record<string, unknown>[];
+      const actualRows = (actuals.data ?? []) as Record<string, unknown>[];
+      const tradeNameById = new Map<string, string>();
+      const subNameById = new Map<string, string>();
+      for (const r of tradeRows) {
+        const t = r.trades as { label?: string } | null;
+        const s = r.subtrades as { name?: string } | null;
+        if (r.trade_id != null && t?.label) tradeNameById.set(String(r.trade_id), t.label);
+        if (r.subtrade_id != null && s?.name) subNameById.set(String(r.subtrade_id), s.name);
+      }
+      const subtradeLines = rowsToSubtradeLines(
+        tradeRows,
+        subtradeActualsByLine(actualRows),
+        (id) => tradeNameById.get(id),
+        (id) => subNameById.get(id)
+      );
+
       setData({
         labourBudget: rowsToLabourBudget(
           (budgets.data ?? []) as Record<string, unknown>[],
           codeName
         ),
         labourActuals: sessionsToLabourActuals((sessions.data ?? []) as Record<string, unknown>[]),
-        materialsActual: materialActualTotal((actuals.data ?? []) as Record<string, unknown>[]),
-        subtradeBudget: subtradeBudgetTotal((trades.data ?? []) as Record<string, unknown>[]),
+        materialsActual: materialActualTotal(actualRows),
+        subtradeLines,
       });
       setError(null);
     } catch (e) {
@@ -113,15 +130,15 @@ export function useBudgetVsActual(jobId: string): {
     async (a: LogActualInput) => {
       if (!hasSupabase()) return;
       try {
-        const { error: insertErr } = await getSupabase()
-          .from("job_cost_actuals")
-          .insert({
-            job_id: jobId,
-            kind: "material" as const,
-            phase_id: a.phaseId,
-            amount: a.amount,
-            note: a.note,
-          });
+        const base = { job_id: jobId, amount: a.amount, note: a.note, actual_date: a.date ?? null };
+        const { error: insertErr } =
+          a.kind === "material"
+            ? await getSupabase()
+                .from("job_cost_actuals")
+                .insert({ ...base, kind: "material" as const, phase_id: a.phaseId })
+            : await getSupabase()
+                .from("job_cost_actuals")
+                .insert({ ...base, kind: "subtrade" as const, trade_line_id: a.tradeLineId, partner_id: a.partnerId });
         if (insertErr) throw insertErr;
         await refresh();
       } catch (e) {
