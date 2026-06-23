@@ -266,6 +266,17 @@ export type Job = {
   estimatedRevenue?: number | null;
 };
 
+export type JobBlocker = {
+  id: string;
+  jobId: string;
+  reason: string;
+  waitingOnContactId: string | null;
+  waitingOnLabel: string | null;
+  gatedPhaseId: MilestoneStage | null;
+  raisedAt: string;       // ISO
+  resolvedAt: string | null;
+};
+
 export type Margin = {
   costsTotal: number;
   marginAmount: number;
