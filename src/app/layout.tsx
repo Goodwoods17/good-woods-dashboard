@@ -5,6 +5,7 @@ import { AppShell } from "@shared/components/layout/AppShell";
 import { AuthProvider } from "@shared/lib/authStore";
 import { WorkspaceSettingsProvider } from "@shared/lib/workspaceSettings";
 import { JobsProvider } from "@features/jobs/lib/jobsStore";
+import { JobBlockersProvider } from "@features/jobs/lib/jobBlockersStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
@@ -47,25 +48,27 @@ export default function RootLayout({
           <WorkspaceSettingsProvider>
             <JobsProvider>
               <ContactsProvider>
-                <DocumentsProvider>
-                  <CatalogProvider>
-                    <WorkCardsProvider>
-                      <RefaceProvider>
-                        <LabourProvider>
-                          <TradesProvider>
-                            <SubtradesProvider>
-                              <JobTradesProvider>
-                                <PartnerPeopleProvider>
-                                  <AppShell>{children}</AppShell>
-                                </PartnerPeopleProvider>
-                              </JobTradesProvider>
-                            </SubtradesProvider>
-                          </TradesProvider>
-                        </LabourProvider>
-                      </RefaceProvider>
-                    </WorkCardsProvider>
-                  </CatalogProvider>
-                </DocumentsProvider>
+                <JobBlockersProvider>
+                  <DocumentsProvider>
+                    <CatalogProvider>
+                      <WorkCardsProvider>
+                        <RefaceProvider>
+                          <LabourProvider>
+                            <TradesProvider>
+                              <SubtradesProvider>
+                                <JobTradesProvider>
+                                  <PartnerPeopleProvider>
+                                    <AppShell>{children}</AppShell>
+                                  </PartnerPeopleProvider>
+                                </JobTradesProvider>
+                              </SubtradesProvider>
+                            </TradesProvider>
+                          </LabourProvider>
+                        </RefaceProvider>
+                      </WorkCardsProvider>
+                    </CatalogProvider>
+                  </DocumentsProvider>
+                </JobBlockersProvider>
               </ContactsProvider>
             </JobsProvider>
           </WorkspaceSettingsProvider>

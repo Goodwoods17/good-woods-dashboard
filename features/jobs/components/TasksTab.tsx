@@ -1,8 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { Check, Circle, ArrowRight } from "lucide-react";
-import { MILESTONE_STAGES, type Job, type MilestoneStage } from "@shared/lib/types";
+import {
+  MILESTONE_STAGES,
+  type Job,
+  type JobBlocker,
+  type MilestoneStage,
+} from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
+import { phaseGatingBlocker, partyLabel } from "@features/jobs/lib/jobBlockers";
+import { useContacts } from "@features/contacts/lib/contactsStore";
 import { cn } from "@shared/lib/utils";
 
 const STAGE_HINTS: Record<MilestoneStage, string> = {
@@ -16,25 +25,62 @@ const STAGE_HINTS: Record<MilestoneStage, string> = {
 
 export function TasksTab({ job }: { job: Job }) {
   const { updateJob } = useJobs();
-  const currentIdx = MILESTONE_STAGES.findIndex(
-    (s) => s.key === job.currentMilestone
-  );
+  const { activeForJob } = useJobBlockers();
+  const { contacts } = useContacts();
+  const [pendingStage, setPendingStage] = useState<MilestoneStage | null>(null);
+  const [gatingBlocker, setGatingBlocker] = useState<JobBlocker | null>(null);
+  const currentIdx = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+
+  const contactName = (id: string) => contacts.find((c) => c.id === id)?.name;
+  const stageLabel = (s: MilestoneStage) => MILESTONE_STAGES.find((m) => m.key === s)?.label ?? s;
 
   function advanceTo(stage: MilestoneStage) {
-    updateJob(job.id, { currentMilestone: stage });
+    const gating = phaseGatingBlocker(activeForJob(job.id), stage);
+    if (gating) {
+      setPendingStage(stage);
+      setGatingBlocker(gating);
+    } else {
+      updateJob(job.id, { currentMilestone: stage });
+    }
   }
 
   return (
     <div className="max-w-3xl space-y-4">
       <header className="bg-surface border border-border rounded-lg p-5">
-        <h2 className="text-sm font-semibold text-text-primary mb-1">
-          Build progress
-        </h2>
+        <h2 className="text-sm font-semibold text-text-primary mb-1">Build progress</h2>
         <p className="text-sm text-text-secondary">
-          Tap a step to mark it done — the active milestone advances and an
-          activity log entry is written automatically.
+          Tap a step to mark it done — the active milestone advances and an activity log entry is
+          written automatically.
         </p>
       </header>
+
+      {pendingStage && gatingBlocker && (
+        <div className="flex flex-wrap items-center gap-3 min-h-[44px] rounded-lg border border-border bg-surface px-4 py-2.5">
+          <span className="text-sm text-text-primary flex-1 min-w-[200px]">
+            ⏳ {stageLabel(pendingStage)} is externally blocked — waiting on{" "}
+            {partyLabel(gatingBlocker, contactName)}. Advance anyway?
+          </span>
+          <button
+            onClick={() => {
+              setPendingStage(null);
+              setGatingBlocker(null);
+            }}
+            className="inline-flex items-center min-h-[44px] rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors duration-fast"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => {
+              updateJob(job.id, { currentMilestone: pendingStage });
+              setPendingStage(null);
+              setGatingBlocker(null);
+            }}
+            className="inline-flex items-center min-h-[44px] rounded-full bg-text-primary text-white px-4 py-1.5 text-sm font-medium hover:bg-status-blocked-soft hover:text-status-blocked transition-colors duration-fast"
+          >
+            Advance
+          </button>
+        </div>
+      )}
 
       <ol className="space-y-2">
         {MILESTONE_STAGES.map((stage, idx) => {

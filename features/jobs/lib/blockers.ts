@@ -4,23 +4,33 @@
 // Jobs WITH real values render those verbatim; jobs WITHOUT render
 // the synthetic value with a "demo" tag.
 
-import type { Job, PipelineStatus, HealthStatus } from "@shared/lib/types";
+import type { Job, JobBlocker, PipelineStatus, HealthStatus } from "@shared/lib/types";
 import { deriveHealth } from "@features/jobs/lib/health";
 
 /**
  * True when this job's blocker/nextStep is synthetic (heuristic-derived,
  * not user-set). Hitlist + Schedule render a "demo" tag in this case.
- * When `job.blocker` is set, this returns false for that job.
+ * When `job.blocker` is set, or active external blockers exist, returns false.
  */
-export function isSyntheticBlocker(job: Job): boolean {
+export function isSyntheticBlocker(job: Job, activeBlockers?: JobBlocker[]): boolean {
+  if (activeBlockers?.length) return false;
   return !job.blocker;
 }
 
 /**
- * Returns the user-facing blocker text. Prefers `job.blocker` (real,
- * user-set) over the synthetic BlockerKind label.
+ * Returns the user-facing blocker text. Prefers active external blockers'
+ * reason first, then `job.blocker` (real, user-set), then the synthetic label.
+ * Note: visible party text (requires contact name lookup) is composed in
+ * BlockerChip — this stays pure (no contacts access).
  */
-export function resolveBlockerText(job: Job, today: Date = new Date()): string {
+export function resolveBlockerText(
+  job: Job,
+  today: Date = new Date(),
+  activeBlockers?: JobBlocker[]
+): string {
+  if (activeBlockers?.length) {
+    return activeBlockers[0].reason.trim() || "Externally blocked";
+  }
   if (job.blocker && job.blocker.trim().length > 0) return job.blocker.trim();
   const kind = getBlocker(job, today);
   return BLOCKER_META[kind].short;
@@ -29,15 +39,15 @@ export function resolveBlockerText(job: Job, today: Date = new Date()): string {
 /**
  * Returns the BlockerKind that drives the chip tone (blocked / at_risk /
  * neutral / on_track) when rendering a synthetic blocker. For real
- * blockers, the chip tone derives from the job's health instead — see
- * resolveBlockerTone().
+ * blockers (user-set or external), the chip tone is always "blocked".
  */
-export function resolveBlockerTone(job: Job, today: Date = new Date()):
-  | "blocked"
-  | "at_risk"
-  | "neutral"
-  | "on_track"
-{
+export function resolveBlockerTone(
+  job: Job,
+  today: Date = new Date(),
+  activeBlockers?: JobBlocker[]
+): "blocked" | "at_risk" | "neutral" | "on_track" {
+  // External blockers always drive a "blocked" tone.
+  if (activeBlockers?.length) return "blocked";
   // Real blocker: tone follows the job's health.
   if (job.blocker && job.blocker.trim().length > 0) {
     const h = deriveHealth(job, today);
@@ -63,11 +73,11 @@ export const BLOCKER_META: Record<
   { label: string; short: string; tone: "blocked" | "at_risk" | "neutral" | "on_track" }
 > = {
   subcontractor: { label: "Waiting on subcontractor quote", short: "Sub quote", tone: "at_risk" },
-  toolpath_cnc:  { label: "Waiting on Toolpath CNC",       short: "Toolpath",  tone: "at_risk" },
-  materials:     { label: "Need to order materials",       short: "Materials", tone: "blocked" },
-  customer:      { label: "Awaiting client decision",      short: "Client",    tone: "at_risk" },
-  internal:      { label: "Internal — needs shop/design time", short: "Internal", tone: "neutral" },
-  none:          { label: "Nothing blocking",              short: "Clear",     tone: "on_track" },
+  toolpath_cnc: { label: "Waiting on Toolpath CNC", short: "Toolpath", tone: "at_risk" },
+  materials: { label: "Need to order materials", short: "Materials", tone: "blocked" },
+  customer: { label: "Awaiting client decision", short: "Client", tone: "at_risk" },
+  internal: { label: "Internal — needs shop/design time", short: "Internal", tone: "neutral" },
+  none: { label: "Nothing blocking", short: "Clear", tone: "on_track" },
 };
 
 // Cheap deterministic hash so the same job always lands on the same synthetic blocker.
@@ -83,13 +93,13 @@ function hash(s: string): number {
 // Plausible blocker candidates per stage. Reflects how Andrew actually thinks
 // about what's stuck at each step of a cabinetry job.
 const CANDIDATES_BY_STAGE: Record<PipelineStatus, BlockerKind[]> = {
-  new:           ["customer", "none"],
-  sold:          ["customer", "internal", "none"],
-  in_design:     ["subcontractor", "customer", "internal", "internal"],
+  new: ["customer", "none"],
+  sold: ["customer", "internal", "none"],
+  in_design: ["subcontractor", "customer", "internal", "internal"],
   in_production: ["toolpath_cnc", "materials", "toolpath_cnc", "none"],
-  in_finishing:  ["materials", "internal", "none"],
-  installing:    ["customer", "none", "none"],
-  complete:      ["none"],
+  in_finishing: ["materials", "internal", "none"],
+  installing: ["customer", "none", "none"],
+  complete: ["none"],
 };
 
 export function getBlocker(job: Job, today: Date = new Date()): BlockerKind {
@@ -181,7 +191,11 @@ const HEALTH_WEIGHT: Record<HealthStatus, number> = {
   complete: 1000,
 };
 
-export function buildHitlist(jobs: Job[], today: Date = new Date()): HitlistEntry[] {
+export function buildHitlist(
+  jobs: Job[],
+  today: Date = new Date(),
+  activeByJob?: Map<string, JobBlocker[]>
+): HitlistEntry[] {
   const t = new Date(today);
   t.setHours(0, 0, 0, 0);
   return jobs
@@ -193,7 +207,7 @@ export function buildHitlist(jobs: Job[], today: Date = new Date()): HitlistEntr
       const daysToInstall = Math.round((installMs - t.getTime()) / (1000 * 60 * 60 * 24));
       const urgencyFromDate = Math.max(0, Math.min(60, daysToInstall));
       const priority =
-        HEALTH_WEIGHT[deriveHealth(job, t)] +
+        HEALTH_WEIGHT[deriveHealth(job, t, activeByJob?.get(job.id) ?? [])] +
         urgencyFromDate +
         STAGE_ORDER[job.pipelineStatus] * 0.01;
       return { job, blocker, nextStep, daysToInstall, priority };

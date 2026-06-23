@@ -18,3 +18,4 @@ export function getServerSupabase(): SupabaseClient {
 }
 
 export const BRIEFINGS_TABLE = "briefings";
+export const JOB_BLOCKERS_TABLE = "job_blockers";

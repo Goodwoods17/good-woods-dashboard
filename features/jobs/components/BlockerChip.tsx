@@ -1,3 +1,5 @@
+"use client";
+
 import type { Job } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";
 import { DemoTag } from "@shared/components/ui/DemoTag";
@@ -6,6 +8,9 @@ import {
   resolveBlockerText,
   resolveBlockerTone,
 } from "@features/jobs/lib/blockers";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
+import { useContacts } from "@features/contacts/lib/contactsStore";
+import { externalBlockerChip } from "@features/jobs/lib/jobBlockers";
 
 type Size = "sm" | "md";
 
@@ -31,17 +36,41 @@ export function BlockerChip({
   subtle?: boolean;
   size?: Size;
 }) {
-  const synthetic = isSyntheticBlocker(job);
-  const text = resolveBlockerText(job);
-  const tone = resolveBlockerTone(job);
+  const { activeForJob } = useJobBlockers();
+  const { contacts } = useContacts();
+  const active = activeForJob(job.id);
+
+  const contactName = (id: string) => contacts.find((c) => c.id === id)?.name;
+
+  const sizeClass =
+    size === "sm" ? "px-1.5 py-0.5 text-[9px] gap-1" : "px-2 py-0.5 text-micro gap-1";
+
+  // External blockers: render chip with party text resolved from contacts.
+  if (active.length > 0) {
+    const chip = externalBlockerChip(active, contactName, new Date());
+    const chipText = chip?.text ?? "Externally blocked";
+    return (
+      <span
+        className={cn(
+          "inline-flex items-center rounded-full font-medium uppercase tracking-[0.04em] shrink-0",
+          sizeClass,
+          "bg-status-blocked-soft text-status-blocked",
+          subtle && "opacity-80"
+        )}
+        title={chipText}
+      >
+        {chipText}
+      </span>
+    );
+  }
+
+  // No external blockers: fall back to existing behavior (real job.blocker or synthetic).
+  const synthetic = isSyntheticBlocker(job, active);
+  const text = resolveBlockerText(job, new Date(), active);
+  const tone = resolveBlockerTone(job, new Date(), active);
 
   // Hide synthetic "Clear" pills on rest-of-pipeline rows to keep them quiet.
   if (subtle && synthetic && tone === "on_track") return null;
-
-  const sizeClass =
-    size === "sm"
-      ? "px-1.5 py-0.5 text-[9px] gap-1"
-      : "px-2 py-0.5 text-micro gap-1";
 
   return (
     <span

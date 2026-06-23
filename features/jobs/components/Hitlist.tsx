@@ -18,13 +18,10 @@ import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { DemoTag } from "@shared/components/ui/DemoTag";
 import { cn } from "@shared/lib/utils";
-import {
-  buildHitlist,
-  isSyntheticBlocker,
-  type HitlistEntry,
-} from "@features/jobs/lib/blockers";
+import { buildHitlist, isSyntheticBlocker, type HitlistEntry } from "@features/jobs/lib/blockers";
 import { BlockerChip } from "@features/jobs/components/BlockerChip";
 import { deriveHealth } from "@features/jobs/lib/health";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 
 // FLIP transition for row reorder + enter/exit on health-driven moves.
 // Duration + curve match DESIGN.md §3.6 motion vocabulary (ease-emphasized,
@@ -37,13 +34,16 @@ const REORDER_TRANSITION = {
 const TOP_N = 8;
 
 export function Hitlist({ jobs }: { jobs: Job[] }) {
-  const entries = useMemo(() => buildHitlist(jobs), [jobs]);
+  const { activeByJob } = useJobBlockers();
+  const entries = useMemo(() => buildHitlist(jobs, new Date(), activeByJob), [jobs, activeByJob]);
   const top = entries.slice(0, TOP_N);
   const rest = entries.slice(TOP_N);
   const reduceMotion = useReducedMotion();
 
   const exposure = top.reduce((s, e) => s + e.job.revenue, 0);
-  const blockedCount = top.filter((e) => deriveHealth(e.job) === "blocked").length;
+  const blockedCount = top.filter(
+    (e) => deriveHealth(e.job, new Date(), activeByJob.get(e.job.id) ?? []) === "blocked"
+  ).length;
 
   return (
     <div className="space-y-5">
@@ -57,8 +57,7 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
               </h3>
             </div>
             <span className="text-xs text-text-tertiary tabular-nums">
-              {top.length} job{top.length === 1 ? "" : "s"} ·{" "}
-              {formatCAD(exposure)} on the line
+              {top.length} job{top.length === 1 ? "" : "s"} · {formatCAD(exposure)} on the line
             </span>
           </div>
           {blockedCount > 0 && (
@@ -81,6 +80,7 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
                   entry={entry}
                   index={i + 1}
                   reduceMotion={reduceMotion}
+                  activeBlockers={activeByJob.get(entry.job.id) ?? []}
                 />
               ))}
             </AnimatePresence>
@@ -98,22 +98,17 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
           <ul>
             <AnimatePresence initial={false}>
               {rest.map((entry) => (
-                <RestRow
-                  key={entry.job.id}
-                  entry={entry}
-                  reduceMotion={reduceMotion}
-                />
+                <RestRow key={entry.job.id} entry={entry} reduceMotion={reduceMotion} />
               ))}
             </AnimatePresence>
           </ul>
         </section>
       )}
 
-      {entries.some((e) => isSyntheticBlocker(e.job)) && (
+      {entries.some((e) => isSyntheticBlocker(e.job, activeByJob.get(e.job.id) ?? [])) && (
         <p className="text-xs text-text-tertiary px-1">
-          Rows marked <DemoTag inline /> use a synthetic blocker fallback.
-          Open the job and set the real blocker + next step to retire the
-          tag.
+          Rows marked <DemoTag inline /> use a synthetic blocker fallback. Open the job and set the
+          real blocker + next step to retire the tag.
         </p>
       )}
     </div>
@@ -124,21 +119,23 @@ function HitlistRow({
   entry,
   index,
   reduceMotion,
+  activeBlockers,
 }: {
   entry: HitlistEntry;
   index: number;
   reduceMotion: boolean | null;
+  activeBlockers: import("@shared/lib/types").JobBlocker[];
 }) {
   const { job, nextStep, daysToInstall } = entry;
-  const health = deriveHealth(job);
+  const health = deriveHealth(job, new Date(), activeBlockers);
   const installLabel =
     daysToInstall < 0
       ? `${Math.abs(daysToInstall)}d overdue`
       : daysToInstall === 0
-      ? "Installs today"
-      : daysToInstall <= 7
-      ? `${daysToInstall}d to install`
-      : formatDate(job.installDate);
+        ? "Installs today"
+        : daysToInstall <= 7
+          ? `${daysToInstall}d to install`
+          : formatDate(job.installDate);
   return (
     <motion.li
       layout={reduceMotion ? false : "position"}
@@ -146,14 +143,13 @@ function HitlistRow({
       animate={{ opacity: 1 }}
       exit={reduceMotion ? { opacity: 0 } : { opacity: 0 }}
       transition={REORDER_TRANSITION}
-      className="border-b border-border last:border-0">
+      className="border-b border-border last:border-0"
+    >
       <Link
         href={`/jobs/${job.id}`}
         className="group grid grid-cols-[28px_1fr_auto] items-center gap-4 px-4 py-3 hover:bg-surface-muted/40 transition-colors duration-fast"
       >
-        <span className="text-xs tabular-nums text-text-tertiary text-center">
-          {index}
-        </span>
+        <span className="text-xs tabular-nums text-text-tertiary text-center">{index}</span>
         <div className="min-w-0">
           <div className="flex items-baseline gap-2 mb-1">
             <span className="text-sm font-semibold text-text-primary truncate group-hover:text-accent transition-colors duration-fast">
@@ -173,9 +169,7 @@ function HitlistRow({
         </div>
         <div className="flex items-center gap-3">
           <div className="text-right tabular-nums">
-            <div className="text-sm text-text-primary font-medium">
-              {formatCAD(job.revenue)}
-            </div>
+            <div className="text-sm text-text-primary font-medium">{formatCAD(job.revenue)}</div>
             <div className="text-caption text-text-tertiary">at risk</div>
           </div>
           <HealthPill status={health} />
@@ -189,13 +183,7 @@ function HitlistRow({
   );
 }
 
-function RestRow({
-  entry,
-  reduceMotion,
-}: {
-  entry: HitlistEntry;
-  reduceMotion: boolean | null;
-}) {
+function RestRow({ entry, reduceMotion }: { entry: HitlistEntry; reduceMotion: boolean | null }) {
   const { job, nextStep } = entry;
   return (
     <motion.li
@@ -215,13 +203,9 @@ function RestRow({
             <span className="text-sm text-text-primary font-medium truncate group-hover:text-accent transition-colors duration-fast">
               {job.name}
             </span>
-            <span className="text-xs text-text-tertiary truncate">
-              · {job.client}
-            </span>
+            <span className="text-xs text-text-tertiary truncate">· {job.client}</span>
           </div>
-          <div className="text-xs text-text-secondary truncate mt-0.5">
-            {nextStep}
-          </div>
+          <div className="text-xs text-text-secondary truncate mt-0.5">{nextStep}</div>
         </div>
         <BlockerChip job={job} subtle />
         <div className="text-xs text-text-tertiary tabular-nums w-24 text-right">
@@ -231,4 +215,3 @@ function RestRow({
     </motion.li>
   );
 }
-
