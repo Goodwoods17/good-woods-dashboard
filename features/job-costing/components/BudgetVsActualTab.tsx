@@ -7,7 +7,7 @@ import { computeMargin, MILESTONE_STAGES } from "@shared/lib/types";
 import { formatCAD, formatPct } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { useBudgetVsActual } from "@features/job-costing/lib/budgetVsActualStore";
-import { computeBudgetVsActual, marginTone } from "@features/job-costing/lib/budgetVsActual";
+import { computeBudgetVsActual, marginTone, UNASSIGNED_LINE } from "@features/job-costing/lib/budgetVsActual";
 import { TimelineView } from "@features/job-costing/components/bva/TimelineView";
 import { PhaseBarsView } from "@features/job-costing/components/bva/PhaseBarsView";
 import { PaceMarginView } from "@features/job-costing/components/bva/PaceMarginView";
@@ -28,14 +28,18 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
 
   // ── Log actual form state ──────────────────────────────────────────────────
   const [logOpen, setLogOpen] = useState(false);
+  const [logKind, setLogKind] = useState<"material" | "subtrade">("material");
   const [amount, setAmount] = useState("");
   const [phaseId, setPhaseId] = useState<MilestoneStage | "">("");
+  const [tradeLineId, setTradeLineId] = useState("");
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   function resetLogForm() {
+    setLogKind("material");
     setAmount("");
     setPhaseId("");
+    setTradeLineId("");
     setNote("");
   }
 
@@ -45,12 +49,25 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
     if (!(parsedAmount > 0)) return;
     setSubmitting(true);
     try {
-      await logActual({
-        kind: "material",
-        amount: parsedAmount,
-        phaseId: phaseId === "" ? null : phaseId,
-        note,
-      });
+      if (logKind === "subtrade") {
+        if (!tradeLineId) return;
+        // Look up subtradeId from the raw data (subtradeLines comes from the hook).
+        const chosenLine = data?.subtradeLines.find((l) => l.lineId === tradeLineId);
+        await logActual({
+          kind: "subtrade",
+          tradeLineId,
+          partnerId: chosenLine?.subtradeId ?? null,
+          amount: parsedAmount,
+          note,
+        });
+      } else {
+        await logActual({
+          kind: "material",
+          amount: parsedAmount,
+          phaseId: phaseId === "" ? null : phaseId,
+          note,
+        });
+      }
       resetLogForm();
       setLogOpen(false);
     } finally {
@@ -135,9 +152,7 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
               >
                 {tone === "on_track" ? "On track" : tone === "at_risk" ? "At risk" : "Blocked"}
               </span>
-              <span className="text-xs text-text-tertiary">
-                projected margin (excl. subtrade actuals)
-              </span>
+              <span className="text-xs text-text-tertiary">projected margin</span>
             </div>
             {bva.clawback > 0 && (
               <div className="mt-2 text-sm text-status-blocked tabular-nums">
@@ -346,6 +361,30 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
             onSubmit={handleLogSubmit}
             className="mb-4 rounded-lg bg-surface-muted/30 p-3 flex flex-col gap-3"
           >
+            {/* Material | Subtrade toggle */}
+            <div
+              role="group"
+              aria-label="Cost type"
+              className="inline-flex items-center gap-0.5 self-start bg-white/60 backdrop-blur-md rounded-full p-1 shadow-floating"
+            >
+              {(["material", "subtrade"] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={logKind === k}
+                  onClick={() => setLogKind(k)}
+                  className={cn(
+                    "inline-flex items-center px-3 py-1 text-xs font-medium rounded-full transition-colors duration-fast min-h-[44px]",
+                    logKind === k
+                      ? "bg-ink-pill text-white"
+                      : "text-text-secondary hover:text-text-primary"
+                  )}
+                >
+                  {k === "material" ? "Material" : "Subtrade"}
+                </button>
+              ))}
+            </div>
+
             {/* Amount */}
             <div>
               <label className="block text-xs text-text-secondary mb-1">
@@ -364,23 +403,50 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
               />
             </div>
 
-            {/* Phase */}
-            <div>
-              <label className="block text-xs text-text-secondary mb-1">Phase</label>
-              <select
-                value={phaseId}
-                onChange={(e) => setPhaseId(e.target.value as MilestoneStage | "")}
-                aria-label="Phase this cost belongs to"
-                className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
-              >
-                <option value="">Whole job</option>
-                {MILESTONE_STAGES.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Material: Phase selector */}
+            {logKind === "material" && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">Phase</label>
+                <select
+                  value={phaseId}
+                  onChange={(e) => setPhaseId(e.target.value as MilestoneStage | "")}
+                  aria-label="Phase this cost belongs to"
+                  className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">Whole job</option>
+                  {MILESTONE_STAGES.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Subtrade: Trade-line selector */}
+            {logKind === "subtrade" && (
+              <div>
+                <label className="block text-xs text-text-secondary mb-1">
+                  Trade line <span className="text-status-blocked">*</span>
+                </label>
+                <select
+                  value={tradeLineId}
+                  onChange={(e) => setTradeLineId(e.target.value)}
+                  required
+                  aria-label="Trade line this subtrade cost belongs to"
+                  className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+                >
+                  <option value="">Select trade line…</option>
+                  {bva.other.subtrades.lines
+                    .filter((l) => l.lineId !== UNASSIGNED_LINE)
+                    .map((l) => (
+                      <option key={l.lineId} value={l.lineId}>
+                        {l.tradeName} — {l.subtradeName ?? "TBD"}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
 
             {/* Note */}
             <div>
@@ -399,7 +465,11 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!(Number(amount) > 0) || submitting}
+                disabled={
+                  !(Number(amount) > 0) ||
+                  (logKind === "subtrade" && !tradeLineId) ||
+                  submitting
+                }
                 className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium bg-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity duration-fast min-h-[44px]"
               >
                 {submitting ? "Saving…" : "Log cost"}
@@ -434,14 +504,123 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
             </div>
           </div>
 
-          {/* Subtrades */}
-          <div className="flex items-center justify-between gap-4 py-2 border-b border-border">
-            <span className="text-sm font-medium text-text-primary">Subtrades</span>
-            <div className="flex items-center gap-6 text-sm tabular-nums">
-              <span className="text-text-tertiary">
-                Budget: {formatCAD(bva.other.subtrades.budget)}
-              </span>
-              <span className="text-text-tertiary text-xs italic">actuals tracked later</span>
+          {/* Subtrades — per-line table */}
+          <div className="border-b border-border pb-3">
+            <div className="text-sm font-medium text-text-primary mb-2">Subtrades</div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-text-tertiary border-b border-border">
+                    <th className="text-left pb-2 pr-4 font-medium">Trade</th>
+                    <th className="text-left pb-2 pr-4 font-medium">Subtrade</th>
+                    <th className="text-left pb-2 pr-4 font-medium">Status</th>
+                    <th className="text-right pb-2 px-3 font-medium">Budget</th>
+                    <th className="text-right pb-2 px-3 font-medium">Actual</th>
+                    <th className="text-right pb-2 px-3 font-medium">Variance</th>
+                    <th className="text-right pb-2 pl-3 font-medium">Var%</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {bva.other.subtrades.lines
+                    .filter((l) => l.lineId !== UNASSIGNED_LINE)
+                    .map((l) => (
+                      <tr key={l.lineId}>
+                        <td className="py-2 pr-4 text-text-primary">{l.tradeName}</td>
+                        <td className="py-2 pr-4 text-text-secondary">
+                          {l.subtradeName ?? (
+                            <span className="text-text-tertiary italic">TBD</span>
+                          )}
+                        </td>
+                        <td className="py-2 pr-4">
+                          <span
+                            className={cn(
+                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                              l.status === "done"
+                                ? "bg-status-on-track-soft text-status-on-track"
+                                : l.status === "booked"
+                                  ? "bg-status-at-risk-soft text-status-at-risk"
+                                  : "bg-surface-muted text-text-tertiary"
+                            )}
+                          >
+                            {l.status === "done"
+                              ? "Done"
+                              : l.status === "booked"
+                                ? "Booked"
+                                : "Needed"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-text-secondary">
+                          {formatCAD(l.budget)}
+                        </td>
+                        <td className="py-2 px-3 text-right tabular-nums text-text-primary">
+                          {formatCAD(l.actual)}
+                        </td>
+                        <td
+                          className={cn(
+                            "py-2 px-3 text-right tabular-nums",
+                            l.variance > 0
+                              ? "text-status-blocked"
+                              : l.variance < 0
+                                ? "text-status-on-track"
+                                : "text-text-secondary"
+                          )}
+                        >
+                          {formatCAD(l.variance)}
+                        </td>
+                        <td
+                          className={cn(
+                            "py-2 pl-3 text-right tabular-nums",
+                            l.variance > 0
+                              ? "text-status-blocked"
+                              : l.variance < 0
+                                ? "text-status-on-track"
+                                : "text-text-secondary"
+                          )}
+                        >
+                          {l.variancePct != null ? formatPct(l.variancePct) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  {/* Total row */}
+                  <tr className="font-medium border-t border-border">
+                    <td className="pt-2 pr-4 text-text-primary" colSpan={3}>
+                      Total
+                    </td>
+                    <td className="pt-2 px-3 text-right tabular-nums text-text-secondary">
+                      {formatCAD(bva.other.subtrades.budget)}
+                    </td>
+                    <td className="pt-2 px-3 text-right tabular-nums text-text-primary">
+                      {formatCAD(bva.other.subtrades.actual)}
+                    </td>
+                    <td
+                      className={cn(
+                        "pt-2 px-3 text-right tabular-nums",
+                        bva.other.subtrades.variance > 0
+                          ? "text-status-blocked"
+                          : bva.other.subtrades.variance < 0
+                            ? "text-status-on-track"
+                            : "text-text-secondary"
+                      )}
+                    >
+                      {formatCAD(bva.other.subtrades.variance)}
+                    </td>
+                    <td
+                      className={cn(
+                        "pt-2 pl-3 text-right tabular-nums",
+                        bva.other.subtrades.variance > 0
+                          ? "text-status-blocked"
+                          : bva.other.subtrades.variance < 0
+                            ? "text-status-on-track"
+                            : "text-text-secondary"
+                      )}
+                    >
+                      {bva.other.subtrades.variancePct != null
+                        ? formatPct(bva.other.subtrades.variancePct)
+                        : "—"}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
 
