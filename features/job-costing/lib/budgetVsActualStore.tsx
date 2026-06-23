@@ -1,7 +1,7 @@
 "use client";
 
 // Per-job loader hook for the Budget-vs-Actual tab (P4, ADR 0014).
-// Fetches all four data sources concurrently, feeds the pure mappers from
+// Fetches the five reads concurrently, feeds the pure mappers from
 // budgetVsActual.ts, and exposes logActual for logging a material spend row.
 // No Context / Provider — this is a hook, one per mounted tab.
 
@@ -67,7 +67,7 @@ export function useBudgetVsActual(jobId: string): {
     try {
       const sb = getSupabase();
 
-      // Fetch all four sources concurrently.
+      // Fetch ops + the four data sources concurrently.
       const [ops, budgets, sessions, actuals, trades] = await Promise.all([
         sb.from("labour_operations").select("id, code, name"),
         sb.from("job_cost_budgets").select("*").eq("job_id", jobId).eq("kind", "labour"),
