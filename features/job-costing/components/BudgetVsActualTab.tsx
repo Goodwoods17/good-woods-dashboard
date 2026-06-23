@@ -46,6 +46,7 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
     setSubmitting(true);
     try {
       await logActual({
+        kind: "material",
         amount: parsedAmount,
         phaseId: phaseId === "" ? null : phaseId,
         note,
