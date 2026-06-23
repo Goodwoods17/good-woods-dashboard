@@ -138,3 +138,18 @@ working). `finishes` = active `finish`-kind items.
   kinds in the UI; async price-history reads).
 - If suppliers grow past ~20, the supplier text field probably wants to
   become its own table with its own page.
+
+## Generic attributes editor (B3 slice, landed feat/catalog-surface-kinds)
+
+Expanding any catalog row reveals a key–value **attributes** editor backed
+by the item's `attributes` JSONB column. String values and numeric values
+are both supported. `coats` is a **reserved key for `finish`-kind items
+only** — it renders as a dedicated stepper (integer 1–5) instead of a
+plain text field and is excluded from the generic editor. All other keys
+are fully generic: add/rename/delete via the editor; changes flush through
+`updateItem({ attributes })` on every keystroke (debounced per row).
+
+Empty categories and subcategory groups render a muted hint
+`No items yet — add the first one` (`text-xs text-text-tertiary`) directly
+above the "+ Add to …" button, so Labour and Services read as intentional
+rather than broken when they contain no items yet.
