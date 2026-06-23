@@ -25,6 +25,7 @@ import {
   StaleChip,
 } from "./cells";
 import { OffersEditor } from "./OffersSubRow";
+import { AttributesEditor } from "./AttributesEditor";
 
 const PROCURED = new Set<string>(PROCURED_KINDS);
 const isProcured = (kind: CatalogKind) => PROCURED.has(kind);
@@ -339,9 +340,13 @@ function SuppliersStrip({
 /** In-house "source" cell: coats stepper for finishes, a flat label otherwise. */
 function InHouseDetail({
   view,
+  expanded,
+  onToggle,
   onChange,
 }: {
   view: CatalogItemView;
+  expanded: boolean;
+  onToggle: () => void;
   onChange: (patch: RowPatch) => void;
 }) {
   if (view.kind === "finish") {
@@ -362,13 +367,43 @@ function InHouseDetail({
           className="w-9 rounded-md bg-transparent px-1 py-0.5 text-right tabular-nums text-text-secondary focus:bg-surface-muted focus:outline-none focus:ring-2 focus:ring-accent-soft"
         />
         <span>coats</span>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={expanded}
+          aria-label="Attributes"
+          className="ml-0.5 inline-flex items-center gap-0.5 text-micro text-text-tertiary transition-colors duration-fast hover:text-accent"
+        >
+          <ChevronDown
+            className={cn(
+              "h-3.5 w-3.5 transition-transform duration-fast",
+              expanded && "rotate-180"
+            )}
+            strokeWidth={2}
+          />
+        </button>
       </div>
     );
   }
   return (
-    <span className="px-1 text-xs text-text-tertiary">
-      {view.kind === "labour" ? "In-house · labour" : "In-house"}
-    </span>
+    <div className="flex items-center gap-1 px-1 text-xs text-text-tertiary">
+      <span>{view.kind === "labour" ? "In-house · labour" : "In-house"}</span>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-label="Attributes"
+        className="inline-flex items-center gap-0.5 text-micro text-text-tertiary transition-colors duration-fast hover:text-accent"
+      >
+        <ChevronDown
+          className={cn(
+            "h-3.5 w-3.5 transition-transform duration-fast",
+            expanded && "rotate-180"
+          )}
+          strokeWidth={2}
+        />
+      </button>
+    </div>
   );
 }
 
@@ -405,7 +440,7 @@ function CatalogRow({
           {procured ? (
             <SuppliersStrip view={view} deltas={deltas} expanded={expanded} onToggle={onToggle} />
           ) : (
-            <InHouseDetail view={view} onChange={onChange} />
+            <InHouseDetail view={view} expanded={expanded} onToggle={onToggle} onChange={onChange} />
           )}
         </td>
         <td className="px-3 py-1.5 text-center">
@@ -475,10 +510,17 @@ function CatalogRow({
           </div>
         </td>
       </tr>
-      {procured && expanded && (
+      {expanded && (
         <tr className="bg-surface-muted/10">
           <td colSpan={CATALOG_COLUMNS.length} className="px-3 pb-2.5 pt-0.5">
-            <OffersEditor view={view} deltas={deltas} />
+            <div className="space-y-2">
+              {procured && <OffersEditor view={view} deltas={deltas} />}
+              <AttributesEditor
+                attributes={view.attributes}
+                kind={view.kind}
+                onChange={(next) => onChange({ attributes: next })}
+              />
+            </div>
           </td>
         </tr>
       )}
@@ -530,7 +572,7 @@ function CatalogItemCard({
         {procured ? (
           <SuppliersStrip view={view} deltas={deltas} expanded={expanded} onToggle={onToggle} />
         ) : (
-          <InHouseDetail view={view} onChange={onChange} />
+          <InHouseDetail view={view} expanded={expanded} onToggle={onToggle} onChange={onChange} />
         )}
       </div>
 
@@ -594,9 +636,14 @@ function CatalogItemCard({
         <StaleChip iso={view.priceUpdatedAt} />
       </div>
 
-      {procured && expanded && (
-        <div className="mt-2">
-          <OffersEditor view={view} deltas={deltas} />
+      {expanded && (
+        <div className="mt-2 space-y-2">
+          {procured && <OffersEditor view={view} deltas={deltas} />}
+          <AttributesEditor
+            attributes={view.attributes}
+            kind={view.kind}
+            onChange={(next) => onChange({ attributes: next })}
+          />
         </div>
       )}
     </div>
