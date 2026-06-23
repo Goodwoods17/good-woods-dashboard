@@ -22,12 +22,26 @@ export type LabourActual = {
   quantity: number | null;
 };
 
+export const UNASSIGNED_LINE = "__unassigned__";
+
+export type SubtradeLine = {
+  lineId: string;
+  tradeName: string;
+  subtradeName: string | null; // null = TBD (no subtrade assigned)
+  subtradeId: string | null; // job_trades.subtrade_id; used as partner_id when logging
+  status: "needed" | "booked" | "done";
+  budget: number; // job_trades.cost (0 if null)
+  actual: number; // Σ kind='subtrade' actuals for this trade_line_id
+  variance: number; // actual − budget
+  variancePct: number | null;
+};
+
 export type BvaInput = {
   labourBudget: BudgetLine[];
   labourActuals: LabourActual[];
   materialsBudget: number;
   materialsActual: number;
-  subtradeBudget: number;
+  subtradeLines: SubtradeLine[];
   overhead: number;
   quotedMargin: number;
   currentMilestone: MilestoneStage;
@@ -57,7 +71,13 @@ export type PhaseRollup = {
 
 export type OtherCosts = {
   materials: { budget: number; actual: number; variance: number; variancePct: number | null };
-  subtrades: { budget: number };
+  subtrades: {
+    budget: number;
+    actual: number;
+    variance: number;
+    variancePct: number | null;
+    lines: SubtradeLine[];
+  };
   overhead: number;
 };
 
@@ -66,6 +86,7 @@ export type BvaResult = {
   other: OtherCosts;
   labourDrift: number;
   materialDrift: number;
+  subtradeDrift: number;
   budgetedMargin: number;
   projectedMargin: number;
   clawback: number;
@@ -155,6 +176,68 @@ export function subtradeBudgetTotal(rows: Record<string, unknown>[]): number {
   return total;
 }
 
+// Sums `amount` of kind='subtrade' actuals, grouped by trade_line_id.
+// Rows with a null trade_line_id accumulate under UNASSIGNED_LINE so money is
+// never silently dropped.
+export function subtradeActualsByLine(rows: Record<string, unknown>[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.kind !== "subtrade") continue;
+    const key = r.trade_line_id != null ? String(r.trade_line_id) : UNASSIGNED_LINE;
+    out[key] = (out[key] ?? 0) + Number(r.amount ?? 0);
+  }
+  return out;
+}
+
+// Builds one SubtradeLine per job_trades row, plus an Unassigned line if any
+// subtrade actual has a null trade_line_id. tradeName/subtradeName resolve from
+// the registries (the store passes embedded names).
+export function rowsToSubtradeLines(
+  jobTrades: Record<string, unknown>[],
+  actualsByLine: Record<string, number>,
+  tradeName: (id: string) => string | undefined,
+  subtradeName: (id: string) => string | undefined
+): SubtradeLine[] {
+  const lines: SubtradeLine[] = jobTrades.map((r) => {
+    const lineId = String(r.id);
+    const budget = Number(r.cost ?? 0);
+    const actual = actualsByLine[lineId] ?? 0;
+    const variance = actual - budget;
+    const tradeId = r.trade_id != null ? String(r.trade_id) : "";
+    const subId = r.subtrade_id != null ? String(r.subtrade_id) : null;
+    const rawStatus = String(r.status ?? "needed");
+    const status: SubtradeLine["status"] =
+      rawStatus === "booked" || rawStatus === "done" ? rawStatus : "needed";
+    return {
+      lineId,
+      tradeName: tradeName(tradeId) ?? "Trade",
+      subtradeName: subId != null ? (subtradeName(subId) ?? null) : null,
+      subtradeId: subId,
+      status,
+      budget,
+      actual,
+      variance,
+      variancePct: variancePct(variance, budget),
+    };
+  });
+
+  const unassigned = actualsByLine[UNASSIGNED_LINE] ?? 0;
+  if (unassigned !== 0) {
+    lines.push({
+      lineId: UNASSIGNED_LINE,
+      tradeName: "Unassigned",
+      subtradeName: null,
+      subtradeId: null,
+      status: "needed",
+      budget: 0,
+      actual: unassigned,
+      variance: unassigned,
+      variancePct: variancePct(unassigned, 0),
+    });
+  }
+  return lines;
+}
+
 // ── Exported functions ────────────────────────────────────────────────────────
 
 // Current phase is in-progress, NOT complete.
@@ -188,6 +271,14 @@ export function projectedPhaseCost(
   return Math.max(actual, budget);
 }
 
+// A trade-line projects like a phase: a 'done' line is locked to its actual;
+// an open line projects to max(actual, budget) so an under-budget open line
+// contributes zero drift (mirrors materials' open-job rule).
+export function subtradeLineProjected(line: SubtradeLine, pipelineComplete: boolean): number {
+  if (pipelineComplete || line.status === "done") return line.actual;
+  return Math.max(line.actual, line.budget);
+}
+
 export function marginTone(
   clawback: number,
   budgetedMargin: number
@@ -204,7 +295,7 @@ export function computeBudgetVsActual(input: BvaInput): BvaResult {
     labourActuals,
     materialsBudget,
     materialsActual,
-    subtradeBudget,
+    subtradeLines,
     overhead,
     quotedMargin,
     currentMilestone,
@@ -344,9 +435,18 @@ export function computeBudgetVsActual(input: BvaInput): BvaResult {
     : Math.max(materialsActual, materialsBudget);
   const materialDrift = materialProjected - materialsBudget;
 
+  const subtradeBudget = subtradeLines.reduce((s, l) => s + l.budget, 0);
+  const subtradeActual = subtradeLines.reduce((s, l) => s + l.actual, 0);
+  const subtradeProjected = subtradeLines.reduce(
+    (s, l) => s + subtradeLineProjected(l, pipelineComplete),
+    0
+  );
+  const subtradeDrift = subtradeProjected - subtradeBudget;
+  const subtradeVariance = subtradeActual - subtradeBudget;
+
   const budgetedMargin = quotedMargin;
-  const projectedMargin = budgetedMargin - labourDrift - materialDrift;
-  const clawback = Math.max(0, labourDrift + materialDrift);
+  const projectedMargin = budgetedMargin - labourDrift - materialDrift - subtradeDrift;
+  const clawback = Math.max(0, labourDrift + materialDrift + subtradeDrift);
 
   const matVariance = materialsActual - materialsBudget;
   const other: OtherCosts = {
@@ -356,7 +456,13 @@ export function computeBudgetVsActual(input: BvaInput): BvaResult {
       variance: matVariance,
       variancePct: variancePct(matVariance, materialsBudget),
     },
-    subtrades: { budget: subtradeBudget },
+    subtrades: {
+      budget: subtradeBudget,
+      actual: subtradeActual,
+      variance: subtradeVariance,
+      variancePct: variancePct(subtradeVariance, subtradeBudget),
+      lines: subtradeLines,
+    },
     overhead,
   };
 
@@ -365,6 +471,7 @@ export function computeBudgetVsActual(input: BvaInput): BvaResult {
     other,
     labourDrift,
     materialDrift,
+    subtradeDrift,
     budgetedMargin,
     projectedMargin,
     clawback,

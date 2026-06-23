@@ -10,6 +10,11 @@ import {
   sessionsToLabourActuals,
   materialActualTotal,
   subtradeBudgetTotal,
+  subtradeActualsByLine,
+  rowsToSubtradeLines,
+  subtradeLineProjected,
+  UNASSIGNED_LINE,
+  type SubtradeLine,
 } from "./budgetVsActual";
 
 // ── phaseComplete ─────────────────────────────────────────────────────────────
@@ -120,7 +125,7 @@ const zeroBudgetInput: BvaInput = {
   labourActuals: [{ phaseId: "design", codeId: "FREE", minutes: 30, quantity: null }], // 30/60*50 = 25
   materialsBudget: 0,
   materialsActual: 0,
-  subtradeBudget: 0,
+  subtradeLines: [],
   overhead: 0,
   quotedMargin: 1000,
   currentMilestone: "design",
@@ -173,7 +178,9 @@ const underBudgetInput: BvaInput = {
   ],
   materialsBudget: 2000,
   materialsActual: 1500,
-  subtradeBudget: 800,
+  subtradeLines: [
+    { lineId: "T1", tradeName: "Countertop", subtradeName: null, subtradeId: null, status: "needed", budget: 800, actual: 0, variance: -800, variancePct: -100 },
+  ],
   overhead: 300,
   quotedMargin: 10000,
   currentMilestone: "cnc",
@@ -406,7 +413,7 @@ describe("row mappers", () => {
       labourActuals: actuals,
       materialsBudget: 0,
       materialsActual: materialActualTotal(actualRows),
-      subtradeBudget: subtradeBudgetTotal(tradeRows),
+      subtradeLines: [],
       overhead: 0,
       quotedMargin: 5000,
       currentMilestone: "design",
@@ -419,5 +426,86 @@ describe("row mappers", () => {
     expect(code).toBeTruthy();
     // 90 min / 60 * rate 50 = 75
     expect(code!.actual).toBe(75);
+  });
+});
+
+// ── subtrade actuals (Slice C) ────────────────────────────────────────────────
+
+describe("subtrade actuals (Slice C)", () => {
+  const tradeRows = [
+    { id: "L1", trade_id: "t-counter", subtrade_id: "s-stone", status: "booked", cost: 800 },
+    { id: "L2", trade_id: "t-elec", subtrade_id: null, status: "needed", cost: 600 },
+  ];
+  const tradeName = (id: string) => ({ "t-counter": "Countertop", "t-elec": "Electrical" }[id]);
+  const subName = (id: string) => ({ "s-stone": "Stoneworks" }[id]);
+
+  it("subtradeActualsByLine sums kind='subtrade' by trade_line_id; null → UNASSIGNED", () => {
+    const rows = [
+      { kind: "subtrade", trade_line_id: "L1", amount: 600 },
+      { kind: "subtrade", trade_line_id: "L1", amount: 400 },
+      { kind: "material", trade_line_id: "L1", amount: 999 }, // ignored
+      { kind: "subtrade", trade_line_id: null, amount: 50 },
+    ];
+    const by = subtradeActualsByLine(rows);
+    expect(by.L1).toBe(1000);
+    expect(by[UNASSIGNED_LINE]).toBe(50);
+  });
+
+  it("rowsToSubtradeLines builds one line per trade + resolves names + variance", () => {
+    const lines = rowsToSubtradeLines(tradeRows, { L1: 1000 }, tradeName, subName);
+    const l1 = lines.find((l) => l.lineId === "L1")!;
+    expect(l1.tradeName).toBe("Countertop");
+    expect(l1.subtradeName).toBe("Stoneworks");
+    expect(l1.subtradeId).toBe("s-stone");
+    expect(l1.budget).toBe(800);
+    expect(l1.actual).toBe(1000);
+    expect(l1.variance).toBe(200);
+    const l2 = lines.find((l) => l.lineId === "L2")!;
+    expect(l2.subtradeName).toBeNull();
+  });
+
+  it("rowsToSubtradeLines appends an Unassigned line when that bucket is non-zero", () => {
+    const lines = rowsToSubtradeLines(tradeRows, { [UNASSIGNED_LINE]: 75 }, tradeName, subName);
+    const u = lines.find((l) => l.lineId === UNASSIGNED_LINE)!;
+    expect(u.tradeName).toBe("Unassigned");
+    expect(u.actual).toBe(75);
+    expect(u.budget).toBe(0);
+  });
+
+  it("subtradeLineProjected: done → actual; open → max(actual,budget)", () => {
+    const done: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "done", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    expect(subtradeLineProjected(done, false)).toBe(1000);
+    const openUnder: SubtradeLine = { ...done, status: "booked", actual: 500 };
+    expect(subtradeLineProjected(openUnder, false)).toBe(800); // under-budget open → budget (0 drift)
+    const openOver: SubtradeLine = { ...done, status: "booked", actual: 900 };
+    expect(subtradeLineProjected(openOver, false)).toBe(900);
+  });
+
+  it("computeBudgetVsActual folds subtrade drift into projectedMargin + clawback", () => {
+    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    const result: BvaResult = computeBudgetVsActual({
+      labourBudget: [], labourActuals: [],
+      materialsBudget: 0, materialsActual: 0,
+      subtradeLines: [line],
+      overhead: 0, quotedMargin: 10000,
+      currentMilestone: "cnc", pipelineComplete: false,
+    });
+    expect(result.subtradeDrift).toBe(200); // projected 1000 − budget 800
+    expect(result.projectedMargin).toBe(9800); // 10000 − 0 − 0 − 200
+    expect(result.clawback).toBe(200);
+    expect(result.other.subtrades.budget).toBe(800);
+    expect(result.other.subtrades.actual).toBe(1000);
+    expect(result.other.subtrades.lines).toHaveLength(1);
+  });
+
+  it("under-budget open subtrade contributes zero drift", () => {
+    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 200, variance: -600, variancePct: -75 };
+    const result = computeBudgetVsActual({
+      labourBudget: [], labourActuals: [], materialsBudget: 0, materialsActual: 0,
+      subtradeLines: [line], overhead: 0, quotedMargin: 10000,
+      currentMilestone: "cnc", pipelineComplete: false,
+    });
+    expect(result.subtradeDrift).toBe(0);
+    expect(result.projectedMargin).toBe(10000);
   });
 });
