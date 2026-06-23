@@ -1,10 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { CONTACTS_TABLE, JOBS_TABLE } from "@shared/lib/supabase";
 import { rowToJob, type JobRow } from "@features/jobs/lib/jobsRowMap";
-import {
-  rowToContact,
-  type ContactRow,
-} from "@features/contacts/lib/contactsRowMap";
+import { rowToContact, type ContactRow } from "@features/contacts/lib/contactsRowMap";
+import { rowToBlocker } from "@features/jobs/lib/jobBlockerRowMap";
 import { daysSince } from "@features/contacts/lib/aggregate";
 import { STALE_THRESHOLD_DAYS } from "@features/contacts/components/WarmthChip";
 import {
@@ -15,26 +13,27 @@ import {
   jobsToInput,
   type StaleAnchorInput,
 } from "./prompt";
-import { getServerSupabase, BRIEFINGS_TABLE } from "./serverSupabase";
+import { getServerSupabase, BRIEFINGS_TABLE, JOB_BLOCKERS_TABLE } from "./serverSupabase";
 import type { Briefing, BriefingItem, BriefingRow } from "./types";
+import type { JobBlocker } from "@shared/lib/types";
 
 export type GenerateOptions = {
   source: "cron" | "manual";
   today?: Date;
 };
 
-export async function generateBriefing(
-  opts: GenerateOptions
-): Promise<Briefing> {
+export async function generateBriefing(opts: GenerateOptions): Promise<Briefing> {
   const today = opts.today ?? new Date();
   const supabase = getServerSupabase();
 
   const [
     { data: jobRows, error: jobsErr },
     { data: contactRows, error: contactsErr },
+    { data: blockerRows, error: blockersErr },
   ] = await Promise.all([
     supabase.from(JOBS_TABLE).select("*"),
     supabase.from(CONTACTS_TABLE).select("*"),
+    supabase.from(JOB_BLOCKERS_TABLE).select("*").is("resolved_at", null),
   ]);
   if (jobsErr) {
     throw new Error(`Failed to read jobs: ${jobsErr.message}`);
@@ -42,11 +41,25 @@ export async function generateBriefing(
   if (contactsErr) {
     throw new Error(`Failed to read contacts: ${contactsErr.message}`);
   }
+  if (blockersErr) {
+    throw new Error(`Failed to read job blockers: ${blockersErr.message}`);
+  }
   const jobs = ((jobRows as JobRow[] | null) ?? []).map(rowToJob);
   const openJobs = jobs.filter((j) => j.pipelineStatus !== "complete");
-  const jobsInput = jobsToInput(openJobs, today);
 
   const contacts = ((contactRows as ContactRow[] | null) ?? []).map(rowToContact);
+
+  const activeBlockers = ((blockerRows as Record<string, unknown>[] | null) ?? []).map(
+    rowToBlocker
+  );
+  const blockersByJob = new Map<string, JobBlocker[]>();
+  for (const b of activeBlockers) {
+    const arr = blockersByJob.get(b.jobId) ?? [];
+    arr.push(b);
+    blockersByJob.set(b.jobId, arr);
+  }
+  const contactMap = new Map(contacts.map((c) => [c.id, c.name]));
+  const jobsInput = jobsToInput(openJobs, today, blockersByJob, (id) => contactMap.get(id));
   const staleAnchors: StaleAnchorInput[] = contacts
     .filter((c) => c.isAnchor && !c.archivedAt)
     .map((c) => ({
@@ -70,16 +83,12 @@ export async function generateBriefing(
     system: SYSTEM_PROMPT,
     tools: [BRIEFING_TOOL],
     tool_choice: { type: "tool", name: BRIEFING_TOOL.name },
-    messages: [
-      { role: "user", content: buildUserMessage(jobsInput, staleAnchors, today) },
-    ],
+    messages: [{ role: "user", content: buildUserMessage(jobsInput, staleAnchors, today) }],
   });
 
   const toolUse = response.content.find((b) => b.type === "tool_use");
   if (!toolUse || toolUse.type !== "tool_use") {
-    throw new Error(
-      `Model did not call submit_briefing. Stop reason: ${response.stop_reason}`
-    );
+    throw new Error(`Model did not call submit_briefing. Stop reason: ${response.stop_reason}`);
   }
   const input = toolUse.input as { summary: string; items: BriefingItem[] };
 
@@ -98,9 +107,7 @@ export async function generateBriefing(
     .single();
 
   if (insertErr || !inserted) {
-    throw new Error(
-      `Failed to insert briefing: ${insertErr?.message ?? "no row returned"}`
-    );
+    throw new Error(`Failed to insert briefing: ${insertErr?.message ?? "no row returned"}`);
   }
 
   return inserted as BriefingRow as Briefing;
