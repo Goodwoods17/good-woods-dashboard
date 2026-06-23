@@ -27,12 +27,57 @@ live in `docs/domain.md`. UI craft direction:
 ```
 features/job-costing/
 ├── CLAUDE.md
+├── components/
+│   └── CostCodesPanel.tsx   estimator "Labour cost codes" block: budget rows by
+│                            phase, editable qty/minutes, reconciliation note
 └── lib/
-    └── types.ts   DriverUnit, CostCodeTemplate(+Item), JobEstimate, JobInvoice,
-                   JobCostBudget, JobCostActual
+    ├── types.ts       DriverUnit, CostCodeTemplate(+Item), JobEstimate, JobInvoice,
+    │                  JobCostBudget, JobCostActual
+    ├── costCodes.ts   CANONICAL_COST_CODES (SEED MIRROR only — not the runtime
+    │                  source), phase labels/order, rateForPhase, plus
+    │                  buildCostCodeRegistry / registryFromDefs / CostCodeRegistry /
+    │                  TOTAL_CABINET_COUNT_CODES (Slice A)
+    ├── budget.ts      deriveCostCodeBudget (counts → budget rows) +
+    │                  reconcileBudgetVsQuote + derivePerRoomBudgets. Pure;
+    │                  tested by scripts/test-job-costing-budget.ts
+    └── saveBudget.ts  saveJobBudget: writes job_estimates + job_cost_budgets
+                       (labour rows) at Save-as-Job — split by room_label when a
+                       Mozaik per-room snapshot is passed, else job-level
 ```
 
-Stores, the Budget-vs-Actual tab, and the `/pnl` rollup arrive in P2–P5.
+The Budget-vs-Actual tab and the `/pnl` rollup arrive in P4–P5.
+
+### ADR 0012 — unified Job template (Slice 1, shipped on `feat/job-templates`)
+
+The estimator's `EstimateTemplate` now carries a `costCodeSet` (string keys into
+`costCodes.ts`). The cabinet summary fills the driven quantities (ASM/INST per
+type, DEL-LOAD = total count); finishing sqft / cut sheets are manual now and
+Mozaik-filled in Slice 2. The canonical codes are seeded into `labour_operations`
+by `20260622130000_seed_cost_codes.sql` (idempotent upsert keyed by `code`).
+`CANONICAL_COST_CODES` (TS) and that seed must stay in lockstep. Save-as-Job
+freezes the labour budget; **material/subtrade budget rows are deferred** (materials
+land with the Mozaik BOM in Slice 2; subtrades read live from `job_trades`).
+
+**Slice 2 follow-ons (shipped):** (1) a Mozaik import splits the frozen budget by
+room — `job_cost_budgets.room_label` (migration `20260622140000`), written from the
+import's per-room snapshot only when it still reconciles to the job-level budget
+(count edits fall back to job-level). (2) BOM lines name-match the catalog on import
+(`features/estimator/lib/bomCatalogMatch.ts`) so they carry real prices, not $0.
+
+### ADR 0012 grill — Slice A: cost codes are a LIVE registry (shipped on `feat/job-templates`)
+
+Cost codes are **user-managed data**, not a hardcoded list. Add/edit them in
+`/labour → Setup → Cost codes` (phase **required** on add — it's the code's shop-floor
+kanban column). The estimator/budget resolve codes from the live `labour_operations`
+registry: `EstimatorView` builds a `CostCodeRegistry` from `useLabour().operations` via
+`buildCostCodeRegistry` and threads it into `deriveCostCodeBudget`. `CANONICAL_COST_CODES`
+is now just the **seed mirror**. A code only budgets if it's in the active template's
+`costCodeSet`, so `templates.ts` lists the component codes in the templates that install
+them. **Implication:** the cost-code panel is now RLS-gated — it needs an authenticated
+session to populate (empty otherwise; graceful empty-state, but Save-as-Job doesn't block
+on an empty registry). Seeded 4 starter component codes (`INST-INSERT`, `INST-ROLLOUT`,
+`HW-PULL`, `FIT-DOOR`; migration `20260622195053`), fed by the Mozaik `# inserts /
+# rollouts+trays / # pulls / # doors+fronts` counts. Andrew extends the set from `/labour`.
 
 ## Cross-feature seams
 

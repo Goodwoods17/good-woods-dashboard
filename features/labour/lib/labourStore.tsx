@@ -37,13 +37,14 @@ export type LabourOperation = {
   driverUnit: DriverUnit | null;
   active: boolean;
 };
-export type LabourWorker = { id: string; name: string; active: boolean };
+export type LabourWorker = { id: string; name: string; active: boolean }; // exported for WorkCardItem + shop consumers
 export type LabourSession = {
   id: string;
   operationId: string | null;
   categoryId: string | null;
   workerId: string | null;
   jobId: string | null;
+  cardId: string | null;     // the work_card this session is clocked against (Slice B)
   startedAt: string; // wall-clock anchor (when work first began) — for sort/Recent
   endedAt: string | null; // set = stopped
   // Pause/resume (ADR 0011): a Session measures ACTIVE time, pauses excluded.
@@ -176,6 +177,7 @@ type SessionRow = {
   category_id: string | null;
   worker_id: string | null;
   job_id: string | null;
+  card_id: string | null;
   started_at: string;
   ended_at: string | null;
   accumulated_ms: number | string | null;
@@ -212,6 +214,7 @@ const rowToSession = (r: SessionRow): LabourSession => ({
   categoryId: r.category_id,
   workerId: r.worker_id,
   jobId: r.job_id,
+  cardId: r.card_id ?? null,
   startedAt: r.started_at,
   endedAt: r.ended_at,
   accumulatedMs: r.accumulated_ms == null || r.accumulated_ms === "" ? 0 : Number(r.accumulated_ms),
@@ -236,12 +239,14 @@ type LabourContextValue = {
     operationId: string;
     workerId: string | null;
     jobId?: string | null;
+    cardId?: string | null;
     targetQuantity?: number | null;
   }) => void;
   pauseTimer: (sessionId: string) => void;
   resumeTimer: (sessionId: string) => void;
   stopTimer: (sessionId: string, quantity?: number | null) => void;
   deleteSession: (sessionId: string) => void;
+  updateSession: (sessionId: string, patch: { startedAt?: string; accumulatedMs?: number; quantity?: number | null }) => void;
   // Operations
   addOperation: (name: string, categoryId: string | null) => void;
   updateOperation: (id: string, patch: Partial<LabourOperation>) => void;
@@ -375,6 +380,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       operationId: string;
       workerId: string | null;
       jobId?: string | null;
+      cardId?: string | null;
       targetQuantity?: number | null;
     }) => {
       const opn = operations.find((o) => o.id === input.operationId);
@@ -394,6 +400,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
         categoryId: opn?.categoryId ?? null,
         workerId: input.workerId,
         jobId: input.jobId ?? null,
+        cardId: input.cardId ?? null,
         startedAt,
         endedAt: null,
         accumulatedMs: 0,
@@ -427,6 +434,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
             category_id: session.categoryId,
             worker_id: session.workerId,
             job_id: session.jobId,
+            card_id: session.cardId,
             started_at: session.startedAt,
             resumed_at: session.resumedAt,
             accumulated_ms: 0,
@@ -538,6 +546,30 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           .delete()
           .eq("id", sessionId)
           .then(({ error: e }) => e && setError(formatError(e)));
+      }
+    },
+    [isSb, sb]
+  );
+
+  const updateSession = useCallback(
+    (sessionId: string, patch: { startedAt?: string; accumulatedMs?: number; quantity?: number | null }) => {
+      setSessions((prev) => prev.map((s) => (s.id === sessionId
+        ? { ...s,
+            // Guard on !== undefined (not ??) so a partial patch matches the
+            // snake_case write below exactly: an omitted field keeps the old
+            // value; a provided 0 / null is honoured, never silently dropped.
+            startedAt: patch.startedAt !== undefined ? patch.startedAt : s.startedAt,
+            accumulatedMs: patch.accumulatedMs !== undefined ? patch.accumulatedMs : s.accumulatedMs,
+            quantity: patch.quantity !== undefined ? patch.quantity : s.quantity }
+        : s)));
+      if (isSb) {
+        const row: Record<string, unknown> = {};
+        if (patch.startedAt !== undefined) row.started_at = patch.startedAt;
+        if (patch.accumulatedMs !== undefined) row.accumulated_ms = patch.accumulatedMs;
+        if (patch.quantity !== undefined) row.quantity = patch.quantity;
+        if (Object.keys(row).length > 0) {
+          void sb().from("labour_sessions").update(row).eq("id", sessionId).then(({ error: e }) => e && setError(formatError(e)));
+        }
       }
     },
     [isSb, sb]
@@ -787,6 +819,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       resumeTimer,
       stopTimer,
       deleteSession,
+      updateSession,
       addOperation,
       updateOperation,
       removeOperation,
@@ -817,6 +850,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       resumeTimer,
       stopTimer,
       deleteSession,
+      updateSession,
       addOperation,
       updateOperation,
       removeOperation,

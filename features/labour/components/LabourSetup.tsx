@@ -30,6 +30,7 @@ export function LabourSetup() {
   } = useLabour();
 
   const activeCats = categories.filter((c) => c.active);
+  const [newOpPhase, setNewOpPhase] = useState<string>("");
 
   return (
     <div className="space-y-4">
@@ -107,10 +108,29 @@ export function LabourSetup() {
               </li>
             ))}
         </ul>
-        <AddRow
-          placeholder="New operation name"
-          onAdd={(name) => addOperation(name, activeCats[0]?.id ?? null)}
-        />
+        <div className="mt-1 flex items-center gap-2 border-t border-border-faint pt-2">
+          <select
+            value={newOpPhase}
+            onChange={(e) => setNewOpPhase(e.target.value)}
+            className="rounded-md bg-surface-muted/50 px-2 py-1.5 text-sm text-text-secondary focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            aria-label="Phase for the new cost code"
+          >
+            <option value="">Phase…</option>
+            {activeCats.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <AddRow
+            placeholder="New cost code (operation) name"
+            disabled={!newOpPhase}
+            onAdd={(name) => {
+              addOperation(name, newOpPhase);
+              setNewOpPhase("");
+            }}
+          />
+        </div>
       </Panel>
 
       {/* Categories */}
@@ -130,7 +150,9 @@ export function LabourSetup() {
             </li>
           ))}
         </ul>
-        <AddRow placeholder="New category" onAdd={addCategory} />
+        <div className="mt-1 flex items-center gap-2 border-t border-border-faint pt-2">
+          <AddRow placeholder="New category" onAdd={addCategory} />
+        </div>
       </Panel>
 
       {/* Workers */}
@@ -149,7 +171,9 @@ export function LabourSetup() {
               </li>
             ))}
         </ul>
-        <AddRow placeholder="New worker name" onAdd={addWorker} />
+        <div className="mt-1 flex items-center gap-2 border-t border-border-faint pt-2">
+          <AddRow placeholder="New worker name" onAdd={addWorker} />
+        </div>
       </Panel>
 
       <p className="px-1 text-xs text-text-tertiary">
@@ -192,29 +216,41 @@ function RemoveBtn({ label, onClick }: { label: string; onClick: () => void }) {
   );
 }
 
-function AddRow({ placeholder, onAdd }: { placeholder: string; onAdd: (name: string) => void }) {
+function AddRow({
+  placeholder,
+  onAdd,
+  disabled = false,
+}: {
+  placeholder: string;
+  onAdd: (name: string) => void;
+  disabled?: boolean;
+}) {
   const [value, setValue] = useState("");
   const commit = () => {
+    if (disabled) return;
     const name = value.trim();
     if (!name) return;
     onAdd(name);
     setValue("");
   };
+  const canAdd = !disabled && !!value.trim();
   return (
-    <div className="mt-1 flex items-center gap-2 border-t border-border-faint pt-2">
+    <>
       <input
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && commit()}
         placeholder={placeholder}
-        className="flex-1 rounded-md bg-surface-muted/50 px-2.5 py-1.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-soft"
+        disabled={disabled}
+        className="flex-1 rounded-md bg-surface-muted/50 px-2.5 py-1.5 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-soft disabled:cursor-not-allowed disabled:opacity-50"
       />
       <button
         type="button"
         onClick={commit}
+        disabled={disabled}
         className={cn(
           "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors duration-fast",
-          value.trim()
+          canAdd
             ? "bg-accent text-white hover:bg-accent-hover"
             : "cursor-not-allowed bg-surface-muted text-text-tertiary"
         )}
@@ -222,6 +258,6 @@ function AddRow({ placeholder, onAdd }: { placeholder: string; onAdd: (name: str
         <Plus className="h-3.5 w-3.5" strokeWidth={2} />
         Add
       </button>
-    </div>
+    </>
   );
 }

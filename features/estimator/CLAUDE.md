@@ -198,8 +198,18 @@ future change switches to margin math, prices drop ~10% on a 35% job.
   "draft estimate" table. State lives in component memory until you
   "Save as Job", which writes a Job. Re-opening `/estimator` is a blank
   slate. (Draft-estimate persistence is a candidate, see PLAN.md.)
-- Catalog picking, CSV import, and a standalone PDF quote are not built —
-  see "When to revisit".
+- Catalog picking and a standalone PDF quote are not built — see "When to
+  revisit". **Mozaik CSV import IS built** (ADR 0012 Slice 2): the "Import
+  Mozaik CSV" button → `MozaikImportModal` → `lib/mozaikImport.ts`
+  (`parseMozaikCsv` + `mozaikToEstimateDraft`) fills cabinet counts, the
+  cost-code quantity overrides (FIN-SPRAY sqft / CUT-SHEET sheets), Rooms, and
+  a material BOM (line items at $0 for catalog pricing — the app owns the
+  money). Target shape: `docs/samples/mozaik-import-target-csv.md`; parser
+  fixture + test: `mozaik-import-target-sample.csv` /
+  `scripts/test-mozaik-import.ts`. Per-room cabinet granularity beyond
+  one-room-per-type isn't representable in `CabinetSummary` yet, so the import
+  rolls a job total + keeps room names as Rooms (per-room budget lines = a
+  follow-on).
 
 ## When to revisit (Phase 2+)
 

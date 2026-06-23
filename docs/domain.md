@@ -104,7 +104,13 @@ does the record that holds them.
 - **Trade-line** — a single trade a project *needs*, listed on the project. It
   may be unassigned ("needed, no one booked yet") or filled by a specific
   subtrade. A project has many trade-lines; planning them before the work starts
-  is normal. The thing you add with the "Add trade" button.
+  is normal. The thing you add with the "Add trade" button. **Phase-tagged** (a
+  Toolpath cut → CNC/Cut; a countertop → Install) and carries a **cost** plus
+  **schedule dates** (e.g. a countertop's template date + install date), so a
+  trade-line feeds **both** the project schedule (its dates land on the timeline)
+  and **budget-vs-actual** (its `cost` is the subtrade budget *for its phase*; the
+  matching subtrade cost-actual is the actual). Subtrade variance is therefore
+  **per-phase**, unlike materials (job-level).
 
 ## Workflow & costing
 
@@ -120,7 +126,46 @@ does the record that holds them.
 - **Cost code** — an Operation (a named unit of shop work) that carries a
   short, unique `code` (e.g. `ASM-BASE`). The shared key that lets budgeted
   vs. actual labour be compared across the estimate, the live timers, and
-  the job. Nests under a Phase.
+  the job. **Nests under a Phase (required)** — the phase is its home column on
+  the shop-floor kanban, so each code can become a task card there. Cost codes
+  are **user-managed data** — added/edited in `/labour → Setup → Cost codes`,
+  not hardcoded; a new code added there flows automatically into estimates, the
+  frozen budget, and the Budget-vs-Actual tab. Seeded with a starter set (mostly
+  install/assembly operations); Andrew extends it as products are spec'd. The
+  estimator/budget/P4 resolve codes from this **live registry** (ADR 0012).
+- **Work card** — a durable **task on the shop-floor board** on a specific Project.
+  Required: a **Phase** (its column) and a **title/description**. Optional: a **Cost
+  code** (the precise costing anchor — when set, it fixes the phase) and an
+  **assignee** (who owns it). Carries `target_quantity`, a **status** (`todo →
+  doing → stuck → done`), and a **source** (`budget` / `template` / `manual`).
+  Seeded from the frozen **Budget** or a **Job template**, or hand-added by anyone
+  on the floor (description required) at job start or mid-job. **Sessions** are the
+  time events logged against a card; many workers can each log their own. A card's
+  phase is fixed by its code (when coded), so work **advances by status, not by
+  dragging between phase columns**. (Replaces the retired `shop_unit` — the
+  localStorage station prototype.)
+- **Uncoded card / "Needs a code" triage** — a Work card with no Cost code. Its
+  time still counts for timekeeping (the Session carries worker + job + duration)
+  and attributes to its **phase** as variance, but it is **invisible to the
+  per-code learning loop until coded**. Uncoded (and manual) cards surface in a
+  **"Needs a code"** queue; an **admin/foreman** assigns an existing code or
+  creates a new one — **code creation is admin-only** (in `/labour → Setup`, never
+  the floor terminal) to protect the code structure. Once coded, the task feeds
+  budget-vs-actual and the next bid.
+- **Stuck** — a Work-card status meaning the task **can't proceed** (waiting on
+  materials, a defect, a question). Surfaces in the shop-wide **"Needs attention"**
+  band — the Andon idea (visible problem, team helps), folded into the card.
+  *Distinct from* the pace band **"blocked"**, which means a running Session is
+  *over* its suggested time. Different axes: workflow vs pace.
+- **External blocker** — the **project** is waiting on an **outside party** (a Contact —
+  client/homeowner/designer/architect/GC — or a supplier/subtrade) before work can
+  continue: client sign-off on shop drawings, designer-approved handles, a permit. Unlike
+  a **Stuck** Work card (an *internal* shop task the crew can unstick), an external blocker
+  is **out of the shop's hands** and blocks at the **project / phase** level. Recorded with
+  *who* we're waiting on, *since when* (so it ages — "stalled 6 days"), and *which phase it
+  gates*; it drives the job's `blocker` + `health = blocked`, surfacing in the Hitlist,
+  Schedule, briefing, and pipeline, and on the shop board's gated phase. A milestone won't
+  advance while an external blocker gates it. (Structured `job_blockers` table — Slice B2.)
 - **Driver** — an optional **unit of measure** a cost code's time scales with
   (sheet, board foot, board, linear foot…). A code *with* a driver tracks
   **minutes per unit** and estimates as `quantity × min/unit`; a code *without*
@@ -150,8 +195,13 @@ does the record that holds them.
   (80–100%), **over** (>100%); the timer's colour language (sage / amber / red),
   reusing the status tones.
 - **Budget** — the planned cost frozen on a Job when an estimate is saved:
-  per cost code for labour (budgeted minutes × phase rate), per phase for
-  materials. The baseline actuals are measured against.
+  **per cost code for labour** (budgeted minutes × phase rate), plus a **single
+  job-level material figure** (the estimate's material total). Materials are a
+  *fixed* estimate, not budgeted per phase — a sheet or a door isn't owned by one
+  labour phase. Buying more later (an error/replacement, or under-estimated yield)
+  shows as **material variance** against that one number. The baseline actuals are
+  measured against. (ADR 0012 / P4: labour carries the per-code variance detail;
+  material is job-level.)
 - **Cost-actual** — an incurred job cost as it lands: in-house labour (from
   timer Sessions), or a logged **Supplier** (material) or **Subtrade**
   payment, optionally attributed to the Partner paid. Distinct from the

@@ -68,9 +68,13 @@ features/labour/
 │                         operationStats/categoryStats, suggestions +
 │                         applySuggestion, useNow/formatDuration helpers
 └── components/
-    ├── LabourView.tsx          tab nav (Timers | Bottlenecks | Setup)
+    ├── LabourView.tsx          tab nav (Timers | Bottlenecks | Time cards | Setup)
     ├── TimersBoard.tsx         start control + running cards + recent
     ├── BottleneckAnalytics.tsx category/operation bars + estimator nudges
+    ├── TimeCardsView.tsx       per-employee + per-project daily hours from
+    │                           `labour_sessions`; corrections via
+    │                           `updateSession`/`deleteSession`; CSV export
+    │                           (hours only, no $)
     └── LabourSetup.tsx         operations/categories/workers editors
 ```
 
@@ -83,9 +87,11 @@ auto-suggest loop; the estimator otherwise owns those defaults.
 
 No per-worker rate $ costing yet (cost-per-job is a follow-on — multiply
 durations by `workspace_settings` rates) · no scheduling/capacity planner
-· no shift clock-in · no CSV export · no editing a session's start/end
-after the fact (delete + re-log). The auto-suggest only touches assembly
-minutes; install/loading defaults are untouched for now.
+· no shift clock-in. Time-card corrections now support editing a session's
+date, hours, and quantity via `updateSession` (Slice B Part 2); CSV export
+of daily hours is also available from the Time cards tab. The auto-suggest
+only touches assembly minutes; install/loading defaults are untouched for
+now. Per-worker $ rate costing remains a non-goal for this build.
 
 ## When to revisit
 
