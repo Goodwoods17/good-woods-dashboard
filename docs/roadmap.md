@@ -5,7 +5,7 @@
 > **Maintain it:** whenever a slice ships, a PR merges, or scope changes during a session,
 > update this file in the same session. Verify claims against code/git, not memory.
 >
-> **Last verified:** 2026-06-22 (against `main` @ PR #13 merged).
+> **Last verified:** 2026-06-23 (against `main` @ PR #13; PR #14 catalog-attributes open; `feat/budget-vs-actual` in flight).
 
 ---
 
@@ -67,8 +67,11 @@ shows real margin per job from captured budget + timer actuals.
 | PR | What | Status / action |
 |----|------|-----------------|
 | **#9** | P2b cost-code **task-template CRUD** (`/labour` Templates tab) | Built, gate-green — **merge it** (the `/labour` surface it touches is now settled) |
+| **#14** | Catalog **generic attributes editor + empty-category state** | Built + opus-reviewed READY + browser-smoked (seed mode). Isolated to `features/catalog`, no migration. Awaiting test/merge. |
 
 (PR #3 estimator-Mozaik = CLOSED. No other open feature PRs.)
+
+**In flight (uncommitted/unmerged branches):** `feat/budget-vs-actual` (the P4 capstone, another session) · `feat/catalog-surface-kinds` (= PR #14).
 
 ---
 
@@ -81,7 +84,7 @@ Mostly **disjoint feature folders** → safe to build in parallel windows (see
 - **Inventory:** **stock-vs-job-needs (BOM)** — now *unblocked* (Mozaik import shipped the per-job BOM input)
 - **Labour:** labour-$ per job (× rates) · per-worker throughput · install/loading nudges
 - **Shop:** Supabase realtime/persistence for the wall tablet (currently in-memory)
-- **Catalog:** surface hardware/insert/labour/service kinds in the UI · estimator pick-from integration
+- **Catalog:** ~~surface all kinds~~ DONE (category-based UI already surfaces all 7 kinds; generic per-item attributes editor + empty-category state = PR #14) · remaining: estimator pick-from integration
 - **Reface:** end-panel/toe-kick forms · hinge logic · order reconciliation
 - **SOPs:** make editable (DB + versioning) · **Documents:** design from scratch
 - **Cross-cutting:** QuickBooks two-way sync · multi-role auth · contacts comms-history
