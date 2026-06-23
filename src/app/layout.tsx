@@ -5,10 +5,11 @@ import { AppShell } from "@shared/components/layout/AppShell";
 import { AuthProvider } from "@shared/lib/authStore";
 import { WorkspaceSettingsProvider } from "@shared/lib/workspaceSettings";
 import { JobsProvider } from "@features/jobs/lib/jobsStore";
+import { JobBlockersProvider } from "@features/jobs/lib/jobBlockersStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
-import { ShopProvider } from "@features/shop/lib/shopStore";
+import { WorkCardsProvider } from "@features/shop/lib/workCardsStore";
 import { RefaceProvider } from "@features/reface/lib/refaceStore";
 import { LabourProvider } from "@features/labour/lib/labourStore";
 import { CostCodeTemplatesProvider } from "@features/job-costing/lib/costCodeTemplatesStore";
@@ -48,12 +49,13 @@ export default function RootLayout({
           <WorkspaceSettingsProvider>
             <JobsProvider>
               <ContactsProvider>
-                <DocumentsProvider>
-                  <CatalogProvider>
-                    <ShopProvider>
-                      <RefaceProvider>
-                        <LabourProvider>
-                          <CostCodeTemplatesProvider>
+                <JobBlockersProvider>
+                  <DocumentsProvider>
+                    <CatalogProvider>
+                      <WorkCardsProvider>
+                        <RefaceProvider>
+                          <LabourProvider>
+                            <CostCodeTemplatesProvider>
                             <TradesProvider>
                               <SubtradesProvider>
                                 <JobTradesProvider>
@@ -63,12 +65,13 @@ export default function RootLayout({
                                 </JobTradesProvider>
                               </SubtradesProvider>
                             </TradesProvider>
-                          </CostCodeTemplatesProvider>
-                        </LabourProvider>
-                      </RefaceProvider>
-                    </ShopProvider>
-                  </CatalogProvider>
-                </DocumentsProvider>
+                            </CostCodeTemplatesProvider>
+                          </LabourProvider>
+                        </RefaceProvider>
+                      </WorkCardsProvider>
+                    </CatalogProvider>
+                  </DocumentsProvider>
+                </JobBlockersProvider>
               </ContactsProvider>
             </JobsProvider>
           </WorkspaceSettingsProvider>

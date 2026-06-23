@@ -1,5 +1,5 @@
-import { ShopBoard } from "@features/shop/components/ShopBoard";
+import { ShopFloorView } from "@features/shop/components/ShopFloorView";
 
 export default function ShopPage() {
-  return <ShopBoard />;
+  return <ShopFloorView />;
 }

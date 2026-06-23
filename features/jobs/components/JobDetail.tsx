@@ -2,24 +2,39 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, MapPin, Calendar as CalendarIcon, CalendarPlus, Pause, Play } from "lucide-react";
+import {
+  ArrowLeft,
+  MapPin,
+  Calendar as CalendarIcon,
+  CalendarPlus,
+  Pause,
+  Play,
+} from "lucide-react";
 import { downloadJobICS } from "@features/jobs/lib/ics";
 import {
   computeMargin,
+  MILESTONE_STAGES,
   PIPELINE_LABELS,
+  type JobBlocker,
+  type MilestoneStage,
   type PipelineStatus,
 } from "@shared/lib/types";
 import { useJob, useJobs } from "@features/jobs/lib/jobsStore";
 import { deriveHealth } from "@features/jobs/lib/health";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
+import { phaseGatingBlocker, partyLabel } from "@features/jobs/lib/jobBlockers";
+import { useContacts } from "@features/contacts/lib/contactsStore";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
+import { BlockersCard } from "./BlockersCard";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
 import { ActivityTab } from "./ActivityTab";
 import { TasksTab } from "./TasksTab";
+import { BudgetVsActualTab } from "@features/job-costing/components/BudgetVsActualTab";
 import { cn } from "@shared/lib/utils";
 
 const PIPELINE_OPTIONS: PipelineStatus[] = [
@@ -32,11 +47,12 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-type TabKey = "overview" | "tasks" | "files" | "costs" | "activity";
+type TabKey = "overview" | "tasks" | "files" | "costs" | "activity" | "budget";
 
 const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
   { key: "overview", label: "Overview", enabled: true },
   { key: "costs", label: "Costs", enabled: true },
+  { key: "budget", label: "Budget vs Actual", enabled: true },
   { key: "tasks", label: "Tasks", enabled: true },
   { key: "activity", label: "Activity", enabled: true },
   { key: "files", label: "Files", enabled: false },
@@ -45,7 +61,14 @@ const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
 export function JobDetail({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   const { updateJob } = useJobs();
+  const { activeByJob, activeForJob } = useJobBlockers();
+  const { contacts } = useContacts();
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [pendingStage, setPendingStage] = useState<MilestoneStage | null>(null);
+  const [gatingBlocker, setGatingBlocker] = useState<JobBlocker | null>(null);
+
+  const contactName = (id: string) => contacts.find((c) => c.id === id)?.name;
+  const stageLabel = (s: MilestoneStage) => MILESTONE_STAGES.find((m) => m.key === s)?.label ?? s;
 
   if (!job) return null;
   const margin = computeMargin(job);
@@ -55,7 +78,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
       : margin.band === "at_risk"
         ? "text-status-at-risk"
         : "text-status-blocked";
-  const derivedHealth = deriveHealth(job);
+  const derivedHealth = deriveHealth(job, new Date(), activeByJob.get(job.id) ?? []);
   const isPaused = job.healthStatus === "paused";
 
   return (
@@ -81,9 +104,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                   value: s,
                   label: PIPELINE_LABELS[s],
                 }))}
-                onChange={(next) =>
-                  updateJob(job.id, { pipelineStatus: next })
-                }
+                onChange={(next) => updateJob(job.id, { pipelineStatus: next })}
                 trigger={<StatusBadge status={job.pipelineStatus} />}
               />
               <HealthPill status={derivedHealth} />
@@ -119,9 +140,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 )}
               </button>
             </div>
-            <h1 className="font-serif text-headline font-medium text-text-primary">
-              {job.name}
-            </h1>
+            <h1 className="font-serif text-headline font-medium text-text-primary">{job.name}</h1>
             <div className="flex items-center gap-4 mt-2 text-sm text-text-secondary flex-wrap">
               <span>{job.client}</span>
               <span className="inline-flex items-center gap-1">
@@ -161,8 +180,44 @@ export function JobDetail({ jobId }: { jobId: string }) {
 
         <MilestonesStrip
           current={job.currentMilestone}
-          onChange={(stage) => updateJob(job.id, { currentMilestone: stage })}
+          onChange={(stage) => {
+            const gating = phaseGatingBlocker(activeForJob(job.id), stage);
+            if (gating) {
+              setPendingStage(stage);
+              setGatingBlocker(gating);
+            } else {
+              updateJob(job.id, { currentMilestone: stage });
+            }
+          }}
         />
+        {pendingStage && gatingBlocker && (
+          <div className="flex flex-wrap items-center gap-3 min-h-[44px] mt-2">
+            <span className="text-sm text-text-primary flex-1 min-w-[200px]">
+              ⏳ {stageLabel(pendingStage)} is externally blocked — waiting on{" "}
+              {partyLabel(gatingBlocker, contactName)}. Advance anyway?
+            </span>
+            <button
+              onClick={() => {
+                setPendingStage(null);
+                setGatingBlocker(null);
+              }}
+              className="inline-flex items-center min-h-[44px] rounded-full border border-border bg-surface px-4 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary transition-colors duration-fast"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => {
+                updateJob(job.id, { currentMilestone: pendingStage });
+                setPendingStage(null);
+                setGatingBlocker(null);
+              }}
+              className="inline-flex items-center min-h-[44px] rounded-full bg-text-primary text-white px-4 py-1.5 text-sm font-medium hover:bg-status-blocked-soft hover:text-status-blocked transition-colors duration-fast"
+            >
+              Advance
+            </button>
+          </div>
+        )}
+        <BlockersCard jobId={job.id} />
       </header>
 
       <nav className="border-b border-border bg-surface px-8" aria-label="Job sections">
@@ -192,11 +247,9 @@ export function JobDetail({ jobId }: { jobId: string }) {
       <div className="flex-1 px-8 py-6">
         {activeTab === "overview" && <OverviewTab job={job} />}
         {activeTab === "costs" && (
-          <CostsTab
-            job={job}
-            onChange={(updated) => updateJob(job.id, () => updated)}
-          />
+          <CostsTab job={job} onChange={(updated) => updateJob(job.id, () => updated)} />
         )}
+        {activeTab === "budget" && <BudgetVsActualTab job={job} />}
         {activeTab === "tasks" && <TasksTab job={job} />}
         {activeTab === "activity" && <ActivityTab job={job} />}
       </div>

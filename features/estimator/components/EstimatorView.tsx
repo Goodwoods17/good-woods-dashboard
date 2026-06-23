@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { UploadCloud } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useWorkspaceSettings } from "@shared/lib/workspaceSettings";
@@ -11,6 +12,7 @@ import {
   emptyDeficiencies,
   emptyPreWork,
   totalCabinetCount,
+  newRoom,
   DEFAULT_ASSEMBLY_MINUTES,
   DEFAULT_INSTALL_MINUTES,
   type CabinetTypeId,
@@ -31,7 +33,18 @@ import {
 } from "@features/estimator/lib/totals";
 import { logPricesFromEstimate } from "@features/catalog/lib/priceHistory";
 import { useCatalog, type CatalogCabinetType } from "@features/catalog/lib/catalogStore";
+import { useLabour } from "@features/labour/lib/labourStore";
+import { buildCostCodeRegistry } from "@features/job-costing/lib/costCodes";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
+import {
+  deriveCostCodeBudget,
+  reconcileBudgetVsQuote,
+  derivePerRoomBudgets,
+  FULL_BUILD_CODE_SET,
+  type RoomBudget,
+} from "@features/job-costing/lib/budget";
+import { saveJobBudget } from "@features/job-costing/lib/saveBudget";
+import { CostCodesPanel } from "@features/job-costing/components/CostCodesPanel";
 import { QUOTE_SECTIONS, type SectionId } from "@features/estimator/lib/sections";
 import {
   defaultTemplate,
@@ -47,6 +60,9 @@ import { DeliveryCalculator } from "./DeliveryCalculator";
 import { DeficienciesBlock } from "./DeficienciesBlock";
 import { RoomsPanel } from "./RoomsPanel";
 import { TemplatePicker, TemplateChip } from "./TemplatePicker";
+import { MozaikImportModal } from "./MozaikImportModal";
+import type { MozaikDraft, MozaikRoomDraft } from "@features/estimator/lib/mozaikImport";
+import type { BomMatch, CatalogLite } from "@features/estimator/lib/bomCatalogMatch";
 
 function newId(prefix: string): string {
   return `${prefix}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`;
@@ -91,7 +107,22 @@ export function EstimatorView() {
   const router = useRouter();
   const { createJob, jobs } = useJobs();
   const { settings } = useWorkspaceSettings();
-  const { cabinetTypes } = useCatalog();
+  const { cabinetTypes, itemsWithOffers } = useCatalog();
+  const { operations } = useLabour();
+  const codeRegistry = useMemo(() => buildCostCodeRegistry(operations), [operations]);
+
+  // Flattened catalog for Mozaik BOM matching (name → surfaced price + supplier).
+  const catalogLite = useMemo<CatalogLite[]>(
+    () =>
+      itemsWithOffers.map((it) => ({
+        id: it.id,
+        name: it.name,
+        unit: it.unit,
+        unitPrice: it.surfacedPrice,
+        supplier: it.surfacedSupplierName,
+      })),
+    [itemsWithOffers]
+  );
 
   // Per-type Assembly/Install minutes, tuned by the shop's labour timers when
   // available, else the shipped defaults. Behaviour-preserving until a labour
@@ -109,6 +140,7 @@ export function EstimatorView() {
   const [project, setProject] = useState("");
   const [activeTemplate, setActiveTemplate] = useState<EstimateTemplate>(defaultTemplate());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
+  const [mozaikOpen, setMozaikOpen] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
 
   const [prework, setPrework] = useState<PreWorkState>(emptyPreWork());
@@ -121,6 +153,15 @@ export function EstimatorView() {
 
   const [lines, setLines] = useState<LineItem[]>([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Per-code overrides for the labour cost-code budget (ADR 0012). Cabinet
+  // counts auto-fill the driven quantities; these capture manual entry (finishing
+  // sqft, cut sheets) and minute tuning before the budget freezes at save.
+  const [budgetQtyByCode, setBudgetQtyByCode] = useState<Record<string, number>>({});
+  const [budgetMinutesByCode, setBudgetMinutesByCode] = useState<Record<string, number>>({});
+  // Per-room cabinet snapshot from a Mozaik import — lets Save-as-Job split the
+  // frozen budget by room (null for manual estimates).
+  const [mozaikPerRoom, setMozaikPerRoom] = useState<MozaikRoomDraft[] | null>(null);
 
   const activeSectionIds = activeTemplate.activeSections;
   const overheadPct = settings.defaultOverheadPct;
@@ -334,6 +375,33 @@ export function EstimatorView() {
     [prework, settings.labourRates]
   );
 
+  // The unified Job template's labour cost-code budget (ADR 0012 Slice 1):
+  // the template's code set, quantities filled from the cabinet counts, priced
+  // at the workspace labour rates. Reconciled against the quote's labour
+  // subtotal so a drift is visible before Save-as-Job freezes it.
+  const costCodeBudget = useMemo(
+    () =>
+      deriveCostCodeBudget(
+        activeTemplate.costCodeSet ?? FULL_BUILD_CODE_SET,
+        cabinetSummary,
+        settings.labourRates,
+        codeRegistry,
+        { qtyByCode: budgetQtyByCode, minutesByCode: budgetMinutesByCode }
+      ),
+    [
+      activeTemplate.costCodeSet,
+      cabinetSummary,
+      settings.labourRates,
+      codeRegistry,
+      budgetQtyByCode,
+      budgetMinutesByCode,
+    ]
+  );
+  const budgetReconciliation = useMemo(
+    () => reconcileBudgetVsQuote(costCodeBudget.totalAmount, totals.costs.labour),
+    [costCodeBudget.totalAmount, totals.costs.labour]
+  );
+
   // Quoted total BEFORE contingency, for the Deficiencies preview.
   const quotedPreContingency = totals.quoted - totals.contingency;
 
@@ -391,6 +459,49 @@ export function EstimatorView() {
     };
   }
 
+  // Apply a parsed Mozaik draft (ADR 0012 Slice 2): cabinet counts → the
+  // summary (which drives the cost-code budget), finishing sqft / sheets → the
+  // cost-code quantity overrides, room names → Rooms, and the material BOM →
+  // line items at $0 for catalog pricing (the app owns the money, ADR 0012).
+  function applyMozaikDraft(draft: MozaikDraft, matches: BomMatch[]) {
+    setCabinetSummary(draft.cabinetSummary);
+    setBudgetQtyByCode((prev) => ({ ...prev, ...draft.qtyByCode }));
+    setMozaikPerRoom(draft.perRoom.length > 0 ? draft.perRoom : null);
+    if (draft.roomNames.length > 0) {
+      setRooms(draft.roomNames.map((n) => newRoom(n)));
+    }
+    const matchByKey = new Map(
+      matches.map((m) => [m.line.name + "__" + m.line.unit, m])
+    );
+    const bomLines: LineItem[] = [];
+    for (const b of draft.bom) {
+      const unit = mapMozaikUnit(b.unit);
+      if (!unit) continue; // skip non-line units (lb / C.Ft) — they're metrics
+      const matched = matchByKey.get(b.name + "__" + b.unit)?.match ?? null;
+      const fuzzy = matchByKey.get(b.name + "__" + b.unit)?.confidence === "fuzzy";
+      const isDoor = /door|panel/i.test(b.name);
+      bomLines.push({
+        id: newId("mz"),
+        category: isDoor ? "Door materials & profiles" : "Casework",
+        item: b.name,
+        description: matched
+          ? fuzzy
+            ? "(Mozaik → catalog — confirm match)"
+            : "(Mozaik → catalog)"
+          : "(from Mozaik — no catalog match, set price)",
+        qty: b.qty,
+        unit,
+        unitPrice: matched ? matched.unitPrice : 0,
+        wastePct: 0,
+        markupPct: settings.defaultMarkupPct,
+        catalogId: matched ? matched.id : undefined,
+        supplierSnapshot: matched ? matched.supplier : undefined,
+        unitPriceSnapshot: matched ? matched.unitPrice : undefined,
+      });
+    }
+    if (bomLines.length > 0) setLines((prev) => [...prev, ...bomLines]);
+  }
+
   async function saveAsJob() {
     if (!client.trim() || !project.trim()) return;
     setSubmitting(true);
@@ -406,6 +517,40 @@ export function EstimatorView() {
       template: activeTemplate,
     });
     await createJob(job);
+    // Freeze the labour cost-code budget (ADR 0012 Slice 1) as the job's
+    // baseline for budget-vs-actual. Non-fatal: a costing hiccup shouldn't
+    // strand the user on a half-saved estimate.
+    try {
+      // Split the budget by room when a Mozaik per-room snapshot is present AND
+      // it still reconciles to the job-level budget (i.e. counts weren't edited
+      // since import). Minute tuning flows through; count edits fall back to a
+      // single job-level budget so the frozen rows always match the panel.
+      let perRoom: RoomBudget[] | undefined;
+      if (mozaikPerRoom && mozaikPerRoom.length > 0) {
+        const codes = activeTemplate.costCodeSet ?? FULL_BUILD_CODE_SET;
+        const rb = derivePerRoomBudgets(
+          mozaikPerRoom.map((r) => ({
+            name: r.name,
+            cabinets: r.cabinetSummary,
+            qtyByCode: r.qtyByCode,
+          })),
+          codes,
+          settings.labourRates,
+          codeRegistry,
+          budgetMinutesByCode
+        );
+        const sum = rb.reduce((s, r) => s + r.budget.totalAmount, 0);
+        if (Math.abs(sum - costCodeBudget.totalAmount) < 0.5) perRoom = rb;
+      }
+      await saveJobBudget({
+        jobId: job.id,
+        quotedTotal: totals.quoted,
+        budget: costCodeBudget,
+        perRoom,
+      });
+    } catch (e) {
+      console.warn("Failed to write job cost budget:", e);
+    }
     // Append a price-history row for every catalogId-tagged line. Builds
     // the dataset behind the "Last bid: $X on Job #N" tooltip + 90-day
     // average comparisons. Failures are non-critical to job creation.
@@ -440,6 +585,13 @@ export function EstimatorView() {
               template={activeTemplate}
               onClickChange={() => setTemplatePickerOpen(true)}
             />
+            <button
+              onClick={() => setMozaikOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-caption text-text-secondary hover:border-text-tertiary hover:text-text-primary transition-colors duration-fast"
+            >
+              <UploadCloud className="h-3.5 w-3.5" strokeWidth={1.75} />
+              Import Mozaik CSV
+            </button>
             <span className="text-caption text-text-tertiary">
               {activeTemplate.activeSections.length} section(s) active. Hidden sections won&apos;t
               price into this quote.
@@ -473,6 +625,19 @@ export function EstimatorView() {
             rooms={rooms}
             onUpdate={(patch) => setCabinetSummary((prev) => ({ ...prev, ...patch }))}
           />
+
+          <CostCodesPanel
+            budget={costCodeBudget}
+            reconciliation={budgetReconciliation}
+            qtyByCode={budgetQtyByCode}
+            minutesByCode={budgetMinutesByCode}
+            onQty={(code, qty) =>
+              setBudgetQtyByCode((prev) => ({ ...prev, [code]: qty }))
+            }
+            onMinutes={(code, minutes) =>
+              setBudgetMinutesByCode((prev) => ({ ...prev, [code]: minutes }))
+            }
+          />
         </div>
 
         <QuoteSummary
@@ -496,6 +661,12 @@ export function EstimatorView() {
         onPick={(tpl) => setActiveTemplate(tpl)}
         onClose={() => setTemplatePickerOpen(false)}
       />
+      <MozaikImportModal
+        open={mozaikOpen}
+        catalog={catalogLite}
+        onClose={() => setMozaikOpen(false)}
+        onConfirm={(draft, matches) => applyMozaikDraft(draft, matches)}
+      />
       {/* No persistence yet — silence unused var warning for AUTO_DERIVED_SECTIONS */}
       <span hidden>{AUTO_DERIVED_SECTIONS.length}</span>
     </>
@@ -513,4 +684,14 @@ function assemblyBreakdownLabel(s: CabinetSummaryT): string {
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+// Map a Mozaik BOM unit to an estimator line unit. Returns null for units that
+// aren't line items (lb / C.Ft are room metrics, not BOM lines).
+function mapMozaikUnit(unit: string): LineItem["unit"] | null {
+  const u = unit.trim().toLowerCase();
+  if (u === "#" || u === "ea") return "ea";
+  if (u === "sqft") return "sqft";
+  if (u === "ft") return "lf";
+  return null;
 }

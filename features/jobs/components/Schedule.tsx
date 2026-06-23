@@ -10,18 +10,14 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  type Job,
-  PIPELINE_LABELS,
-  computeMargin,
-} from "@shared/lib/types";
+import { type Job, PIPELINE_LABELS, computeMargin } from "@shared/lib/types";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { cn } from "@shared/lib/utils";
 import { getNextStep } from "@features/jobs/lib/blockers";
 import { BlockerChip } from "@features/jobs/components/BlockerChip";
-import { deriveHealth } from "@features/jobs/lib/health";
-import { STAGE_LEAD_DAYS } from "@features/jobs/lib/health";
+import { deriveHealth, STAGE_LEAD_DAYS } from "@features/jobs/lib/health";
+import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 
 const WEEKS_AHEAD = 12;
 const WEEKS_BEHIND = 1;
@@ -45,6 +41,7 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
   const windowStart = addDays(today, -WEEKS_BEHIND * 7);
   const windowEnd = addDays(today, WEEKS_AHEAD * 7);
   const totalDays = daysBetween(windowStart, windowEnd);
+  const { activeByJob } = useJobBlockers();
 
   const [hovered, setHovered] = useState<string | null>(null);
 
@@ -60,7 +57,7 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
     const ticks: { offsetPct: number; date: Date; label: string }[] = [];
     for (let w = 0; w <= WEEKS_AHEAD + WEEKS_BEHIND; w++) {
       const date = addDays(windowStart, w * 7);
-      const offsetPct = (w * 7 / totalDays) * 100;
+      const offsetPct = ((w * 7) / totalDays) * 100;
       const label = date.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
       ticks.push({ offsetPct, date, label });
     }
@@ -109,6 +106,7 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
                 totalDays={totalDays}
                 hovered={hovered === job.id}
                 onHover={(h) => setHovered(h ? job.id : null)}
+                activeBlockers={activeByJob.get(job.id) ?? []}
               />
             ))
           )}
@@ -116,9 +114,8 @@ export function Schedule({ jobs }: { jobs: Job[] }) {
       </div>
 
       <p className="text-xs text-text-tertiary px-1">
-        Each lane shows the job&rsquo;s next step on the left and the install bar on
-        the right. The blocker chip beside the next step says what&rsquo;s holding it
-        up. Orange line = today.
+        Each lane shows the job&rsquo;s next step on the left and the install bar on the right. The
+        blocker chip beside the next step says what&rsquo;s holding it up. Orange line = today.
       </p>
     </div>
   );
@@ -130,12 +127,14 @@ function Lane({
   totalDays,
   hovered,
   onHover,
+  activeBlockers,
 }: {
   job: Job;
   windowStart: Date;
   totalDays: number;
   hovered: boolean;
   onHover: (h: boolean) => void;
+  activeBlockers: import("@shared/lib/types").JobBlocker[];
 }) {
   const install = new Date(job.installDate + "T12:00:00");
   const leadDays = STAGE_LEAD_DAYS[job.pipelineStatus];
@@ -154,15 +153,15 @@ function Lane({
   const isPast = endOffset < 0;
   const isFuture = startOffset > totalDays;
 
-  const health = deriveHealth(job);
+  const health = deriveHealth(job, new Date(), activeBlockers);
   const barColor =
     job.pipelineStatus === "complete"
       ? "bg-status-paused/40 border-status-paused"
       : health === "blocked"
-      ? "bg-status-blocked/30 border-status-blocked"
-      : health === "at_risk"
-      ? "bg-status-at-risk/30 border-status-at-risk"
-      : "bg-status-on-track/30 border-status-on-track";
+        ? "bg-status-blocked/30 border-status-blocked"
+        : health === "at_risk"
+          ? "bg-status-at-risk/30 border-status-at-risk"
+          : "bg-status-on-track/30 border-status-on-track";
 
   const margin = computeMargin(job);
   const nextStep = getNextStep(job);
@@ -183,19 +182,14 @@ function Lane({
         </div>
         <div className="flex items-center gap-1.5 mt-1 min-w-0">
           <BlockerChip job={job} size="sm" />
-          <span className="text-xs text-text-secondary truncate">
-            {nextStep}
-          </span>
+          <span className="text-xs text-text-secondary truncate">{nextStep}</span>
         </div>
       </div>
       <div className="relative h-14">
         {visible && !isPast && !isFuture && (
           <>
             <div
-              className={cn(
-                "absolute top-1/2 -translate-y-1/2 h-4 rounded border",
-                barColor
-              )}
+              className={cn("absolute top-1/2 -translate-y-1/2 h-4 rounded border", barColor)}
               style={{ left: `${leftPct}%`, width: `${widthPct}%` }}
             />
             <div
@@ -233,4 +227,3 @@ function Lane({
     </Link>
   );
 }
-

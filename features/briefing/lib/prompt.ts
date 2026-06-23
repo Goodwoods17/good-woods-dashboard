@@ -1,5 +1,6 @@
-import type { Job } from "@shared/lib/types";
+import type { Job, JobBlocker } from "@shared/lib/types";
 import { computeMargin } from "@shared/lib/types";
+import { blockerAgeDays, partyLabel } from "@features/jobs/lib/jobBlockers";
 
 export const BRIEFING_MODEL = "claude-sonnet-4-6";
 
@@ -75,8 +76,7 @@ export const BRIEFING_TOOL: Anthropic.Tool = {
             },
             suggested_action: {
               type: "string",
-              description:
-                "One concrete next action Andrew can do today. Verb-first.",
+              description: "One concrete next action Andrew can do today. Verb-first.",
             },
           },
           required: [
@@ -111,6 +111,7 @@ EXECUTION STEPS:
    - margin % is below 20 (band: blocked) and revenue > 5000
    - health_status is "at_risk" or "blocked"
    - pipeline_status is "complete" but install date is in the future (data hygiene)
+   - externalBlockers is non-empty (EXTERNAL BLOCKER, severity red): the shop is waiting on an outside party and cannot progress.
 2a. Client followup rule: when the trigger is "last activity > 14 days" specifically and nothing else is firing, frame the item as a CLIENT-NUDGE not a project-blocker. Headline pattern: "<Client>. <N> days since last word. Check in." Suggested action is verb-first outreach: "Text <client> a quick how's-it-going about <project name>." This is the "auto-followup reminder" Andrew asked for — the dashboard reminding him to chase before clients feel forgotten.
 3. Read every stale anchor. These are strategic relationships (designers who refer business, key GCs) that have not been touched in 30+ days. Each represents revenue risk if the relationship goes cold. Flag every one; the older the silence, the higher the urgency.
 4. Order all flagged items by urgency. Most-pressing first. Anchor relationships compete with jobs on the same axis; an anchor at 60 days deserves "red" treatment over a job that's only mildly off track.
@@ -128,6 +129,7 @@ RELATIONSHIP ITEMS (stale anchors):
 - Severity: red if >60 days, yellow if 30-60 days, green never (don't surface healthy relationships).
 
 RULES:
+- EXTERNAL BLOCKER items: severity red. Headline names the party and days. Reason pattern: "Externally blocked: waiting on {party} for {days}d ({reason})." Suggested action: chase that party today (call or email).
 - Cite real numbers ("11 days since last activity", "install in 5 days", "margin at 17%", "47 days since last touch"). No vague "this needs attention".
 - Suggested actions are verb-first and doable today.
 - Do NOT include healthy on-track jobs or fresh relationships as informational filler. If the day is quiet, return a short list and a calm summary.
@@ -166,24 +168,31 @@ export type JobInput = {
   lastActivityMessage: string | null;
   daysSinceLastActivity: number | null;
   daysUntilInstall: number;
+  externalBlockers: { reason: string; party: string; days: number }[];
 };
 
-export function jobsToInput(jobs: Job[], today: Date): JobInput[] {
+export function jobsToInput(
+  jobs: Job[],
+  today: Date,
+  blockersByJob?: Map<string, JobBlocker[]>,
+  contactName?: (id: string) => string | undefined
+): JobInput[] {
   return jobs.map((job) => {
     const margin = computeMargin(job);
     const installDate = new Date(job.installDate);
-    const daysUntilInstall = Math.round(
-      (installDate.getTime() - today.getTime()) / 86_400_000
-    );
+    const daysUntilInstall = Math.round((installDate.getTime() - today.getTime()) / 86_400_000);
     const lastActivity = (job.activity ?? [])
       .slice()
       .sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
     const daysSinceLastActivity = lastActivity
-      ? Math.round(
-          (today.getTime() - new Date(lastActivity.timestamp).getTime()) /
-            86_400_000
-        )
+      ? Math.round((today.getTime() - new Date(lastActivity.timestamp).getTime()) / 86_400_000)
       : null;
+    const active = blockersByJob?.get(job.id) ?? [];
+    const externalBlockers = active.map((b) => ({
+      reason: b.reason,
+      party: partyLabel(b, contactName ?? (() => undefined)),
+      days: blockerAgeDays(b, today),
+    }));
     return {
       id: job.id,
       code: job.code,
@@ -201,6 +210,7 @@ export function jobsToInput(jobs: Job[], today: Date): JobInput[] {
       lastActivityMessage: lastActivity?.message ?? null,
       daysSinceLastActivity,
       daysUntilInstall,
+      externalBlockers,
     };
   });
 }
