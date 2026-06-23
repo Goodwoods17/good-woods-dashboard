@@ -5,66 +5,66 @@
 @layer base {
   :root {
     /* Canvas + surfaces — Lit Workshop, lighter (DESIGN.md §2) */
-    --background: #FAFAF9;
-    --canvas-top: #FFFFFF;
-    --canvas-foot-tint: #F2EDE9;
-    --surface: #FFFFFF;
-    --surface-muted: #F4F2EE;
-    --surface-sunken: #ECE9E4;
+    --background: #fafaf9;
+    --canvas-top: #ffffff;
+    --canvas-foot-tint: #f2ede9;
+    --surface: #ffffff;
+    --surface-muted: #f4f2ee;
+    --surface-sunken: #ece9e4;
 
     /* Borders — used sparingly; cards rely on shadow, not borders */
-    --border-faint: #ECE9E4;
-    --border: #E2DFD9;
-    --border-strong: #CDC9C1;
+    --border-faint: #ece9e4;
+    --border: #e2dfd9;
+    --border-strong: #cdc9c1;
 
     /* Text — warm graphite, never pure black */
-    --text-primary: #1A1916;
-    --text-secondary: #4F4D49;
-    --text-tertiary: #8B8782;
-    --text-disabled: #C4BFB6;
+    --text-primary: #1a1916;
+    --text-secondary: #4f4d49;
+    --text-tertiary: #8b8782;
+    --text-disabled: #c4bfb6;
 
     /* Accent — muted clay/terracotta */
-    --accent: #B86F52;
-    --accent-hover: #A45F44;
-    --accent-active: #8F4F36;
-    --accent-soft: #F2E4DC;
+    --accent: #b86f52;
+    --accent-hover: #a45f44;
+    --accent-active: #8f4f36;
+    --accent-soft: #f2e4dc;
 
     /* Secondary — warm taupe */
-    --secondary: #8B7355;
-    --secondary-hover: #75614A;
-    --secondary-soft: #EDE7DD;
+    --secondary: #8b7355;
+    --secondary-hover: #75614a;
+    --secondary-soft: #ede7dd;
 
     /* Ink pill — primary CTA background (semantically distinct from text-primary) */
-    --ink-pill: #1A1916;
+    --ink-pill: #1a1916;
 
     /* Status — Lean visual management (held from spec §3.1) */
-    --status-on-track: #6B8E5C;
-    --status-at-risk: #C99846;
-    --status-blocked: #B5544C;
-    --status-complete: #7A8B6F;
-    --status-paused: #9A968D;
-    --status-andon: #D14D3F;
-    --status-on-track-soft: #E8EFE3;
-    --status-at-risk-soft: #F7EBD5;
-    --status-blocked-soft: #F2DDDA;
-    --status-andon-soft: #FADBD7;
+    --status-on-track: #6b8e5c;
+    --status-at-risk: #c99846;
+    --status-blocked: #b5544c;
+    --status-complete: #7a8b6f;
+    --status-paused: #9a968d;
+    --status-andon: #d14d3f;
+    --status-on-track-soft: #e8efe3;
+    --status-at-risk-soft: #f7ebd5;
+    --status-blocked-soft: #f2ddda;
+    --status-andon-soft: #fadbd7;
 
     /* Categorical trade palette — off-axis cool arc (DESIGN.md §2 "Categorical
        (Trade) Palette"). Small dots + icons only, never status. */
-    --trade-installer: #547DAB;
+    --trade-installer: #547dab;
     --trade-finisher: #976796;
-    --trade-countertop: #3C84A2;
-    --trade-electrical: #6C75AF;
-    --trade-plumbing: #2D8992;
-    --trade-delivery: #826FA5;
-    --trade-upholstery: #A16580;
-    --trade-other: #747B83;
+    --trade-countertop: #3c84a2;
+    --trade-electrical: #6c75af;
+    --trade-plumbing: #2d8992;
+    --trade-delivery: #826fa5;
+    --trade-upholstery: #a16580;
+    --trade-other: #747b83;
 
     /* Shadow vocabulary — soft elevation, no borders (DESIGN.md §4) */
-    --shadow-resting: 0 8px 22px -14px rgb(26 25 22 / 0.10);
+    --shadow-resting: 0 8px 22px -14px rgb(26 25 22 / 0.1);
     --shadow-hover: 0 12px 30px -18px rgb(26 25 22 / 0.18);
-    --shadow-floating: 0 1px 2px rgb(26 25 22 / 0.04), 0 6px 18px -10px rgb(26 25 22 / 0.10);
-    --shadow-modal: 0 12px 32px -8px rgb(26 25 22 / 0.10), 0 4px 8px -4px rgb(26 25 22 / 0.06);
+    --shadow-floating: 0 1px 2px rgb(26 25 22 / 0.04), 0 6px 18px -10px rgb(26 25 22 / 0.1);
+    --shadow-modal: 0 12px 32px -8px rgb(26 25 22 / 0.1), 0 4px 8px -4px rgb(26 25 22 / 0.06);
     /* Legacy aliases for code that still references the old names */
     --shadow-sm: var(--shadow-resting);
     --shadow-md: var(--shadow-floating);
@@ -81,46 +81,50 @@
   }
 
   [data-theme="dark"] {
-    --background: #1C1B19;
-    --canvas-top: #1F1E1B;
-    --canvas-foot-tint: #2A211B;
-    --surface: #25241F;
-    --surface-muted: #2D2C27;
-    --surface-sunken: #1F1E1B;
+    --background: #1c1b19;
+    --canvas-top: #1f1e1b;
+    --canvas-foot-tint: #2a211b;
+    --surface: #25241f;
+    --surface-muted: #2d2c27;
+    --surface-sunken: #1f1e1b;
 
-    --border-faint: #2D2C27;
-    --border: #3A3833;
-    --border-strong: #4A4842;
+    --border-faint: #2d2c27;
+    --border: #3a3833;
+    --border-strong: #4a4842;
 
-    --text-primary: #ECEAE4;
-    --text-secondary: #B5B1A8;
-    --text-tertiary: #807C73;
-    --text-disabled: #5A5750;
+    --text-primary: #eceae4;
+    --text-secondary: #b5b1a8;
+    --text-tertiary: #807c73;
+    --text-disabled: #5a5750;
 
-    --accent: #D08B6F;
-    --accent-hover: #DD9C82;
-    --accent-active: #BA785D;
-    --accent-soft: #3D2A22;
+    --accent: #d08b6f;
+    --accent-hover: #dd9c82;
+    --accent-active: #ba785d;
+    --accent-soft: #3d2a22;
 
-    --secondary: #A8927A;
-    --secondary-soft: #2F2820;
+    --secondary: #a8927a;
+    --secondary-soft: #2f2820;
 
-    --ink-pill: #ECEAE4;
+    --ink-pill: #eceae4;
 
-    --status-on-track: #87A977;
-    --status-at-risk: #DBAA5C;
-    --status-blocked: #C9685F;
-    --status-complete: #95A689;
-    --status-paused: #807C73;
-    --status-andon: #E36050;
-    --status-on-track-soft: #2A352A;
-    --status-at-risk-soft: #3A2F1F;
-    --status-blocked-soft: #3A2624;
-    --status-andon-soft: #3D211D;
+    --status-on-track: #87a977;
+    --status-at-risk: #dbaa5c;
+    --status-blocked: #c9685f;
+    --status-complete: #95a689;
+    --status-paused: #807c73;
+    --status-andon: #e36050;
+    --status-on-track-soft: #2a352a;
+    --status-at-risk-soft: #3a2f1f;
+    --status-blocked-soft: #3a2624;
+    --status-andon-soft: #3d211d;
   }
 
   html {
-    font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+    font-family:
+      var(--font-inter),
+      system-ui,
+      -apple-system,
+      sans-serif;
     letter-spacing: -0.01em;
   }
 
@@ -130,13 +134,12 @@
     -moz-osx-font-smoothing: grayscale;
     /* Foot-glow canvas: pure white at top, near-white through 60%,
        whisper of warm clay at the very foot. DESIGN.md "Foot-Glow Rule". */
-    background:
-      linear-gradient(
-        180deg,
-        var(--canvas-top) 0%,
-        var(--background) 60%,
-        var(--canvas-foot-tint) 100%
-      );
+    background: linear-gradient(
+      180deg,
+      var(--canvas-top) 0%,
+      var(--background) 60%,
+      var(--canvas-foot-tint) 100%
+    );
     background-attachment: fixed;
     min-height: 100vh;
   }
@@ -180,11 +183,16 @@
      andon alerts only. Outward-expanding halo on the andon-red soft
      fill, breathing at 1200ms. */
   @keyframes andon-pulse {
-    0%, 100% {
-      box-shadow: 0 0 0 0 rgb(209 77 63 / 0.40), var(--shadow-resting);
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 0 rgb(209 77 63 / 0.4),
+        var(--shadow-resting);
     }
     50% {
-      box-shadow: 0 0 0 10px rgb(209 77 63 / 0), var(--shadow-resting);
+      box-shadow:
+        0 0 0 10px rgb(209 77 63 / 0),
+        var(--shadow-resting);
     }
   }
   .animate-andon-pulse {
@@ -195,10 +203,35 @@
      (which is too fast for the andon register). 1200ms to match the
      banner's breathing. */
   @keyframes andon-icon-pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.55; }
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.55;
+    }
   }
   .animate-andon-icon-pulse {
     animation: andon-icon-pulse 1200ms cubic-bezier(0.2, 0, 0, 1) infinite;
+  }
+
+  /* Pace crossover — a ONE-SHOT nudge fired the moment a timer crosses its
+     suggested time. Distinct from andon-pulse: single iteration, ≤320ms,
+     blocked-red (not andon-red), and NOT exempt from reduced-motion (the
+     general rule above collapses it, leaving just the colour change). */
+  @keyframes pace-crossover {
+    0% {
+      box-shadow:
+        0 0 0 0 rgb(181 84 76 / 0.45),
+        var(--shadow-resting);
+    }
+    100% {
+      box-shadow:
+        0 0 0 8px rgb(181 84 76 / 0),
+        var(--shadow-resting);
+    }
+  }
+  .animate-pace-crossover {
+    animation: pace-crossover 320ms cubic-bezier(0.2, 0, 0, 1) 1;
   }
 }

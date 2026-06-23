@@ -44,8 +44,13 @@ export type LabourSession = {
   categoryId: string | null;
   workerId: string | null;
   jobId: string | null;
-  startedAt: string;
-  endedAt: string | null; // null = running
+  startedAt: string; // wall-clock anchor (when work first began) — for sort/Recent
+  endedAt: string | null; // set = stopped
+  // Pause/resume (ADR 0011): a Session measures ACTIVE time, pauses excluded.
+  // running = endedAt null & resumedAt set; paused = endedAt null & resumedAt null.
+  accumulatedMs: number; // active time banked from completed segments
+  resumedAt: string | null; // start of the current live segment; null = paused/stopped
+  targetQuantity: number | null; // driven code: target units entered on Start (suggested time)
   quantity: number | null; // units done this run for a driven code (captured on Stop)
   note: string | null;
 };
@@ -80,10 +85,21 @@ export type MinuteSuggestion = {
   sampleSize: number;
 };
 
+// Active duration (pauses excluded): banked time + the current live segment.
+// Stopped rows carry the full active total in accumulatedMs (banked on Stop).
+// Legacy fallback: pre-pause completed rows (accumulatedMs 0, never resumed)
+// keep their old wall-clock start→end duration so historical averages survive.
 export function durationMs(s: LabourSession, now = Date.now()): number {
-  const start = new Date(s.startedAt).getTime();
-  const end = s.endedAt ? new Date(s.endedAt).getTime() : now;
-  return Math.max(0, end - start);
+  if (s.accumulatedMs === 0 && s.resumedAt == null && s.endedAt) {
+    return Math.max(0, new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime());
+  }
+  const live = s.resumedAt && !s.endedAt ? now - new Date(s.resumedAt).getTime() : 0;
+  return Math.max(0, s.accumulatedMs + Math.max(0, live));
+}
+
+// A Session is paused when it is open (not stopped) but has no live segment.
+export function isPaused(s: LabourSession): boolean {
+  return s.endedAt == null && s.resumedAt == null;
 }
 
 // ─── Seed (localStorage fallback parity with the SQL seed) ──────────────
@@ -162,6 +178,9 @@ type SessionRow = {
   job_id: string | null;
   started_at: string;
   ended_at: string | null;
+  accumulated_ms: number | string | null;
+  resumed_at: string | null;
+  target_quantity: number | string | null;
   quantity: number | string | null;
   note: string | null;
 };
@@ -195,6 +214,9 @@ const rowToSession = (r: SessionRow): LabourSession => ({
   jobId: r.job_id,
   startedAt: r.started_at,
   endedAt: r.ended_at,
+  accumulatedMs: r.accumulated_ms == null || r.accumulated_ms === "" ? 0 : Number(r.accumulated_ms),
+  resumedAt: r.resumed_at,
+  targetQuantity: numOrNull(r.target_quantity),
   quantity: numOrNull(r.quantity),
   note: r.note,
 });
@@ -214,7 +236,10 @@ type LabourContextValue = {
     operationId: string;
     workerId: string | null;
     jobId?: string | null;
+    targetQuantity?: number | null;
   }) => void;
+  pauseTimer: (sessionId: string) => void;
+  resumeTimer: (sessionId: string) => void;
   stopTimer: (sessionId: string, quantity?: number | null) => void;
   deleteSession: (sessionId: string) => void;
   // Operations
@@ -284,7 +309,17 @@ export function LabourProvider({ children }: { children: ReactNode }) {
             setCategories(p.categories ?? SEED_CATEGORIES);
             setOperations(p.operations ?? SEED_OPERATIONS);
             setWorkers(p.workers ?? SEED_WORKERS);
-            setSessions(p.sessions ?? []);
+            // Normalize pre-pause localStorage sessions to the new shape so
+            // durationMs's legacy fallback engages (running rows resume-anchor
+            // to startedAt; completed rows stay accumulatedMs 0 + resumedAt null).
+            setSessions(
+              ((p.sessions ?? []) as LabourSession[]).map((s) => ({
+                ...s,
+                accumulatedMs: s.accumulatedMs ?? 0,
+                resumedAt: s.resumedAt ?? (s.endedAt ? null : s.startedAt),
+                targetQuantity: s.targetQuantity ?? null,
+              }))
+            );
           }
         } catch {
           /* keep seed */
@@ -333,22 +368,57 @@ export function LabourProvider({ children }: { children: ReactNode }) {
   const isSb = backend === "supabase";
 
   // ─ Timers ─
+  // One open Session per worker: starting auto-stops the worker's other open
+  // Sessions (running or paused), banking each one's active time.
   const startTimer = useCallback(
-    (input: { operationId: string; workerId: string | null; jobId?: string | null }) => {
+    (input: {
+      operationId: string;
+      workerId: string | null;
+      jobId?: string | null;
+      targetQuantity?: number | null;
+    }) => {
       const opn = operations.find((o) => o.id === input.operationId);
+      const startedAt = NOW();
+      const now = Date.now();
+      const closures = new Map<string, { endedAt: string; accumulatedMs: number }>();
+      if (input.workerId) {
+        for (const s of sessions) {
+          if (s.workerId !== input.workerId || s.endedAt !== null) continue;
+          const live = s.resumedAt ? Math.max(0, now - new Date(s.resumedAt).getTime()) : 0;
+          closures.set(s.id, { endedAt: startedAt, accumulatedMs: s.accumulatedMs + live });
+        }
+      }
       const session: LabourSession = {
         id: newUuid(),
         operationId: input.operationId,
         categoryId: opn?.categoryId ?? null,
         workerId: input.workerId,
         jobId: input.jobId ?? null,
-        startedAt: NOW(),
+        startedAt,
         endedAt: null,
+        accumulatedMs: 0,
+        resumedAt: startedAt,
+        targetQuantity: input.targetQuantity ?? null,
         quantity: null,
         note: null,
       };
-      setSessions((prev) => [session, ...prev]);
+      setSessions((prev) => [
+        session,
+        ...prev.map((s) => {
+          const c = closures.get(s.id);
+          return c
+            ? { ...s, endedAt: c.endedAt, resumedAt: null, accumulatedMs: c.accumulatedMs }
+            : s;
+        }),
+      ]);
       if (isSb) {
+        closures.forEach((c, id) => {
+          void sb()
+            .from("labour_sessions")
+            .update({ ended_at: c.endedAt, resumed_at: null, accumulated_ms: c.accumulatedMs })
+            .eq("id", id)
+            .then(({ error: e }) => e && setError(formatError(e)));
+        });
         void sb()
           .from("labour_sessions")
           .insert({
@@ -358,25 +428,96 @@ export function LabourProvider({ children }: { children: ReactNode }) {
             worker_id: session.workerId,
             job_id: session.jobId,
             started_at: session.startedAt,
+            resumed_at: session.resumedAt,
+            accumulated_ms: 0,
+            target_quantity: session.targetQuantity,
           })
           .then(({ error: e }) => e && setError(formatError(e)));
       }
     },
-    [operations, isSb, sb]
+    [operations, sessions, isSb, sb]
+  );
+
+  // Pause = freeze the live segment (within-sitting break). Only acts on a
+  // running Session; banks the live tail into accumulatedMs.
+  const pauseTimer = useCallback(
+    (sessionId: string) => {
+      const target = sessions.find((s) => s.id === sessionId);
+      if (!target || target.endedAt !== null || target.resumedAt == null) return; // not running
+      const live = Math.max(0, Date.now() - new Date(target.resumedAt).getTime());
+      const accumulatedMs = target.accumulatedMs + live;
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, accumulatedMs, resumedAt: null } : s))
+      );
+      if (isSb) {
+        void sb()
+          .from("labour_sessions")
+          .update({ accumulated_ms: accumulatedMs, resumed_at: null })
+          .eq("id", sessionId)
+          .then(({ error: e }) => e && setError(formatError(e)));
+      }
+    },
+    [sessions, isSb, sb]
+  );
+
+  const resumeTimer = useCallback(
+    (sessionId: string) => {
+      const target = sessions.find((s) => s.id === sessionId);
+      if (!target || target.endedAt !== null || target.resumedAt != null) return; // not paused
+      const resumedAt = NOW();
+      setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, resumedAt } : s)));
+      if (isSb) {
+        void sb()
+          .from("labour_sessions")
+          .update({ resumed_at: resumedAt })
+          .eq("id", sessionId)
+          .then(({ error: e }) => e && setError(formatError(e)));
+      }
+    },
+    [sessions, isSb, sb]
   );
 
   const stopTimer = useCallback(
     (sessionId: string, quantity?: number | null) => {
+      const target = sessions.find((s) => s.id === sessionId);
+      if (!target) return;
+      // Already stopped: allow setting/correcting units (the Recent "set units" fix).
+      if (target.endedAt !== null) {
+        if (quantity === undefined) return;
+        setSessions((prev) => prev.map((s) => (s.id === sessionId ? { ...s, quantity } : s)));
+        if (isSb) {
+          void sb()
+            .from("labour_sessions")
+            .update({ quantity })
+            .eq("id", sessionId)
+            .then(({ error: e }) => e && setError(formatError(e)));
+        }
+        return;
+      }
       const endedAt = NOW();
+      const live = target.resumedAt
+        ? Math.max(0, Date.now() - new Date(target.resumedAt).getTime())
+        : 0;
+      const accumulatedMs = target.accumulatedMs + live; // full active total banked on stop
       setSessions((prev) =>
         prev.map((s) =>
           s.id === sessionId
-            ? { ...s, endedAt, quantity: quantity === undefined ? s.quantity : quantity }
+            ? {
+                ...s,
+                endedAt,
+                resumedAt: null,
+                accumulatedMs,
+                quantity: quantity === undefined ? s.quantity : quantity,
+              }
             : s
         )
       );
       if (isSb) {
-        const update: Record<string, unknown> = { ended_at: endedAt };
+        const update: Record<string, unknown> = {
+          ended_at: endedAt,
+          resumed_at: null,
+          accumulated_ms: accumulatedMs,
+        };
         if (quantity !== undefined) update.quantity = quantity;
         void sb()
           .from("labour_sessions")
@@ -385,7 +526,7 @@ export function LabourProvider({ children }: { children: ReactNode }) {
           .then(({ error: e }) => e && setError(formatError(e)));
       }
     },
-    [isSb, sb]
+    [sessions, isSb, sb]
   );
 
   const deleteSession = useCallback(
@@ -642,6 +783,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       startTimer,
+      pauseTimer,
+      resumeTimer,
       stopTimer,
       deleteSession,
       addOperation,
@@ -670,6 +813,8 @@ export function LabourProvider({ children }: { children: ReactNode }) {
       loading,
       error,
       startTimer,
+      pauseTimer,
+      resumeTimer,
       stopTimer,
       deleteSession,
       addOperation,

@@ -128,6 +128,27 @@ does the record that holds them.
   `ea/sqft/lf/bf` plus `sheet`/`board`) so per-unit averages stay comparable. A
   timer Session on a driven code records the `quantity` done, enabling
   physical-%-complete projection. Maps to quantity on a QuickBooks item line.
+- **Session** — one timer run of a Cost code by a Worker on a Project (optional).
+  Measures **active time** (below). The unit the shop-floor timer attaches to;
+  one **open** Session per worker (starting a new one auto-stops their previous).
+  Maps to a QuickBooks **Time Activity** (ADR 0011).
+- **Active time** — a Session's hands-on duration, **pauses excluded**. The basis
+  for a cost code's historical average, the in-house labour Cost-actual, and pace.
+  Wall-clock start→stop is *not* used. Banked across pause/resume; the full active
+  total is fixed on Stop (ADR 0011).
+- **Pause** — a within-sitting break in a Session (lunch, interruption); resumes
+  the same Session and does not count toward active time. Switching to another
+  cost code, or ending the day, is a **Stop** + a new Session later — never a pause.
+- **Target quantity** — for a driven Cost code, the planned units entered on
+  *Start* (the "Y" that yields a suggested time). Distinct from `quantity`, the
+  actual units done, entered on *Stop*.
+- **Suggested time** — the "should take about" target shown on a running timer:
+  the outlier-trimmed historical average (per-unit × target quantity for driven
+  codes) → else the Budget's bid estimate → else the operation's hand-set default.
+  Drives the pace colour.
+- **Pace** — active time ÷ suggested time, banded **on-track** (<80%), **at-risk**
+  (80–100%), **over** (>100%); the timer's colour language (sage / amber / red),
+  reusing the status tones.
 - **Budget** — the planned cost frozen on a Job when an estimate is saved:
   per cost code for labour (budgeted minutes × phase rate), per phase for
   materials. The baseline actuals are measured against.
@@ -152,6 +173,19 @@ does the record that holds them.
 - **Invoice** — a light record of one revenue cycle on a project; its amount adds
   to the project's revenue. Maps to a QuickBooks **Invoice**. A project's total
   revenue = Σ its invoices.
+- **Job template** — a named, reusable definition of a *job type* (e.g. "Full
+  kitchen", "Install only", "Spray finishing only"). Defines which quote sections
+  show, the **set of cost codes** the job uses, and default overhead/markup. It
+  **references** cost codes (it does not copy them — codes stay in Labour). One
+  concept; supersedes the former split between estimator section-templates and the
+  P2b cost-code task templates (**ADR 0012**). A template carries the *task set*,
+  not fixed quantities — those come per-job (manual entry or a Mozaik import).
+- **Mozaik import** — dropping a Mozaik pricing-export CSV onto an estimate to
+  auto-fill the **cabinet counts, material BOM, and labour breakdown** (quantities
+  + structure only). The app **re-prices** with its own catalog + labour rates +
+  cost codes; Mozaik's dollar amounts are not used as the budget. Lands as a draft
+  estimate to review, then *Save as Job* freezes the budget (**ADR 0012**). Sample:
+  `docs/samples/mozaik-export-sample.csv`.
 - **QuickBooks mapping** — the costing model is shaped to map 1:1 onto QuickBooks
   for a future integration: Project→Project, Payer→Customer, Estimate→Estimate,
   Invoice→Invoice, **Phase→Class**, **Cost code→Item**, Worker→Employee,
