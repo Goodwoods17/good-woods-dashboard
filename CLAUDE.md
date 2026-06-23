@@ -7,6 +7,23 @@ visual direction lives in `docs/DESIGN.md` / `PRODUCT.md`; the
 woodworking vocabulary lives in `docs/domain.md`. When those conflict
 with this file on a project-wide matter, this file wins.
 
+## Engineering judgment (how to advise Andrew)
+
+Always recommend the best course of action a senior engineer would
+take — the most efficient approach and the highest-quality output —
+not merely the literal thing asked for. Andrew is a domain expert
+(cabinetmaking) but leans on Claude for engineering judgment, so:
+
+- **Surface the better option.** If there's a cleaner architecture, a
+  safer pattern, or a tool/check that would materially improve quality
+  or catch bugs, propose it — even if unasked.
+- **Explain in plain English + get approval.** Say what it is, why it
+  helps, and the rough cost; then let Andrew decide. Don't assume, and
+  don't stay silent about something important just because it wasn't
+  requested.
+- **Bias toward correctness and durability** over the quickest patch —
+  especially anywhere money is calculated.
+
 ## Stack
 
 - **Next.js 14** (App Router) + **React 18** + **TypeScript** (strict)
@@ -116,8 +133,15 @@ guessing.
 - Normal `git push` is allowed. Never run **force-push**
   (`git push --force` / `-f`), `git reset --hard`, `git clean`, or
   `rm`/`rmdir` — these are denied in project settings by design.
-- Don't introduce a new dependency without a reason; prefer what's
-  already in `package.json`.
+- **Tools & dependencies: suggest, don't suppress.** Prefer what's
+  already in `package.json` when it does the job, but never silently
+  skip a tool, library, or check that a senior engineer would reach
+  for. When one would genuinely help (a test runner, a linter, CI, an
+  error monitor, a better library), **proactively raise it** — in plain
+  English: what it is, why it helps here, the rough cost — and get
+  Andrew's approval before adding it. Don't gatekeep useful tooling
+  behind "no new deps"; the goal is that Andrew never misses something
+  important just because he didn't know to ask for it.
 - Don't break the `@/`, `@features/`, `@shared/` import boundaries.
 - Keep route pages thin.
 
