@@ -190,7 +190,9 @@ export function CatalogCategoryCard({
             <p className="px-4 pb-0.5 pt-2 text-label uppercase text-text-tertiary">Ungrouped</p>
           )}
           {ungrouped.length === 0 ? (
-            <p className="px-4 pb-1 pt-1 text-xs text-text-tertiary">Nothing here yet.</p>
+            <p className="px-4 pb-1 pt-2 text-xs text-text-tertiary">
+              No items yet — add the first one
+            </p>
           ) : (
             <CatalogTable
               items={ungrouped}
@@ -262,7 +264,9 @@ function SubGroup({
         </button>
       </div>
       {items.length === 0 ? (
-        <p className="px-4 pb-1 text-xs text-text-tertiary">Nothing here yet.</p>
+        <p className="px-4 pb-1 pt-2 text-xs text-text-tertiary">
+          No items yet — add the first one
+        </p>
       ) : (
         <CatalogTable
           items={items}
