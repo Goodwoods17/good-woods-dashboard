@@ -2,8 +2,8 @@
 
 import { Fragment, useState } from "react";
 import Link from "next/link";
-import type { Job } from "@shared/lib/types";
-import { computeMargin } from "@shared/lib/types";
+import type { Job, MilestoneStage } from "@shared/lib/types";
+import { computeMargin, MILESTONE_STAGES } from "@shared/lib/types";
 import { formatCAD, formatPct } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { useBudgetVsActual } from "@features/job-costing/lib/budgetVsActualStore";
@@ -11,7 +11,7 @@ import { computeBudgetVsActual, marginTone } from "@features/job-costing/lib/bud
 import { TimelineView } from "@features/job-costing/components/bva/TimelineView";
 import { PhaseBarsView } from "@features/job-costing/components/bva/PhaseBarsView";
 import { PaceMarginView } from "@features/job-costing/components/bva/PaceMarginView";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, ChevronUp } from "lucide-react";
 
 type BvaView = "timeline" | "bars" | "pace";
 
@@ -22,9 +22,40 @@ const VIEWS: { key: BvaView; label: string }[] = [
 ];
 
 export function BudgetVsActualTab({ job }: { job: Job }) {
-  const { data, loading } = useBudgetVsActual(job.id);
+  const { data, loading, logActual } = useBudgetVsActual(job.id);
   const [activeView, setActiveView] = useState<BvaView>("timeline");
   const [expandedPhaseIds, setExpandedPhaseIds] = useState<string[]>([]);
+
+  // ── Log actual form state ──────────────────────────────────────────────────
+  const [logOpen, setLogOpen] = useState(false);
+  const [amount, setAmount] = useState("");
+  const [phaseId, setPhaseId] = useState<MilestoneStage | "">("");
+  const [note, setNote] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  function resetLogForm() {
+    setAmount("");
+    setPhaseId("");
+    setNote("");
+  }
+
+  async function handleLogSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const parsedAmount = Number(amount);
+    if (!(parsedAmount > 0)) return;
+    setSubmitting(true);
+    try {
+      await logActual({
+        amount: parsedAmount,
+        phaseId: phaseId === "" ? null : phaseId,
+        note,
+      });
+      resetLogForm();
+      setLogOpen(false);
+    } finally {
+      setSubmitting(false);
+    }
+  }
 
   // Derive job-level inputs
   const materialsBudget = job.costs
@@ -278,7 +309,103 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
 
       {/* Other-costs panel */}
       <div className="rounded-xl bg-surface shadow-resting p-6">
-        <h2 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">Other Costs</h2>
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <h2 className="text-xs uppercase tracking-[0.06em] text-text-tertiary">Other Costs</h2>
+          <button
+            type="button"
+            onClick={() => {
+              const closing = logOpen;
+              setLogOpen((p) => !p);
+              if (closing) resetLogForm();
+            }}
+            className={cn(
+              "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-fast min-h-[44px]",
+              logOpen
+                ? "bg-surface-muted text-text-secondary hover:text-text-primary"
+                : "bg-ink-pill text-white hover:bg-accent-active"
+            )}
+          >
+            {logOpen ? (
+              <>
+                <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
+                Close
+              </>
+            ) : (
+              <>
+                <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+                Log actual cost
+              </>
+            )}
+          </button>
+        </div>
+
+        {/* Log actual form */}
+        {logOpen && (
+          <form
+            onSubmit={handleLogSubmit}
+            className="mb-4 rounded-lg bg-surface-muted/30 p-3 flex flex-col gap-3"
+          >
+            {/* Amount */}
+            <div>
+              <label className="block text-xs text-text-secondary mb-1">
+                Amount (CAD) <span className="text-status-blocked">*</span>
+              </label>
+              <input
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="0.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+                aria-label="Actual cost amount in CAD"
+                className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </div>
+
+            {/* Phase */}
+            <div>
+              <label className="block text-xs text-text-secondary mb-1">Phase</label>
+              <select
+                value={phaseId}
+                onChange={(e) => setPhaseId(e.target.value as MilestoneStage | "")}
+                aria-label="Phase this cost belongs to"
+                className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent"
+              >
+                <option value="">Whole job</option>
+                {MILESTONE_STAGES.map((s) => (
+                  <option key={s.key} value={s.key}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Note */}
+            <div>
+              <label className="block text-xs text-text-secondary mb-1">Note (optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Lumber from Rona, invoice #1234"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                aria-label="Note (optional)"
+                className="w-full bg-surface-muted border border-border rounded-md px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:ring-1 focus:ring-accent"
+              />
+            </div>
+
+            {/* Submit */}
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={!(Number(amount) > 0) || submitting}
+                className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium bg-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity duration-fast min-h-[44px]"
+              >
+                {submitting ? "Saving…" : "Log cost"}
+              </button>
+            </div>
+          </form>
+        )}
 
         <div className="space-y-3">
           {/* Materials */}
