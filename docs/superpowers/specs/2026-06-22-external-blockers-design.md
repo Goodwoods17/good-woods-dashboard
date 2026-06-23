@@ -28,6 +28,28 @@ and the shop board.
    allows** ("This phase is externally blocked — advance anyway?"). The blocker stays recorded.
 3. **Full slice.** Table + store + derivation + JobDetail add/resolve UI + soft milestone
    gate + shop-board read-only chip + briefing integration, all in this slice.
+4. **Whole-job blocker = flag only (no gate).** A blocker with `gated_phase_id = null` turns
+   the job `blocked` (Hitlist / chip / briefing) but does **not** gate any milestone advance.
+   **Only a phase-specific blocker gates that one phase's advance.** (Avoids nagging on every
+   milestone click while e.g. a permit is pending.)
+5. **Externally-blocked ranks at the top of the Hitlist.** An active blocker → `blocked`
+   health → top of the Hitlist (same bucket as today's schedule-`blocked`), because a blocker
+   is exactly what Andrew should action (chase the party). No new intermediate rank. Revisit
+   only if waiting-on-client jobs flood the list.
+
+### Codebase-confirmed (grill)
+
+- **`PhaseId` (`@features/job-costing/lib/costCodes`) === `MilestoneStage` (`@shared/lib/types`)**
+  — identical 6 keys (`design`,`cnc`,`assembly`,`finishing`,`delivery`,`install`). `gated_phase_id`
+  stores one of these; it is unambiguous across job milestones AND the shop board (which renders
+  `PHASE_ORDER`). Validate against this set on write.
+- **`deriveHealth` precedence today** is `complete > paused > schedule-derived`. External blocker
+  slots in as: **`complete` > `paused` > active-blocker→`blocked` > schedule-derived.** A complete
+  or manually-paused job never shows `blocked` from a stale blocker.
+- **`deriveHealth` / `resolveBlockerText` / `resolveBlockerTone` are called in ~8 places**
+  (`health.ts`, `blockers.ts` ×3 incl. `buildHitlist`, `Hitlist`, `Schedule`, `KanbanBoard`,
+  `JobDetail`, `BlockerChip`). The optional `activeBlockers` arg must be threaded to **all** of
+  them for the single-source-of-truth to hold everywhere (a plan task, not a new decision).
 
 ## Architecture
 
@@ -95,8 +117,10 @@ Pure module `features/jobs/lib/jobBlockers.ts`:
 - `externalBlockerChip(active, contactName, now): { text, tone } | null` — when `active`
   is non-empty: `text = "Waiting on {party} · {N}d"` (headline = oldest), `tone = "blocked"`.
 
-**Health precedence (in `deriveHealth(job, activeBlockers?)`):**
-`manual paused` > `active external blocker → "blocked"` > existing schedule-derived rule.
+**Health precedence (in `deriveHealth(job, today, activeBlockers?)`):**
+`complete` (pipeline complete) > `manual paused` > `active external blocker → "blocked"` >
+existing schedule-derived rule. (`activeBlockers` defaults to `[]` for backward compatibility,
+but every call site is updated to pass it — see Codebase-confirmed above.)
 
 **Chip precedence (in `resolveBlockerText` / `resolveBlockerTone`):** an active external
 blocker yields a **real** (non-synthetic) chip from the headline blocker; otherwise today's
@@ -109,8 +133,11 @@ A new section/card on `JobDetail` (the job's own page), placed near the status h
 - **Active list** — each row: `reason` · waiting-on party · `Nd` aging badge (amber→red as
   it ages) · **Resolve** button (sets `resolved_at = now`).
 - **Add blocker** — inline form: `reason` (text, required), **waiting on** (a Contact picker
-  drawn from the job's linked contacts + all contacts, OR a free-text label when the party
-  isn't a contact), **gates phase** (optional dropdown of the 6 phases, default "whole job").
+  over **all contacts with the job's linked contacts — payer/designer/architect/gc/homeowner —
+  pinned to the top**, OR a free-text label when the party isn't a contact), **gates phase**
+  (optional dropdown of the 6 phases, default "whole job").
+- **Aging badge** — `Nd` since `raised_at`: neutral/amber from day 1, **red at ≥7 days** (a
+  blocker stalled a week+ is the thing to chase).
 - **History** — resolved blockers collapsed below ("Resolved · waiting was on X · 4d"), with
   a **Reopen** affordance. No hard delete in v1 (history is the audit trail).
 - Tokens only; matches the JobDetail card idiom; touch targets ≥44px (shop tablet).
@@ -118,18 +145,19 @@ A new section/card on `JobDetail` (the job's own page), placed near the status h
 ### Soft milestone gate
 
 `MilestonesStrip`'s advance path (`onChange` → `updateJob({ currentMilestone })`, used in
-`JobDetail` and `TasksTab`) is wrapped: if the **target phase** has an active gating blocker
-(`gated_phase_id === targetPhase`), show an **inline confirm** ("⏳ {phase} is externally
-blocked — waiting on {party}. Advance anyway?") → proceed or cancel. A blocker with
-`gated_phase_id = null` (whole-job) gates **every** advance. No confirm when there's no
-gating blocker (unchanged flow).
+`JobDetail` and `TasksTab`) is wrapped: if the **target phase** has an active blocker with
+`gated_phase_id === targetPhase`, show an **inline confirm** ("⏳ {phase} is externally
+blocked — waiting on {party}. Advance anyway?") → proceed or cancel. **Whole-job blockers
+(`gated_phase_id = null`) never gate** (decision 4) — they flag health only. No confirm when
+the target phase has no phase-specific gating blocker (unchanged flow).
 
 ### Shop board read-only chip
 
-On `/shop`, the selected job's gated phase column header shows a read-only
-`⏳ externally blocked — waiting on {party} · {N}d` chip when that phase (or the whole job)
-has an active blocker, read from `useJobBlockers().activeByJob`. Read-only — no add/resolve
-on the shop board (that lives on the job).
+On `/shop`, for the selected job: a **phase-specific** blocker shows a read-only
+`⏳ externally blocked — waiting on {party} · {N}d` chip on **that phase's column header**; a
+**whole-job** blocker shows the chip on the **board header** (under the job name). Read from
+`useJobBlockers().activeByJob`. Read-only — no add/resolve on the shop board (that lives on
+the job).
 
 ### Briefing integration
 
@@ -161,6 +189,8 @@ on the shop board (that lives on the job).
 
 ## ADR
 
-Propose **ADR 0013 — external blockers as structured source of truth** during the grill:
-derive-health-from-blockers + soft gate is hard to reverse (data model + the health
-precedence rule) and a real trade-off (structured vs the existing free-text field).
+**ADR 0013 — external blockers as a structured source of truth that derives job health**
+(`docs/decisions/0013-external-blockers-structured-source-of-truth.md`) — written during the
+grill. Captures: structured table over free-text; derive-on-read over write-through; conflate
+into the existing `blocked` enum rather than a new `externally_blocked` value; soft gate only
+for phase-specific blockers.

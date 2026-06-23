@@ -162,10 +162,12 @@ does the record that holds them.
   continue: client sign-off on shop drawings, designer-approved handles, a permit. Unlike
   a **Stuck** Work card (an *internal* shop task the crew can unstick), an external blocker
   is **out of the shop's hands** and blocks at the **project / phase** level. Recorded with
-  *who* we're waiting on, *since when* (so it ages — "stalled 6 days"), and *which phase it
-  gates*; it drives the job's `blocker` + `health = blocked`, surfacing in the Hitlist,
-  Schedule, briefing, and pipeline, and on the shop board's gated phase. A milestone won't
-  advance while an external blocker gates it. (Structured `job_blockers` table — Slice B2.)
+  *who* we're waiting on, *since when* (so it ages — "stalled 6 days"), and optionally *which
+  phase it gates* (else it's a **whole-job** blocker). It **derives** the job's effective
+  `health = blocked` and blocker chip (source of truth; not written through), surfacing in the
+  Hitlist, Schedule, briefing, pipeline, and the shop board. A **phase-specific** blocker
+  *soft-gates* that phase's milestone advance (warns, allows); a whole-job blocker flags health
+  only and never gates. (Structured `job_blockers` table — Slice B2; ADR 0013.)
 - **Driver** — an optional **unit of measure** a cost code's time scales with
   (sheet, board foot, board, linear foot…). A code *with* a driver tracks
   **minutes per unit** and estimates as `quantity × min/unit`; a code *without*
