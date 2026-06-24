@@ -100,6 +100,39 @@ export type ProjectDocument = {
   pageCount?: number | null;
 };
 
+export type PieceKind = "cabinet" | "end_panel" | "scribe" | "toe_kick" | "filler";
+export type CutMethod = "inhouse" | "cnc_sub";
+export type PieceSource = "manual" | "mozaik";
+/** A lifecycle position: "not_started" | one of the kind's stages | "done". */
+export type PieceStatus = string;
+
+export type JobPiece = {
+  id: string;
+  projectId: string;
+  kind: PieceKind;
+  subtype?: string | null;
+  code?: string | null;
+  room?: string | null;
+  label: string;
+  cutMethod?: CutMethod | null;
+  status: PieceStatus;
+  statusUpdatedAt?: string | null;
+  statusUpdatedBy?: string | null;
+  source: PieceSource;
+  sourceRef?: string | null;
+  pinDocumentId?: string | null;
+  pinPage?: number | null;
+  pinX?: number | null;
+  pinY?: number | null;
+  sortOrder: number;
+  dimensions?: string | null;
+  material?: string | null;
+  edgeband?: string | null;
+  parentRef?: string | null;
+  createdBy?: string | null;
+  createdAt: string;
+};
+
 /**
  * Where the client came from. Used to attribute revenue to anchor
  * relationships and channels.
