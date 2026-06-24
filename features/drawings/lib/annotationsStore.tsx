@@ -14,6 +14,7 @@ type AnnotationsContextValue = {
   annotations: Annotation[];
   backend: Backend;
   createAnnotation: (a: Annotation) => Promise<void>;
+  updateAnnotation: (id: string, patch: Partial<Annotation>) => Promise<void>;
   deleteAnnotation: (id: string) => Promise<void>;
   /** Re-insert a full annotation (incl. id) — used by undo to restore an erased stroke. */
   restoreAnnotation: (a: Annotation) => Promise<void>;
@@ -80,6 +81,22 @@ export function AnnotationsProvider({ children }: { children: ReactNode }) {
   const createAnnotation = useCallback((a: Annotation) => insert(a), [insert]);
   const restoreAnnotation = useCallback((a: Annotation) => insert(a), [insert]);
 
+  const updateAnnotation = useCallback(async (id: string, patch: Partial<Annotation>) => {
+    const prev = annotationsRef.current.find((x) => x.id === id);
+    if (!prev) return;
+    const merged = { ...prev, ...patch, updatedAt: new Date().toISOString() };
+    annotationsRef.current = annotationsRef.current.map((x) => (x.id === id ? merged : x));
+    setAnnotations(annotationsRef.current);
+    if (backend === "supabase") {
+      const { error } = await getSupabase().from(DOCUMENT_ANNOTATIONS_TABLE).update(annotationToRow(merged)).eq("id", id);
+      if (error) {
+        annotationsRef.current = annotationsRef.current.map((x) => (x.id === id ? prev : x));
+        setAnnotations(annotationsRef.current);
+        throw error;
+      }
+    }
+  }, [backend]);
+
   const deleteAnnotation = useCallback(async (id: string) => {
     const removed = annotationsRef.current.find((x) => x.id === id);
     annotationsRef.current = annotationsRef.current.filter((x) => x.id !== id);
@@ -94,8 +111,8 @@ export function AnnotationsProvider({ children }: { children: ReactNode }) {
   }, [backend]);
 
   const value = useMemo<AnnotationsContextValue>(
-    () => ({ annotations, backend, createAnnotation, deleteAnnotation, restoreAnnotation }),
-    [annotations, backend, createAnnotation, deleteAnnotation, restoreAnnotation]
+    () => ({ annotations, backend, createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation }),
+    [annotations, backend, createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation]
   );
   return <AnnotationsContext.Provider value={value}>{children}</AnnotationsContext.Provider>;
 }

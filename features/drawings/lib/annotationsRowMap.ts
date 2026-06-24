@@ -1,4 +1,4 @@
-import type { Annotation, AnnotationType, StrokeData } from "@shared/lib/types";
+import type { Annotation, AnnotationType, AnnotationData } from "@shared/lib/types";
 
 export type AnnotationRow = {
   id: string;
@@ -6,7 +6,7 @@ export type AnnotationRow = {
   project_id: string;
   page: number;
   type: AnnotationType;
-  data: StrokeData;
+  data: AnnotationData;
   color: string;
   stroke_width: number | null;
   created_by: string | null;

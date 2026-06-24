@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import type { StrokeData } from "@shared/lib/types";
 import { rowToAnnotation, annotationToRow, type AnnotationRow } from "./annotationsRowMap";
 
 const row: AnnotationRow = {
@@ -20,7 +21,7 @@ describe("annotationsRowMap", () => {
     const a = rowToAnnotation(row);
     expect(a.documentId).toBe("d1");
     expect(a.page).toBe(2);
-    expect(a.data.points[0][0]).toBe(0.1);
+    expect((a.data as StrokeData).points[0][0]).toBe(0.1);
   });
   it("round-trips", () => {
     expect(annotationToRow(rowToAnnotation(row))).toEqual(row);
