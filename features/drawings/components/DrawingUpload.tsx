@@ -63,7 +63,7 @@ export function DrawingUpload({ jobId }: { jobId: string }) {
           value={kind}
           onChange={(e) => setKind(e.target.value as DocumentKind)}
           disabled={busy}
-          className="rounded-full border border-border bg-surface px-3 py-1.5 text-xs text-text-secondary duration-fast focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+          className="min-h-[44px] rounded-lg border border-border bg-surface px-2.5 py-2 text-sm text-text-primary duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft disabled:opacity-50"
         >
           {DOCUMENT_KIND_ORDER.map((k) => (
             <option key={k} value={k}>{DOCUMENT_KIND_LABELS[k]}</option>
@@ -73,10 +73,10 @@ export function DrawingUpload({ jobId }: { jobId: string }) {
           onChange={onPick} className="hidden" />
         <button type="button" onClick={() => inputRef.current?.click()} disabled={busy}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-3 py-1.5 text-xs font-medium hover:bg-accent-active duration-fast",
-            "disabled:bg-text-disabled disabled:cursor-not-allowed"
+            "inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-ink-pill px-4 py-2 text-sm font-medium text-white duration-fast hover:bg-accent-active focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+            "disabled:cursor-not-allowed disabled:bg-text-disabled"
           )}>
-          <Upload className="h-3.5 w-3.5" strokeWidth={2} />
+          <Upload className="h-4 w-4" strokeWidth={2} />
           {busy ? "Uploading…" : "Upload drawing"}
         </button>
       </div>

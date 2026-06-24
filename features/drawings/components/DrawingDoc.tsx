@@ -31,7 +31,7 @@ export function DrawingDoc({ doc }: { doc: ProjectDocument }) {
   }, [doc.source, doc.driveUrl, doc.storagePath]);
 
   if (err) return <p className="text-sm text-status-blocked">{err}</p>;
-  if (!url) return <p className="text-sm text-text-tertiary">Loading…</p>;
+  if (!url) return <DrawingSkeleton />;
 
   if (doc.source === "link") {
     return (
@@ -44,6 +44,15 @@ export function DrawingDoc({ doc }: { doc: ProjectDocument }) {
 
   if (isPdf(doc.mime)) return <PdfCanvas url={url} />;
   return <img src={url} alt={doc.label} className="max-w-full rounded-lg shadow-resting" />;
+}
+
+function DrawingSkeleton() {
+  return (
+    <div className="space-y-2" aria-busy="true" aria-label="Loading drawing">
+      <div className="h-8 w-48 animate-pulse rounded-md bg-surface-muted motion-reduce:animate-none" />
+      <div className="h-[60vh] w-full animate-pulse rounded-lg bg-surface-muted motion-reduce:animate-none" />
+    </div>
+  );
 }
 
 function PdfCanvas({ url }: { url: string }) {
@@ -73,23 +82,27 @@ function PdfCanvas({ url }: { url: string }) {
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm text-text-secondary">
+      <div className="flex items-center gap-1 text-sm text-text-secondary">
         <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
-          className="rounded-md p-1 hover:bg-surface-muted disabled:opacity-40" aria-label="Previous page">
+          className="flex h-11 w-11 items-center justify-center rounded-md duration-fast hover:bg-surface-muted disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Previous page">
           <ChevronLeft className="h-4 w-4" />
         </button>
-        <span className="tabular-nums">{page} / {pages}</span>
+        <span className="min-w-[3.5rem] text-center tabular-nums">{page} / {pages}</span>
         <button onClick={() => setPage((p) => Math.min(pages, p + 1))} disabled={page >= pages}
-          className="rounded-md p-1 hover:bg-surface-muted disabled:opacity-40" aria-label="Next page">
+          className="flex h-11 w-11 items-center justify-center rounded-md duration-fast hover:bg-surface-muted disabled:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Next page">
           <ChevronRight className="h-4 w-4" />
         </button>
-        <span className="mx-2 h-4 w-px bg-border" />
+        <span className="mx-1 h-5 w-px bg-border" />
         <button onClick={() => setScale((s) => clampScale(s - 0.25))}
-          className="rounded-md p-1 hover:bg-surface-muted" aria-label="Zoom out">
+          className="flex h-11 w-11 items-center justify-center rounded-md duration-fast hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Zoom out">
           <ZoomOut className="h-4 w-4" />
         </button>
         <button onClick={() => setScale((s) => clampScale(s + 0.25))}
-          className="rounded-md p-1 hover:bg-surface-muted" aria-label="Zoom in">
+          className="flex h-11 w-11 items-center justify-center rounded-md duration-fast hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          aria-label="Zoom in">
           <ZoomIn className="h-4 w-4" />
         </button>
       </div>
