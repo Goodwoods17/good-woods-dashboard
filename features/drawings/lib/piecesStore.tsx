@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode,
+  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
 import { JOB_PIECES_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
 import type { JobPiece } from "@shared/lib/types";
@@ -38,6 +38,11 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   const backend: Backend = hasSupabase() ? "supabase" : "localStorage";
   const [pieces, setPieces] = useState<JobPiece[]>([]);
   const [loading, setLoading] = useState(true);
+  // Synchronous mirror of `pieces`. React 18 defers functional-update bodies,
+  // so we cannot read post-`setPieces` state synchronously; the ref gives every
+  // mutator a deterministic, race-safe view (rapid same-id updates compose).
+  const piecesRef = useRef<JobPiece[]>([]);
+  useEffect(() => { piecesRef.current = pieces; }, [pieces]);
 
   useEffect(() => {
     let cancelled = false;
@@ -60,39 +65,44 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   }, [pieces, loading, backend]);
 
   const createPiece = useCallback(async (p: JobPiece) => {
-    setPieces((prev) => [...prev, p]);
+    piecesRef.current = [...piecesRef.current, p];
+    setPieces(piecesRef.current);
     if (backend === "supabase") {
       const { error } = await getSupabase().from(JOB_PIECES_TABLE).insert(pieceToRow(p));
-      if (error) { setPieces((prev) => prev.filter((x) => x.id !== p.id)); throw error; }
+      if (error) {
+        piecesRef.current = piecesRef.current.filter((x) => x.id !== p.id);
+        setPieces(piecesRef.current);
+        throw error;
+      }
     }
   }, [backend]);
 
   const updatePiece = useCallback(async (id: string, patch: Partial<JobPiece>) => {
-    let prevSnapshot: JobPiece | undefined;
-    setPieces((prev) => prev.map((x) => {
-      if (x.id !== id) return x;
-      prevSnapshot = x;
-      return { ...x, ...patch };
-    }));
+    const prev = piecesRef.current.find((x) => x.id === id);
+    if (!prev) return;
+    const merged = { ...prev, ...patch };
+    piecesRef.current = piecesRef.current.map((x) => (x.id === id ? merged : x));
+    setPieces(piecesRef.current);
     if (backend === "supabase") {
-      const merged = prevSnapshot ? { ...prevSnapshot, ...patch } : undefined;
-      if (merged) {
-        const { error } = await getSupabase().from(JOB_PIECES_TABLE)
-          .update(pieceToRow(merged)).eq("id", id);
-        if (error) {
-          if (prevSnapshot) setPieces((prev) => prev.map((x) => (x.id === id ? prevSnapshot! : x)));
-          throw error;
-        }
+      const { error } = await getSupabase().from(JOB_PIECES_TABLE).update(pieceToRow(merged)).eq("id", id);
+      if (error) {
+        piecesRef.current = piecesRef.current.map((x) => (x.id === id ? prev : x));
+        setPieces(piecesRef.current);
+        throw error;
       }
     }
   }, [backend]);
 
   const deletePiece = useCallback(async (id: string) => {
-    let removed: JobPiece | undefined;
-    setPieces((prev) => { removed = prev.find((x) => x.id === id); return prev.filter((x) => x.id !== id); });
+    const removed = piecesRef.current.find((x) => x.id === id);
+    piecesRef.current = piecesRef.current.filter((x) => x.id !== id);
+    setPieces(piecesRef.current);
     if (backend === "supabase") {
       const { error } = await getSupabase().from(JOB_PIECES_TABLE).delete().eq("id", id);
-      if (error) { if (removed) setPieces((prev) => [...prev, removed!]); throw error; }
+      if (error) {
+        if (removed) { piecesRef.current = [...piecesRef.current, removed]; setPieces(piecesRef.current); }
+        throw error;
+      }
     }
   }, [backend]);
 
