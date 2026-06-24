@@ -6,8 +6,16 @@ import type { ProjectDocument } from "@shared/lib/types";
 import { resolveDocumentUrl } from "../lib/storage";
 import { isPdf } from "../lib/upload";
 import { loadPdf, renderPdfPage, clampScale } from "../lib/pdf";
+import { DrawingStage } from "./DrawingStage";
 
-export function DrawingDoc({ doc }: { doc: ProjectDocument }) {
+export function DrawingDoc({
+  doc, addingPin = false, onPlace = () => {}, overlay,
+}: {
+  doc: ProjectDocument;
+  addingPin?: boolean;
+  onPlace?: (x: number, y: number) => void;
+  overlay?: React.ReactNode;
+}) {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -42,8 +50,14 @@ export function DrawingDoc({ doc }: { doc: ProjectDocument }) {
     );
   }
 
-  if (isPdf(doc.mime)) return <PdfCanvas url={url} />;
-  return <img src={url} alt={doc.label} className="max-w-full rounded-lg shadow-resting" />;
+  if (isPdf(doc.mime)) {
+    return <PdfCanvas url={url} addingPin={addingPin} onPlace={onPlace} overlay={overlay} />;
+  }
+  return (
+    <DrawingStage addingPin={addingPin} onPlace={onPlace} overlay={overlay}>
+      <img src={url} alt={doc.label} className="block w-full rounded-lg shadow-resting" />
+    </DrawingStage>
+  );
 }
 
 function DrawingSkeleton() {
@@ -55,7 +69,14 @@ function DrawingSkeleton() {
   );
 }
 
-function PdfCanvas({ url }: { url: string }) {
+function PdfCanvas({
+  url, addingPin, onPlace, overlay,
+}: {
+  url: string;
+  addingPin: boolean;
+  onPlace: (x: number, y: number) => void;
+  overlay?: React.ReactNode;
+}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
@@ -106,8 +127,10 @@ function PdfCanvas({ url }: { url: string }) {
           <ZoomIn className="h-4 w-4" />
         </button>
       </div>
-      <div className="overflow-auto rounded-lg border border-border bg-surface-muted p-2">
-        <canvas ref={canvasRef} className="mx-auto" />
+      <div className="overflow-hidden rounded-lg border border-border bg-surface-muted">
+        <DrawingStage addingPin={addingPin} onPlace={onPlace} overlay={overlay}>
+          <canvas ref={canvasRef} className="block w-full" />
+        </DrawingStage>
       </div>
     </div>
   );
