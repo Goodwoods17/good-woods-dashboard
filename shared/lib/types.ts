@@ -138,13 +138,22 @@ export type AnnotationType = "ink" | "highlight" | "shape" | "text";
 /** Ink/highlight payload: normalized input points [x, y, pressure]. */
 export type StrokeData = { points: [number, number, number][] };
 
+export type ShapeKind = "arrow" | "rect" | "line";
+/** Shape payload: endpoints (arrow/line) or opposite corners (rect), normalized 0–1. */
+export type ShapeData = { shape: ShapeKind; x1: number; y1: number; x2: number; y2: number };
+/** Text note: top-left x/y (0–1) + the words + fontSize normalized to page height. */
+export type TextData = { x: number; y: number; text: string; fontSize: number };
+
+/** Discriminated by `Annotation.type`: ink/highlight→StrokeData, shape→ShapeData, text→TextData. */
+export type AnnotationData = StrokeData | ShapeData | TextData;
+
 export type Annotation = {
   id: string;
   documentId: string;
   projectId: string;
   page: number;
   type: AnnotationType;
-  data: StrokeData; // Slice 3: ink/highlight. Slice 4 widens the union.
+  data: AnnotationData; // discriminated by `type`
   color: string;
   strokeWidth?: number | null;
   createdBy?: string | null;

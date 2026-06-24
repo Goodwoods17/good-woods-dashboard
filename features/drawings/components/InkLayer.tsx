@@ -72,9 +72,9 @@ export function InkLayer({
       className={drawing ? "absolute inset-0 h-full w-full touch-none" : "absolute inset-0 h-full w-full"}
       style={{ pointerEvents: activeTool === "pan" || activeTool === "pin" ? "none" : "auto" }}
       onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
-      {annotations.map((a) => (
+      {annotations.filter((a) => a.type === "ink" || a.type === "highlight").map((a) => (
         <path key={a.id}
-          d={strokePathData(a.data.points, size.w, size.h, a.type, a.strokeWidth ?? (a.type === "highlight" ? HIGHLIGHTER_SIZE : PEN_SIZE))}
+          d={strokePathData((a.data as StrokeData).points, size.w, size.h, a.type, a.strokeWidth ?? (a.type === "highlight" ? HIGHLIGHTER_SIZE : PEN_SIZE))}
           fill={a.color} fillOpacity={a.type === "highlight" ? 0.35 : 1}
           style={{ pointerEvents: activeTool === "eraser" ? "auto" : "none", cursor: activeTool === "eraser" ? "pointer" : "default" }}
           onPointerDown={activeTool === "eraser" ? (e) => { e.stopPropagation(); onErase(a); } : undefined} />
