@@ -15,6 +15,8 @@ import {
   type Annotation,
   type AnnotationType,
   type StrokeData,
+  type ShapeData,
+  type ShapeKind,
 } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";
 import { DrawingUpload } from "./DrawingUpload";
@@ -23,7 +25,8 @@ import { PiecePin } from "./PiecePin";
 import { PieceCreateForm } from "./PieceCreateForm";
 import { PieceChecklist } from "./PieceChecklist";
 import { MarkupToolbar, type Tool } from "./MarkupToolbar";
-import { InkLayer } from "./InkLayer";
+import { MarkupLayer } from "./MarkupLayer";
+import { TextNoteEditor } from "./TextNoteEditor";
 import { removeDrawing } from "../lib/storage";
 import { usePieces, useProjectPieces } from "../lib/piecesStore";
 import { useAnnotations, useDocAnnotations } from "../lib/annotationsStore";
@@ -56,6 +59,9 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const [showChecklist, setShowChecklist] = useState(true);
   const [penColor, setPenColor] = useState<string>(PEN_COLORS[0]);
   const [highlighterColor, setHighlighterColor] = useState<string>(HIGHLIGHTER_COLORS[0]);
+  const [shapeKind, setShapeKind] = useState<ShapeKind>("arrow");
+  const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<{ id?: string; x: number; y: number; value: string } | null>(null);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0] ?? null;
   // Slice 3: pins + ink both filter by document AND current page.
@@ -63,6 +69,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     (p) => p.pinDocumentId === active?.id && p.pinX != null && (p.pinPage ?? 1) === currentPage
   );
   const docAnnotations = useDocAnnotations(active?.id ?? null, currentPage);
+  const selectedAnnotation = docAnnotations.find((a) => a.id === selectedAnnId) ?? null;
 
   const history = useMarkupHistory({
     onAdd: (a) => restoreAnnotation(a),
@@ -70,7 +77,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     onUpdate: (a) => updateAnnotation(a.id, a),
   });
 
-  // ⌘Z / Ctrl+Z undo, ⇧⌘Z redo — markup only, ignored while typing in a field.
+  // ⌘Z / Ctrl+Z undo, ⇧⌘Z redo, Delete/Backspace removes the selected markup —
+  // all ignored while typing in a field.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const t = e.target as HTMLElement | null;
@@ -78,11 +86,16 @@ export function DrawingsView({ jobId }: { jobId: string }) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) history.redo(); else history.undo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && selectedAnnotation) {
+        e.preventDefault();
+        void deleteAnnotation(selectedAnnotation.id);
+        history.recordDelete(selectedAnnotation);
+        setSelectedAnnId(null);
       }
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [history]);
+  }, [history, selectedAnnotation, deleteAnnotation]);
 
   function selectDoc(id: string) {
     setArmedId(null);
@@ -93,6 +106,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   function selectTool(t: Tool) {
     setActiveTool(t);
     setPendingPin(null);
+    if (t !== "select") setSelectedAnnId(null);
+    setEditingText(null);
   }
 
   async function onTrashDoc(doc: ProjectDocument) {
@@ -147,6 +162,69 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   async function handleErase(a: Annotation) {
     await deleteAnnotation(a.id);
     history.recordDelete(a);
+    if (selectedAnnId === a.id) setSelectedAnnId(null);
+  }
+
+  async function handleCommitShape(s: { color: string; size: number; data: ShapeData }) {
+    if (!active) return;
+    const now = new Date().toISOString();
+    const a: Annotation = {
+      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
+      type: "shape", data: s.data, color: s.color, strokeWidth: s.size,
+      createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+    };
+    await createAnnotation(a);
+    history.recordAdd(a);
+  }
+
+  function handleRequestText(x: number, y: number) {
+    setEditingText({ x, y, value: "" });
+  }
+
+  function handleEditText(a: Annotation) {
+    if (a.type !== "text") return;
+    const d = a.data as { x: number; y: number; text: string; fontSize: number };
+    setEditingText({ id: a.id, x: d.x, y: d.y, value: d.text });
+  }
+
+  async function handleCommitText(value: string) {
+    const editing = editingText;
+    setEditingText(null);
+    if (!editing || !active) return;
+    const text = value.trim();
+    if (editing.id) {
+      const before = docAnnotations.find((a) => a.id === editing.id);
+      if (!before) return;
+      if (!text) { await deleteAnnotation(before.id); history.recordDelete(before); setSelectedAnnId(null); return; }
+      const after: Annotation = {
+        ...before, data: { ...(before.data as { x: number; y: number; fontSize: number }), text },
+        updatedAt: new Date().toISOString(),
+      };
+      await updateAnnotation(after.id, after);
+      history.recordUpdate(before, after);
+      return;
+    }
+    if (!text) return;
+    const now = new Date().toISOString();
+    const a: Annotation = {
+      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
+      type: "text", data: { x: editing.x, y: editing.y, text, fontSize: 0.022 },
+      color: penColor, strokeWidth: null, createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+    };
+    await createAnnotation(a);
+    history.recordAdd(a);
+  }
+
+  async function handleUpdateAnnotation(before: Annotation, after: Annotation) {
+    await updateAnnotation(after.id, after);
+    history.recordUpdate(before, after);
+  }
+
+  async function handleDeleteSelection() {
+    if (!selectedAnnotation) return;
+    await deleteAnnotation(selectedAnnotation.id);
+    history.recordDelete(selectedAnnotation);
+    setSelectedAnnId(null);
   }
 
   async function handleAdvance(p: JobPiece) {
@@ -193,6 +271,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
               activeTool={activeTool} onTool={selectTool} canPin={canPin}
               penColor={penColor} onPenColor={setPenColor}
               highlighterColor={highlighterColor} onHighlighterColor={setHighlighterColor}
+              shapeKind={shapeKind} onShapeKind={setShapeKind}
+              selectionActive={selectedAnnotation != null} onDeleteSelection={handleDeleteSelection}
               canUndo={history.canUndo} canRedo={history.canRedo}
               onUndo={history.undo} onRedo={history.redo}
             />
@@ -250,16 +330,19 @@ export function DrawingsView({ jobId }: { jobId: string }) {
         <main className="relative min-w-0 flex-1 overflow-auto p-4">
           {active ? (
             <DrawingDoc doc={active} disablePan={activeTool !== "pan"} onPlace={handlePlace}
-              onPageChange={setCurrentPage}
+              onPageChange={(p) => { setCurrentPage(p); setSelectedAnnId(null); setEditingText(null); }}
               overlay={
                 <>
                   {docPins.map((p) => (
                     <PiecePin key={p.id} piece={p} selected={selectedPieceId === p.id}
                       onSelect={() => setSelectedPieceId(p.id)} />
                   ))}
-                  <InkLayer annotations={docAnnotations} activeTool={activeTool}
-                    penColor={penColor} highlighterColor={highlighterColor}
-                    onCommit={handleCommitStroke} onErase={handleErase} />
+                  <MarkupLayer annotations={docAnnotations} activeTool={activeTool}
+                    penColor={penColor} highlighterColor={highlighterColor} shapeKind={shapeKind}
+                    selectedId={selectedAnnId} onSelect={setSelectedAnnId}
+                    onCommit={handleCommitStroke} onCommitShape={handleCommitShape}
+                    onErase={handleErase} onUpdate={handleUpdateAnnotation}
+                    onRequestText={handleRequestText} onEditText={handleEditText} />
                 </>
               } />
           ) : (
@@ -272,6 +355,14 @@ export function DrawingsView({ jobId }: { jobId: string }) {
                 <PieceCreateForm onCancel={() => setPendingPin(null)} onCreate={handleCreate} />
               </div>
             </div>
+          )}
+
+          {editingText && (
+            <TextNoteEditor
+              initialValue={editingText.value}
+              onCancel={() => setEditingText(null)}
+              onSave={handleCommitText}
+            />
           )}
         </main>
 

@@ -62,14 +62,14 @@ export function hitTestShape(
   return pointSegDist(px, py, ax, ay, bx, by) <= tol;
 }
 
-/** Pixel bbox of a text note (baseline at y; box extends upward by the font size). */
+/** Pixel bbox of a text note. y is the TOP (hanging baseline); box extends downward. */
 export function textBounds(
   t: TextData, width: number, height: number,
   measure?: (text: string, fontPx: number) => number
 ): Box {
   const fontPx = t.fontSize * height;
   const w = measure ? measure(t.text, fontPx) : Math.max(1, t.text.length) * fontPx * 0.6;
-  return { x: t.x * width, y: t.y * height - fontPx, w, h: fontPx * 1.2 };
+  return { x: t.x * width, y: t.y * height, w, h: fontPx };
 }
 
 /** Point-in-box test with optional tolerance. */
