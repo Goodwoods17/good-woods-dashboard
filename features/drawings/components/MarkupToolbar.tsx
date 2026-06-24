@@ -71,17 +71,20 @@ export function MarkupToolbar({
       </div>
 
       {swatches && (
-        <div className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-2 py-1">
+        <div className="inline-flex items-center gap-0.5 rounded-full border border-border bg-surface p-0.5">
           {swatches.colors.map((c) => {
             const selected = swatches.value === c;
             return (
               <button key={c} type="button" onClick={() => swatches.set(c)}
                 aria-label={`Color ${c}`} aria-pressed={selected} title={c}
-                className={cn(
-                  "h-8 w-8 rounded-full duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
-                  selected ? "ring-2 ring-offset-2 ring-offset-surface ring-ink-pill" : "ring-1 ring-border"
-                )}
-                style={{ background: c }} />
+                className="inline-flex h-11 w-11 items-center justify-center rounded-full duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft">
+                <span
+                  className={cn(
+                    "h-6 w-6 rounded-full duration-fast",
+                    selected ? "ring-2 ring-offset-2 ring-offset-surface ring-ink-pill" : "ring-1 ring-border"
+                  )}
+                  style={{ background: c }} />
+              </button>
             );
           })}
         </div>
