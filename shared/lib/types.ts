@@ -133,6 +133,25 @@ export type JobPiece = {
   createdAt: string;
 };
 
+export type AnnotationType = "ink" | "highlight" | "shape" | "text";
+
+/** Ink/highlight payload: normalized input points [x, y, pressure]. */
+export type StrokeData = { points: [number, number, number][] };
+
+export type Annotation = {
+  id: string;
+  documentId: string;
+  projectId: string;
+  page: number;
+  type: AnnotationType;
+  data: StrokeData; // Slice 3: ink/highlight. Slice 4 widens the union.
+  color: string;
+  strokeWidth?: number | null;
+  createdBy?: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 /**
  * Where the client came from. Used to attribute revenue to anchor
  * relationships and channels.

@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, MapPin, ListChecks } from "lucide-react";
+import { ArrowLeft, Trash2, ListChecks } from "lucide-react";
 import { useJob } from "@features/jobs/lib/jobsStore";
 import { useProjectDocuments, useDocuments } from "@features/documents/lib/documentsStore";
 import { useAuth } from "@shared/lib/authStore";
@@ -12,6 +12,9 @@ import {
   type JobPiece,
   type PieceKind,
   type CutMethod,
+  type Annotation,
+  type AnnotationType,
+  type StrokeData,
 } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";
 import { DrawingUpload } from "./DrawingUpload";
@@ -19,8 +22,13 @@ import { DrawingDoc } from "./DrawingDoc";
 import { PiecePin } from "./PiecePin";
 import { PieceCreateForm } from "./PieceCreateForm";
 import { PieceChecklist } from "./PieceChecklist";
+import { MarkupToolbar, type Tool } from "./MarkupToolbar";
+import { InkLayer } from "./InkLayer";
 import { removeDrawing } from "../lib/storage";
 import { usePieces, useProjectPieces } from "../lib/piecesStore";
+import { useAnnotations, useDocAnnotations } from "../lib/annotationsStore";
+import { useMarkupHistory } from "../lib/useMarkupHistory";
+import { PEN_COLORS, HIGHLIGHTER_COLORS } from "../lib/strokes";
 import { nextStatus } from "../lib/pipelines";
 
 function newId(): string {
@@ -36,22 +44,54 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const { user } = useAuth();
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
+  const { createAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [armedId, setArmedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [addingPin, setAddingPin] = useState(false);
+  const [activeTool, setActiveTool] = useState<Tool>("pan");
+  const [currentPage, setCurrentPage] = useState(1);
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
+  const [penColor, setPenColor] = useState<string>(PEN_COLORS[0]);
+  const [highlighterColor, setHighlighterColor] = useState<string>(HIGHLIGHTER_COLORS[0]);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0] ?? null;
-  // Slice 1: pins filter by document only (not page) — see plan's page note.
-  const docPins = pieces.filter((p) => p.pinDocumentId === active?.id && p.pinX != null);
+  // Slice 3: pins + ink both filter by document AND current page.
+  const docPins = pieces.filter(
+    (p) => p.pinDocumentId === active?.id && p.pinX != null && (p.pinPage ?? 1) === currentPage
+  );
+  const docAnnotations = useDocAnnotations(active?.id ?? null, currentPage);
+
+  const history = useMarkupHistory({
+    onAdd: (a) => restoreAnnotation(a),
+    onRemove: (id) => deleteAnnotation(id),
+  });
+
+  // ⌘Z / Ctrl+Z undo, ⇧⌘Z redo — markup only, ignored while typing in a field.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) history.redo(); else history.undo();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [history]);
 
   function selectDoc(id: string) {
     setArmedId(null);
     setActiveId(id);
+    setSelectedPieceId(null);
+  }
+
+  function selectTool(t: Tool) {
+    setActiveTool(t);
+    setPendingPin(null);
   }
 
   async function onTrashDoc(doc: ProjectDocument) {
@@ -69,8 +109,9 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   }
 
   function handlePlace(x: number, y: number) {
+    if (activeTool !== "pin") return;
     setPendingPin({ x, y });
-    setAddingPin(false);
+    setActiveTool("pan");
   }
 
   async function handleCreate(d: { kind: PieceKind; label: string; code?: string; subtype?: string }) {
@@ -80,12 +121,31 @@ export function DrawingsView({ jobId }: { jobId: string }) {
       id, projectId: jobId, kind: d.kind, label: d.label, code: d.code ?? null,
       subtype: d.subtype ?? null, room: null, cutMethod: null, status: "not_started",
       statusUpdatedAt: null, statusUpdatedBy: null, source: "manual", sourceRef: null,
-      pinDocumentId: active.id, pinPage: 1, pinX: pendingPin.x, pinY: pendingPin.y,
+      pinDocumentId: active.id, pinPage: currentPage, pinX: pendingPin.x, pinY: pendingPin.y,
       sortOrder: pieces.length, dimensions: null, material: null, edgeband: null,
       parentRef: null, createdBy: user?.email ?? null, createdAt: new Date().toISOString(),
     });
     setPendingPin(null);
     setSelectedPieceId(id);
+  }
+
+  async function handleCommitStroke(s: {
+    type: AnnotationType; color: string; size: number; data: StrokeData;
+  }) {
+    if (!active) return;
+    const now = new Date().toISOString();
+    const a: Annotation = {
+      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
+      type: s.type, data: s.data, color: s.color, strokeWidth: s.size,
+      createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+    };
+    await createAnnotation(a);
+    history.recordAdd(a);
+  }
+
+  async function handleErase(a: Annotation) {
+    await deleteAnnotation(a.id);
+    history.recordDelete(a);
   }
 
   async function handleAdvance(p: JobPiece) {
@@ -112,6 +172,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   }
 
   const canPin = active != null && active.source !== "link";
+  const canMarkup = active != null && active.source !== "link";
 
   return (
     <div className="flex h-screen flex-col">
@@ -126,15 +187,14 @@ export function DrawingsView({ jobId }: { jobId: string }) {
           </h1>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {canPin && (
-            <button type="button" onClick={() => { setAddingPin((v) => !v); setPendingPin(null); }}
-              aria-pressed={addingPin}
-              className={cn(
-                "inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-sm font-medium duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
-                addingPin ? "bg-ink-pill text-white" : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
-              )}>
-              <MapPin className="h-4 w-4" /> {addingPin ? "Tap drawing to place" : "Add pin"}
-            </button>
+          {canMarkup && (
+            <MarkupToolbar
+              activeTool={activeTool} onTool={selectTool} canPin={canPin}
+              penColor={penColor} onPenColor={setPenColor}
+              highlighterColor={highlighterColor} onHighlighterColor={setHighlighterColor}
+              canUndo={history.canUndo} canRedo={history.canRedo}
+              onUndo={history.undo} onRedo={history.redo}
+            />
           )}
           <button type="button" onClick={() => setShowChecklist((v) => !v)}
             aria-pressed={showChecklist}
@@ -188,11 +248,19 @@ export function DrawingsView({ jobId }: { jobId: string }) {
 
         <main className="relative min-w-0 flex-1 overflow-auto p-4">
           {active ? (
-            <DrawingDoc doc={active} addingPin={addingPin} onPlace={handlePlace}
-              overlay={docPins.map((p) => (
-                <PiecePin key={p.id} piece={p} selected={selectedPieceId === p.id}
-                  onSelect={() => setSelectedPieceId(p.id)} />
-              ))} />
+            <DrawingDoc doc={active} disablePan={activeTool !== "pan"} onPlace={handlePlace}
+              onPageChange={setCurrentPage}
+              overlay={
+                <>
+                  {docPins.map((p) => (
+                    <PiecePin key={p.id} piece={p} selected={selectedPieceId === p.id}
+                      onSelect={() => setSelectedPieceId(p.id)} />
+                  ))}
+                  <InkLayer annotations={docAnnotations} activeTool={activeTool}
+                    penColor={penColor} highlighterColor={highlighterColor}
+                    onCommit={handleCommitStroke} onErase={handleErase} />
+                </>
+              } />
           ) : (
             <p className="text-sm text-text-tertiary">Select or upload a drawing.</p>
           )}
