@@ -9,15 +9,22 @@ import { loadPdf, renderPdfPage, clampScale } from "../lib/pdf";
 import { DrawingStage } from "./DrawingStage";
 
 export function DrawingDoc({
-  doc, addingPin = false, onPlace = () => {}, overlay,
+  doc, addingPin = false, onPlace = () => {}, onPageChange, overlay,
 }: {
   doc: ProjectDocument;
   addingPin?: boolean;
   onPlace?: (x: number, y: number) => void;
+  onPageChange?: (page: number) => void;
   overlay?: React.ReactNode;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const isPdfDoc = doc.source !== "link" && isPdf(doc.mime);
+
+  // Non-paged docs (images, links) always report page 1; PdfCanvas reports its own.
+  useEffect(() => {
+    if (!isPdfDoc) onPageChange?.(1);
+  }, [isPdfDoc, doc.id, onPageChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,7 +58,7 @@ export function DrawingDoc({
   }
 
   if (isPdf(doc.mime)) {
-    return <PdfCanvas url={url} addingPin={addingPin} onPlace={onPlace} overlay={overlay} />;
+    return <PdfCanvas url={url} addingPin={addingPin} onPlace={onPlace} onPageChange={onPageChange} overlay={overlay} />;
   }
   return (
     <DrawingStage addingPin={addingPin} onPlace={onPlace} overlay={overlay}>
@@ -70,11 +77,12 @@ function DrawingSkeleton() {
 }
 
 function PdfCanvas({
-  url, addingPin, onPlace, overlay,
+  url, addingPin, onPlace, onPageChange, overlay,
 }: {
   url: string;
   addingPin: boolean;
   onPlace: (x: number, y: number) => void;
+  onPageChange?: (page: number) => void;
   overlay?: React.ReactNode;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -82,6 +90,8 @@ function PdfCanvas({
   const [pages, setPages] = useState(1);
   const [scale, setScale] = useState(1.2);
   const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => { onPageChange?.(page); }, [page, onPageChange]);
 
   useEffect(() => {
     let cancelled = false;
