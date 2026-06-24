@@ -89,21 +89,25 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
   `pipelines.ts` (`not_started → stages → done`), add-pin mode + `react-zoom-pan-pinch`
   gestures, grouped checklist (advance/stepper/two-step delete), forced cut-method prompt.
 - **Slice 2** realtime — `postgres_changes` subscription; piece changes sync < ~1s, no refresh.
+- **Slice 3** ink markup — `document_annotations` table + dual-mode `annotationsStore`
+  (load-on-open), `perfect-freehand` strokes in an SVG overlay, `activeTool` toolbar
+  (pan/pin/pen/highlighter/eraser) + color swatches, tap-to-erase, session-scoped
+  undo/redo (⌘Z/⇧⌘Z), lifted PDF page state so ink **and** pins filter per `(document, page)`.
+  PR (review). Authed browser smoke green: pen/highlighter/erase/undo/redo/per-page/reload.
 
 ### Remaining 🗂️ (build order)
 ```
-🗂️ Slice 3   ink markup (perfect-freehand; object-erase; load-on-open) ... not built
 🗂️ Slice 4   shapes / arrows / typed text notes ......................... not built
 🗂️ Slice 5   sketchpad (blank-canvas, source='sketch') ................. not built
 🗂️ later     Mozaik CSV seeding + pin-an-existing-piece ................. not built
 ```
-Pre-decided for Slice 3: eraser = **object-erase**; ink = **load-on-open** (not realtime).
 
 ---
 
 ## 3. Open PRs
 
-**None.** The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
+**Drawings Slice 3 (ink markup)** — open for review on `feat/drawings-slice-3`.
+The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
 CI/security pass (#18), and the **Drawings Slices 0–2 (#20/#21/#22)** are all merged to `main`;
 their branches are pruned (drawings branches kept locally for now).
 
