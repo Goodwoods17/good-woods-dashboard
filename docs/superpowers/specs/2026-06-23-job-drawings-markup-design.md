@@ -41,7 +41,7 @@ blank canvas, and as live status markers ("pins") on a drawing.
 ### Goals
 - In-app PDF viewer for job drawings (uploaded into Supabase Storage).
 - Stylus markup: **pen+eraser, highlighter, typed text notes, shapes & arrows**.
-- First-class trackable **build items** (cabinets + parts) with per-kind status lifecycles,
+- First-class trackable **pieces** (cabinets + parts) with per-kind status lifecycles,
   shown as **pins on the drawing AND a synced checklist** ("Both").
 - **True realtime** status across all screens (Supabase Realtime).
 - Per-project **sketchpad** (blank-canvas sketches, multiple, named, referenceable).
@@ -71,14 +71,14 @@ tilt), which are cleanest on Chromium. Lean bundle matters (phones + shop hardwa
 
 | # | Decision |
 |---|---|
-| D1 | New `features/drawings` folder; opens from a new **"Drawings" tab** on `/jobs/[id]`. |
+| D1 | New `features/drawings` folder. Drawings live at the **project/job level** (uploaded during the design phase) and are referenced from many surfaces. The viewer is a **dedicated full-screen route `/jobs/[id]/drawings`**, opened by a shared **`<DrawingsButton/>`** launcher placed on the **job page, shop-floor cards, and installer view** (drawings are referenced a lot during build + install). Deep-linkable (bookmark a shop tablet to a job's drawings), survives refresh, hardware back works. Upload affordance lives inside the viewer route. |
 | D2 | **Storage:** uploaded PDFs → Supabase Storage (own the bytes). Drive/URL links remain a **view-only** option. Reuse the Reface upload pattern (`features/reface/lib/storage.ts`). |
 | D3 | **Build approach A — custom lean layer**: `pdfjs-dist` to render, Pointer Events for input, `perfect-freehand` (~5kb) for ink quality, annotations stored as **vector JSON** in Supabase. Built phased (unique value first). |
-| D4 | Trackable thing is a generalized **build item** with a `kind` and a **per-kind stage pipeline** defined in code. |
+| D4 | Trackable thing is a generalized **piece** with a `kind` and a **per-kind stage pipeline** defined in code. |
 | D5 | **Cabinet pipeline (7):** cut → assembled → finished → packed → delivered → installed → final_adjustments. **Part pipeline (8):** cut → edgebanded → sanded → sprayed → packed → delivered → installed → final_adjustments. Shared tail (packed→…→final_adjustments). |
 | D6 | `cut` carries a **cut method**: `inhouse` (table saw) or `cnc_sub` (Toolpath subbed) — ties to ADR 0012 make-vs-buy. |
-| D7 | **Both** model: build items appear as **pins on the drawing** *and* in a **synced checklist**; tapping either updates the other. |
-| D8 | **True realtime, all screens** via Supabase Realtime on the build-items table. |
+| D7 | **Both** model: pieces appear as **pins on the drawing** *and* in a **synced checklist**; tapping either updates the other. |
+| D8 | **True realtime, all screens** via Supabase Realtime on the pieces table. |
 | D9 | Markup toolset: **pen+eraser, highlighter, typed text notes, shapes & arrows**. |
 | D10 | **Mozaik `R{room}C{cabinet}` code is the join key** (e.g. `R1C7` = Room 1/Kitchen, Cabinet 7 "3-drawer"), printed on the drawing. Items can be seeded from Mozaik **or** hand-typed off a supplied drawing — same machinery. |
 | D11 | Mozaik **data** ingests as **CSV/XLSX** (not print-to-PDF/XPS/DOCX). Drawings to mark up stay **PDF**. |
@@ -95,17 +95,17 @@ features/drawings/
     DrawingsTab.tsx         Job tab: lists drawings/links/sketches + item progress summary
     DrawingViewer.tsx       Full-screen: PDF page + annotation overlay + toolbar + checklist
     MarkupToolbar.tsx       Pen / highlighter / shapes / text / eraser
-    BuildItemChecklist.tsx  Grouped checklist (Cabinets / Parts), tap to advance status
-    BuildItemPin.tsx        Pin on the drawing carrying a status badge + R#C# code
+    PieceChecklist.tsx  Grouped checklist (Cabinets / Parts), tap to advance status
+    PiecePin.tsx        Pin on the drawing carrying a status badge + R#C# code
     SketchpadCanvas.tsx     Blank-canvas variant of the viewer
     DocumentUpload.tsx      Upload PDF (storage) or paste link
   lib/
     pdf.ts                  pdfjs-dist load/render helpers
     annotations.ts          Annotation types + Supabase CRUD store
-    buildItems.ts           Item store, stage pipelines, realtime subscription
+    pieces.ts           Item store, stage pipelines, realtime subscription
     pipelines.ts            STAGE_PIPELINES registry (single source of truth)
     storage.ts              job-documents bucket helpers (mirrors reface/lib/storage.ts)
-    mozaikSeed.ts           (later slice) CSV → build items mapping
+    mozaikSeed.ts           (later slice) CSV → pieces mapping
 ```
 
 Route page stays thin (`src/app/jobs/[id]` already renders `JobDetail`; we add a tab).
@@ -134,7 +134,7 @@ One row per markup object.
 - `created_by`, `created_at`, `updated_at`
 - **All geometry normalized 0–1** relative to page size → scales across zoom & device.
 
-### 7.3 `job_build_items` (new) — the check-off spine
+### 7.3 `job_pieces` (new) — the check-off spine
 - `id`, `project_id` (fk)
 - `kind` — `cabinet` | `end_panel` | `scribe` | `toe_kick` | `filler` | … (extensible)
 - `subtype` — text, nullable (cabinets: `base`/`wall`/`tall`/`island`)
@@ -153,7 +153,8 @@ One row per markup object.
   `parent_ref` (text — parent cabinet `code` for a part)
 - **Realtime enabled** on this table.
 
-> **Naming note:** `job_build_items` is the working name; open to `build_items` if preferred.
+> **Naming:** `job_pieces` / "Piece" is the canonical term (settled in the grill; recorded in
+> `docs/domain.md`). "Build item" was an earlier working name — do not use it.
 
 ### 7.4 Stage pipelines (`lib/pipelines.ts` — code, not DB)
 ```ts
@@ -179,7 +180,7 @@ Colors/labels/order derive from this single source. Adding a kind = one entry.
   (e.g. "Cabinets 6/13 installed · Parts 2/7"). Upload button + "New sketch" + "Add link".
 - **Drawing viewer** (`DrawingViewer`): full-screen. Center = the PDF page (pdf.js) with the
   annotation overlay + pins. Top/side = **markup toolbar**. Right (collapsible) = the
-  **build-item checklist** grouped Cabinets / Parts, each row showing `code` + label +
+  **piece checklist** grouped Cabinets / Parts, each row showing `code` + label +
   colored stage badge; tap a row or its pin to advance status. Page nav + zoom/pan/pinch.
 - **Checklist** readable with 7–8 stages: show a small **progress ring / step badge** (not
   color alone), since 7–8 colors are hard to distinguish as dots. Visual polish via the
@@ -191,8 +192,8 @@ Colors/labels/order derive from this single source. Adding a kind = one entry.
 
 ## 9. Realtime
 
-Supabase Realtime channel on `job_build_items` filtered by `project_id`;
-`postgres_changes` → patch the `buildItems` store. Foreman taps "Installed" at site → shop
+Supabase Realtime channel on `job_pieces` filtered by `project_id`;
+`postgres_changes` → patch the `pieces` store. Foreman taps "Installed" at site → shop
 wall tablet + office update within ~1s, no refresh. (Annotations realtime is a possible
 later slice; v1 ink syncs on reopen.)
 
@@ -218,14 +219,21 @@ plan time. Bundle impact is modest and lazy-loadable on the viewer route.
 ## 11. Build slices (tracer-bullet; riskiest/most-valuable first; merge at each boundary)
 
 ### Slice 0 — Storage + Viewer spine
-- `job-documents` Supabase Storage bucket + RLS; extend `documents` (source/storage_path/…).
-- `DocumentUpload` (upload PDF or paste link); in-app pdf.js viewer (page nav, zoom, pinch).
+- `job-documents` Supabase Storage bucket + RLS (mirror `reface-photos`); extend `documents`
+  (source/storage_path/mime/page_count; make `drive_url` nullable).
+- Dedicated full-screen route `/jobs/[id]/drawings` + shared `<DrawingsButton/>` launcher on
+  the job page, shop-floor cards, and installer view.
+- Upload **PDF or image (JPG/PNG/WebP), ~50MB cap** (client-side guard), into the bucket;
+  also paste a link (view-only). Viewer picks the renderer by `mime`: **pdf.js** for PDFs,
+  **`<img>`** for images. Page nav + zoom/pan/pinch for PDFs.
 - Link docs render view-only (existing Drive embed path preserved).
-- **DoD:** upload a PDF to a job, see it render in-app, page through it, zoom; a pasted link
-  still shows view-only; `tsc`/`lint`/Vitest/build green; browser smoke.
+- **DoD:** upload a PDF *and* an image to a job, open `/jobs/[id]/drawings` from the
+  DrawingsButton on the job page (and it appears on shop floor + installer), see each render
+  in-app, page/zoom the PDF; a pasted link still shows view-only; over-cap upload is blocked
+  with a clear message; `tsc`/`lint`/Vitest/build green; browser smoke.
 
-### Slice 1 — Build items + pins + status (save-first)
-- `job_build_items` table + `buildItems` store + `pipelines.ts`.
+### Slice 1 — Pieces + pins + status (save-first)
+- `job_pieces` table + `pieces` store + `pipelines.ts`.
 - Tap a drawing to drop a pin → create an item (enter `code`/label/kind); checklist panel
   grouped Cabinets/Parts; advance status; cut-method on `cut`.
 - **DoD:** create cabinet + part items by tapping a drawing, advance each through its full
@@ -233,7 +241,7 @@ plan time. Bundle impact is modest and lazy-loadable on the viewer route.
   smoke.
 
 ### Slice 2 — Realtime
-- Supabase Realtime on `job_build_items`; two browsers reflect status changes < ~1s.
+- Supabase Realtime on `job_pieces`; two browsers reflect status changes < ~1s.
 - **DoD:** status change in window A appears in window B without refresh; smoke on two
   sessions.
 
@@ -252,15 +260,22 @@ plan time. Bundle impact is modest and lazy-loadable on the viewer route.
 - **DoD:** create/name a sketch, draw, reopen later from the job; smoke.
 
 ### Later — Mozaik seeding (deferred; needs the comprehensive CSV)
-- `mozaikSeed.ts`: parse the Cutlist/Job-Costing **CSV** → seed `job_build_items`:
-  - **Cabinets** → one item per named row; `code` = `R#C#`; `label` = type name;
+- `mozaikSeed.ts`: parse the Cutlist/Job-Costing **CSV** → seed `job_pieces`:
+  - **Cabinets** → one piece per named row; `code` = `R#C#`; `label` = type name;
     `source_ref` = raw string.
-  - **Parts** (Panelized End, Fin Panel, Filler, Finished End/Toe Skin) → expand counts into
-    instances; `parent_ref` = parent cabinet `code`; carry dims/material/edgeband.
-  - **Granularity:** seed checkable items for **cabinets + standalone finish parts only** —
-    NOT every cutlist component (a small job's cutlist is ~35 parts: doors/backs/shelves are
-    reference data, not check-off rows).
+  - **Finish pieces** (Panelized End, Fin Panel, Filler, Finished End/Toe Skin) → expand
+    counts into instances; `parent_ref` = parent cabinet `code`; carry dims/material/edgeband.
+  - **Granularity:** seed checkable pieces for **cabinets + standalone finish pieces only** —
+    NOT every cutlist **component** (a small job's cutlist is ~35 components: doors/backs/
+    shelves are reference data, not check-off rows).
   - **Reconcile** on re-import by `source_ref` (no duplicates).
+
+### Later — Archive to Google Drive (deferred; ADR 0016)
+- On job completion/archive: move uploaded files to a Drive folder, flip those `documents`
+  rows to `source = 'link'`, free the Supabase objects. Pins/markup stay in Postgres;
+  optionally **flatten markup into the archived PDF** so the Drive copy is the final record.
+- Not urgent (Pro's 100 GB covers years of active jobs); keeps the active bucket tidy + puts
+  the permanent record in Andrew's Drive ecosystem.
 
 ---
 
@@ -277,10 +292,14 @@ plan time. Bundle impact is modest and lazy-loadable on the viewer route.
 
 - **Mozaik export format**: Andrew to find the Cutlist/Pricing **CSV/Excel** export (not the
   Windows print dialog's Print-to-PDF / XPS). Resolved before the Mozaik slice, not before.
-- **ADR?** Consider an ADR for "build items as first-class with per-kind pipelines + R#C#
-  join key" once Slice 1 lands (it's a durable model decision). Optional.
+- **ADR 0016** (written) records the storage lifecycle: active drawings in Supabase Storage,
+  archive to Drive on completion, links view-only.
+- **ADR?** Consider a *second* ADR for "pieces as first-class with per-kind pipelines + R#C#
+  join key" once Slice 1 lands (a durable model decision). Optional.
 - **Annotation realtime** (multi-user live ink) — possible post-v1 slice.
 - Final **checklist visual** (rings vs badges vs color) settled in the `impeccable` pass.
+- Glossary terms recorded in `docs/domain.md` (Piece, Cabinet, Finish piece, Component,
+  R#C# code, Pin, Markup, Document, Drawing, Sketch).
 
 ---
 
@@ -289,5 +308,7 @@ plan time. Bundle impact is modest and lazy-loadable on the viewer route.
 - Reuses Reface storage pattern (`features/reface/lib/storage.ts`) and the Supabase
   store/RLS conventions used across features.
 - Complements (doesn't replace) `CabinetSummary` counts in the estimator/job-costing —
-  build items are *instances for tracking*, not the costing budget.
+  pieces are *instances for tracking*, not the costing budget.
 - Ties to ADR 0012 (Mozaik import + make-vs-buy cut) via `cut_method` and the seeding seam.
+- Storage lifecycle governed by **ADR 0016** (active in Supabase, archive to Drive).
+- Terminology governed by `docs/domain.md` → *Drawings, markup & piece tracking*.
