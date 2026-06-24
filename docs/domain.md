@@ -271,6 +271,51 @@ projected job cost`, where projected cost locks completed phases to their
   Session→Time Activity, Supplier/Subtrade→Vendor, cost-actual→Bill/Expense. Full
   table + rationale in ADR 0010.
 
+## Drawings, markup & piece tracking
+
+- **Piece** — any individually-tracked buildable thing in a job's progress check-off: a
+  cabinet, or a standalone finish piece. The shop says "cabs" or names the piece (toekick,
+  end panel); "piece" is the canonical collective term. Code/table: `job_pieces`.
+- **Cabinet** — a piece that is a box/carcass (base · wall · tall · island). See also
+  *Cabinets and millwork* above.
+- **Finish piece** — a non-cabinet tracked piece: **end panel**, **toe kick**, **scribe**,
+  **filler**. Has its own stage pipeline (edgebanded/sanded/sprayed) distinct from a cabinet's
+  (assembled/finished).
+- **Component** (a.k.a. *cutlist part*) — a sub-part of a cabinet from the Mozaik cutlist
+  (door, drawer front, shelf, back, bottom, end). **Reference data, NOT individually tracked**
+  on the check-off. Distinct from a *Finish piece*. Avoid the bare word "part" for a tracked
+  piece — it collides with these components.
+- **R#C# code** — Mozaik's per-cabinet code, e.g. `R1C7` = Room 1 (Kitchen), Cabinet 7. It is
+  **printed on the shop drawing** and is the **join key** tying a pin on the drawing ↔ its
+  checklist piece ↔ Mozaik data ↔ the piece's child components. Finish pieces inherit their
+  parent cabinet's code.
+- **Pin** — a piece's marker placed on a drawing at a normalized (0–1) point; carries the
+  piece's `R#C#` code and a status badge. The drawing-side half of the pin↔checklist pair.
+- **Markup / annotation** — ink, highlighter, shape/arrow, or typed text note drawn on a
+  document page (or a sketch). Stored as vector data in normalized (0–1) coordinates.
+- **Document** — any per-project file or link reference (uploaded PDF, uploaded image,
+  external link, or in-app sketch). The storage concept; `documents` table.
+- **Drawing** — the user-facing name for documents opened in the Drawings viewer. Colloquial:
+  staff say "drawings" for shop/designer/architectural drawings *and* appliance packages /
+  permits alike, so the **viewer + button are labelled "Drawings"** even though some documents
+  aren't literally drawings.
+- **Sketch** — a document with no uploaded source file: a blank-canvas drawing made in-app on
+  the per-project sketchpad. `source = 'sketch'`.
+
 ## Add new terms here
 
 When introducing a domain term in code, add it here first.
+
+- **User** — a person logged into the app (a Supabase auth account: `id` + `email`).
+  This is the in-house crew / employee identity for _attribution_ — e.g. a
+  document's `uploaded_by` records the uploading **User's email** so we know who
+  drew or uploaded something.
+- **Worker** — the labour entity in `labour_workers` used for shop-floor time
+  tracking (timers, time-cards). **Distinct from User:** a Worker is _not_
+  currently linked to an auth account.
+- **Employee (future)** — the intended unification of **User** and **Worker** so
+  every action (upload, timer, pin, markup) traces to one named person. Needs an
+  `auth_user_id` link on `labour_workers` (or a dedicated `employees` table) plus
+  a backfill. **Not built yet** — flagged during the Drawings Slice 0 grill
+  (2026-06-23); will get its own ADR when built. Until then, attribution is by
+  login email only.

@@ -285,6 +285,7 @@ export default function NewJobPage() {
             notes: null,
             uploadedBy: null,
             createdAt: new Date().toISOString(),
+            source: "link",
           });
         } catch {
           // Don't fail the whole submit on a doc write — the user can

@@ -1,11 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ChevronDown,
   ChevronUp,
   ExternalLink,
   FileText,
+  PencilRuler,
   Plus,
   Trash2,
   Eye,
@@ -55,7 +57,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
   }, [docs, filter]);
 
   const active = activeId ? docs.find((d) => d.id === activeId) ?? null : filtered[0] ?? null;
-  const activePreview = active ? parseDriveUrl(active.driveUrl) : null;
+  const activePreview = active?.driveUrl ? parseDriveUrl(active.driveUrl) : null;
 
   async function handleAdd(payload: {
     kind: DocumentKind;
@@ -77,6 +79,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         notes: null,
         uploadedBy: null,
         createdAt: new Date().toISOString(),
+        source: "link",
       });
       setActiveId(id);
       setAdding(false);
@@ -101,7 +104,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
             Documents
           </h3>
           <p className="text-xs text-text-tertiary mt-0.5">
-            Google Drive links. Click any row to preview without leaving the page.
+            Drive links and uploaded drawings. Click any row to preview without leaving the page.
           </p>
         </div>
         <button
@@ -197,10 +200,17 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                           })}
                         </div>
                       </div>
-                      <FileText
-                        className="h-4 w-4 text-text-tertiary shrink-0 mt-0.5"
-                        strokeWidth={1.5}
-                      />
+                      {d.source === "link" ? (
+                        <FileText
+                          className="h-4 w-4 text-text-tertiary shrink-0 mt-0.5"
+                          strokeWidth={1.5}
+                        />
+                      ) : (
+                        <PencilRuler
+                          className="h-4 w-4 text-text-tertiary shrink-0 mt-0.5"
+                          strokeWidth={1.5}
+                        />
+                      )}
                     </div>
                   </button>
                 </li>
@@ -209,7 +219,23 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
           </ul>
 
           <div className="lg:col-span-3 min-h-[300px] bg-surface-muted/20">
-            {active ? (
+            {active && active.source !== "link" ? (
+              <div className="h-full flex flex-col items-center justify-center px-6 py-10 text-center">
+                <PencilRuler className="h-5 w-5 mb-2 text-text-tertiary" strokeWidth={1.5} />
+                <div className="text-sm font-medium text-text-primary">{active.label}</div>
+                <p className="mt-1 mb-3 max-w-xs text-xs text-text-tertiary">
+                  Uploaded {DOCUMENT_KIND_LABELS[active.kind].toLowerCase()} drawing. View, zoom,
+                  and manage it in the Drawings workspace.
+                </p>
+                <Link
+                  href={`/jobs/${projectId}/drawings`}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill px-3 py-1.5 text-xs font-medium text-white duration-fast hover:bg-accent-active focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
+                >
+                  <PencilRuler className="h-3.5 w-3.5" strokeWidth={1.75} />
+                  Open in Drawings
+                </Link>
+              </div>
+            ) : active ? (
               <div className="h-full flex flex-col">
                 <div className="px-6 py-3 flex items-center justify-between gap-3 border-b border-[rgba(26,25,22,0.05)]">
                   <div className="min-w-0">
@@ -227,7 +253,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <a
-                      href={active.driveUrl}
+                      href={active.driveUrl ?? undefined}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors duration-fast px-2 py-1"
