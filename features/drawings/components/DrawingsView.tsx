@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Trash2, ListChecks } from "lucide-react";
+import { ArrowLeft, Trash2, ListChecks, SquarePen, Grid3x3 } from "lucide-react";
 import { useJob } from "@features/jobs/lib/jobsStore";
 import { useProjectDocuments, useDocuments } from "@features/documents/lib/documentsStore";
 import { useAuth } from "@shared/lib/authStore";
@@ -43,7 +43,7 @@ function newId(): string {
 export function DrawingsView({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   const docs = useProjectDocuments(jobId);
-  const { deleteDocument } = useDocuments();
+  const { createDocument, deleteDocument } = useDocuments();
   const { user } = useAuth();
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
@@ -57,6 +57,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
+  const [showDots, setShowDots] = useState(true);
   const [penColor, setPenColor] = useState<string>(PEN_COLORS[0]);
   const [highlighterColor, setHighlighterColor] = useState<string>(HIGHLIGHTER_COLORS[0]);
   const [shapeKind, setShapeKind] = useState<ShapeKind>("arrow");
@@ -136,6 +137,20 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     if (activeTool !== "pin") return;
     setPendingPin({ x, y });
     setActiveTool("pan");
+  }
+
+  async function handleNewSketch() {
+    const n = docs.filter((d) => d.source === "sketch").length + 1;
+    const id = newId();
+    await createDocument({
+      id, projectId: jobId, kind: "other", label: `Sketch ${n}`,
+      driveUrl: null, version: null, isCurrent: true, notes: null,
+      uploadedBy: user?.email ?? null, createdAt: new Date().toISOString(),
+      source: "sketch", storagePath: null, mime: null, pageCount: 0,
+    });
+    setArmedId(null);
+    setActiveId(id);
+    setActiveTool("pen");
   }
 
   async function handleCreate(d: { kind: PieceKind; label: string; code?: string; subtype?: string }) {
@@ -285,6 +300,16 @@ export function DrawingsView({ jobId }: { jobId: string }) {
               onUndo={history.undo} onRedo={history.redo}
             />
           )}
+          {active?.source === "sketch" && (
+            <button type="button" onClick={() => setShowDots((v) => !v)}
+              aria-pressed={showDots}
+              className={cn(
+                "inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-sm font-medium duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+                showDots ? "bg-surface-muted text-text-primary" : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
+              )}>
+              <Grid3x3 className="h-4 w-4" /> Dots
+            </button>
+          )}
           <button type="button" onClick={() => setShowChecklist((v) => !v)}
             aria-pressed={showChecklist}
             className={cn(
@@ -292,6 +317,10 @@ export function DrawingsView({ jobId }: { jobId: string }) {
               showChecklist ? "bg-surface-muted text-text-primary" : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
             )}>
             <ListChecks className="h-4 w-4" /> Checklist
+          </button>
+          <button type="button" onClick={handleNewSketch}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-medium text-text-secondary duration-fast hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft">
+            <SquarePen className="h-4 w-4" /> New sketch
           </button>
           <DrawingUpload jobId={jobId} />
         </div>
@@ -317,7 +346,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
                       {d.label}
                     </span>
                     <span className="text-micro uppercase tracking-wider text-text-tertiary">
-                      {DOCUMENT_KIND_LABELS[d.kind]}{d.source === "link" ? " · link" : ""}
+                      {d.source === "sketch" ? "Sketch" : DOCUMENT_KIND_LABELS[d.kind]}{d.source === "link" ? " · link" : ""}
                     </span>
                   </button>
                   <button onClick={() => onTrashDoc(d)} disabled={busyId === d.id}
@@ -338,7 +367,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
         <main className="relative min-w-0 flex-1 overflow-auto p-4">
           {active ? (
             <DrawingDoc doc={active} disablePan={activeTool !== "pan"} onPlace={handlePlace}
-              onPageChange={setCurrentPage}
+              onPageChange={setCurrentPage} showDots={showDots}
               overlay={
                 <>
                   {docPins.map((p) => (
