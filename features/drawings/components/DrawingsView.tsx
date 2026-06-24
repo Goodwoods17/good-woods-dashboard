@@ -71,6 +71,14 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const docAnnotations = useDocAnnotations(active?.id ?? null, currentPage);
   const selectedAnnotation = docAnnotations.find((a) => a.id === selectedAnnId) ?? null;
 
+  // Reset any selection / open text editor when the page or document changes.
+  // (Must NOT live in an inline onPageChange — that re-fires PdfCanvas's effect
+  // every render and would instantly clear a just-opened editor.)
+  useEffect(() => {
+    setSelectedAnnId(null);
+    setEditingText(null);
+  }, [currentPage, active?.id]);
+
   const history = useMarkupHistory({
     onAdd: (a) => restoreAnnotation(a),
     onRemove: (id) => deleteAnnotation(id),
@@ -330,7 +338,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
         <main className="relative min-w-0 flex-1 overflow-auto p-4">
           {active ? (
             <DrawingDoc doc={active} disablePan={activeTool !== "pan"} onPlace={handlePlace}
-              onPageChange={(p) => { setCurrentPage(p); setSelectedAnnId(null); setEditingText(null); }}
+              onPageChange={setCurrentPage}
               overlay={
                 <>
                   {docPins.map((p) => (

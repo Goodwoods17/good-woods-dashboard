@@ -135,9 +135,18 @@ export function MarkupLayer({
     const r = ref.current!.getBoundingClientRect();
     return normalizePoint(e.clientX - r.left, e.clientY - r.top, r.width, r.height);
   }
-  function px(e: React.PointerEvent): { x: number; y: number } {
+  function px(e: { clientX: number; clientY: number }): { x: number; y: number } {
     const r = ref.current!.getBoundingClientRect();
     return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+
+  function onDoubleClick(e: React.MouseEvent) {
+    if (activeTool !== "select") return;
+    const p = px(e);
+    const hit = [...annotations].reverse().find(
+      (a) => isText(a) && boxContains(textBounds(a.data, size.w, size.h), p.x, p.y, HIT_TOL)
+    );
+    if (hit) onEditText(hit);
   }
 
   function startHandleDrag(e: React.PointerEvent, a: Annotation, handle: number) {
@@ -161,6 +170,17 @@ export function MarkupLayer({
     }
     if (activeTool === "text") {
       const p = np(e); onRequestText(p.x, p.y);
+      return;
+    }
+    if (activeTool === "eraser") {
+      // ink/highlight self-erase per-element; this catches thin shapes + text.
+      const p = px(e);
+      const hit = [...annotations].reverse().find(
+        (a) =>
+          (isShape(a) && hitTestShape(a.data, p.x, p.y, size.w, size.h, HIT_TOL)) ||
+          (isText(a) && boxContains(textBounds(a.data, size.w, size.h), p.x, p.y, HIT_TOL))
+      );
+      if (hit) onErase(hit);
       return;
     }
     if (activeTool === "select") {
@@ -218,18 +238,21 @@ export function MarkupLayer({
   }
 
   function renderAnnotation(a: Annotation) {
-    const eraseProps = activeTool === "eraser"
+    // Ink/highlight are filled → easy to tap-erase per-element. Shapes/text are
+    // thin/small → erased via the SVG's tolerant hit-test in onDown instead.
+    const inkErase = activeTool === "eraser"
       ? {
           style: { pointerEvents: "auto" as const, cursor: "pointer" },
           onPointerDown: (e: React.PointerEvent) => { e.stopPropagation(); onErase(a); },
         }
       : { style: { pointerEvents: "none" as const } };
+    const passive = { style: { pointerEvents: "none" as const } };
 
     if (isStroke(a)) {
       return (
         <path key={a.id}
           d={strokePathData(a.data.points, size.w, size.h, a.type, a.strokeWidth ?? (a.type === "highlight" ? HIGHLIGHTER_SIZE : PEN_SIZE))}
-          fill={a.color} fillOpacity={a.type === "highlight" ? 0.35 : 1} {...eraseProps} />
+          fill={a.color} fillOpacity={a.type === "highlight" ? 0.35 : 1} {...inkErase} />
       );
     }
     if (isShape(a)) {
@@ -239,12 +262,12 @@ export function MarkupLayer({
         const r = normRect(d);
         return (
           <rect key={a.id} x={r.x * size.w} y={r.y * size.h} width={r.w * size.w} height={r.h * size.h}
-            fill="transparent" stroke={a.color} strokeWidth={sw} {...eraseProps} />
+            fill="transparent" stroke={a.color} strokeWidth={sw} {...passive} />
         );
       }
       const x1 = d.x1 * size.w, y1 = d.y1 * size.h, x2 = d.x2 * size.w, y2 = d.y2 * size.h;
       return (
-        <g key={a.id} {...eraseProps}>
+        <g key={a.id} {...passive}>
           <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={a.color} strokeWidth={sw} strokeLinecap="round" />
           {d.shape === "arrow" && (
             <polygon points={arrowHead(d.x1, d.y1, d.x2, d.y2, ARROW_HEAD, size.w, size.h).map((p) => p.join(",")).join(" ")}
@@ -258,10 +281,7 @@ export function MarkupLayer({
     return (
       <text key={a.id} x={t.x * size.w} y={t.y * size.h} dominantBaseline="hanging"
         fontSize={t.fontSize * size.h} fill={a.color}
-        style={{ paintOrder: "stroke", stroke: TEXT_HALO, strokeWidth: 3, fontWeight: 600,
-          ...(activeTool === "eraser" ? { pointerEvents: "auto", cursor: "pointer" } : { pointerEvents: "none" }) }}
-        onPointerDown={activeTool === "eraser" ? (e) => { e.stopPropagation(); onErase(a); } : undefined}
-        onDoubleClick={activeTool === "select" ? () => onEditText(a) : undefined}>
+        style={{ paintOrder: "stroke", stroke: TEXT_HALO, strokeWidth: 3, fontWeight: 600, pointerEvents: "none" }}>
         {t.text}
       </text>
     );
@@ -277,7 +297,8 @@ export function MarkupLayer({
     <svg ref={ref}
       className={interactive ? "absolute inset-0 h-full w-full touch-none" : "absolute inset-0 h-full w-full"}
       style={{ pointerEvents: interactive ? "auto" : "none", cursor: activeTool === "select" ? "default" : undefined }}
-      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+      onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}
+      onDoubleClick={onDoubleClick}>
       {renderList.map(renderAnnotation)}
 
       {/* live ink */}
