@@ -7,24 +7,29 @@ import { resolveDocumentUrl } from "../lib/storage";
 import { isPdf } from "../lib/upload";
 import { loadPdf, renderPdfPage, clampScale } from "../lib/pdf";
 import { DrawingStage } from "./DrawingStage";
+import { SketchCanvas } from "./SketchCanvas";
 
 export function DrawingDoc({
-  doc, disablePan = false, onPlace = () => {}, onPageChange, overlay,
+  doc, disablePan = false, onPlace = () => {}, onPageChange, overlay, showDots = true,
 }: {
   doc: ProjectDocument;
   disablePan?: boolean;
   onPlace?: (x: number, y: number) => void;
   onPageChange?: (page: number) => void;
   overlay?: React.ReactNode;
+  showDots?: boolean;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  const isSketch = doc.source === "sketch";
   const isPdfDoc = doc.source !== "link" && isPdf(doc.mime);
 
-  // Non-paged docs (images, links) always report page 1; PdfCanvas reports its own.
+  // Sketches are a single blank surface → page 0. Other non-paged docs (images,
+  // links) report page 1; PdfCanvas reports its own.
   useEffect(() => {
-    if (!isPdfDoc) onPageChange?.(1);
-  }, [isPdfDoc, doc.id, onPageChange]);
+    if (isSketch) onPageChange?.(0);
+    else if (!isPdfDoc) onPageChange?.(1);
+  }, [isSketch, isPdfDoc, doc.id, onPageChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,6 +51,16 @@ export function DrawingDoc({
   }, [doc.source, doc.driveUrl, doc.storagePath]);
 
   if (err) return <p className="text-sm text-status-blocked">{err}</p>;
+
+  // Sketches have no stored file — render the blank dot-grid surface directly.
+  if (isSketch) {
+    return (
+      <DrawingStage disablePan={disablePan} onPlace={onPlace} overlay={overlay}>
+        <SketchCanvas showDots={showDots} />
+      </DrawingStage>
+    );
+  }
+
   if (!url) return <DrawingSkeleton />;
 
   if (doc.source === "link") {
