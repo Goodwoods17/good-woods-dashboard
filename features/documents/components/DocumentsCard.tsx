@@ -55,7 +55,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
   }, [docs, filter]);
 
   const active = activeId ? docs.find((d) => d.id === activeId) ?? null : filtered[0] ?? null;
-  const activePreview = active ? parseDriveUrl(active.driveUrl) : null;
+  const activePreview = active?.driveUrl ? parseDriveUrl(active.driveUrl) : null;
 
   async function handleAdd(payload: {
     kind: DocumentKind;
@@ -77,6 +77,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         notes: null,
         uploadedBy: null,
         createdAt: new Date().toISOString(),
+        source: "link",
       });
       setActiveId(id);
       setAdding(false);
@@ -227,7 +228,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                   </div>
                   <div className="flex items-center gap-1">
                     <a
-                      href={active.driveUrl}
+                      href={active.driveUrl ?? undefined}
                       target="_blank"
                       rel="noreferrer"
                       className="inline-flex items-center gap-1 text-xs text-text-secondary hover:text-accent transition-colors duration-fast px-2 py-1"

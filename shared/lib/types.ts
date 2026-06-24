@@ -76,17 +76,28 @@ export const DOCUMENT_KIND_ORDER: DocumentKind[] = [
   "other",
 ];
 
+export type DocumentSource = "upload" | "link" | "sketch";
+
 export type ProjectDocument = {
   id: string;
   projectId: string;
   kind: DocumentKind;
   label: string;
-  driveUrl: string;
+  /** External/Drive URL when source='link'; null for uploads/sketches. */
+  driveUrl: string | null;
   version?: string | null;
   isCurrent: boolean;
   notes?: string | null;
   uploadedBy?: string | null;
   createdAt: string;
+  /** How the document is stored. Existing rows default to 'link'. */
+  source: DocumentSource;
+  /** Path in the private job-documents bucket when source='upload'. */
+  storagePath?: string | null;
+  /** MIME of the uploaded file. */
+  mime?: string | null;
+  /** PDF page count (1 for images); null until known. */
+  pageCount?: number | null;
 };
 
 /**
