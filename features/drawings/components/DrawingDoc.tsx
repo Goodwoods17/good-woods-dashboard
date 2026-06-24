@@ -9,10 +9,10 @@ import { loadPdf, renderPdfPage, clampScale } from "../lib/pdf";
 import { DrawingStage } from "./DrawingStage";
 
 export function DrawingDoc({
-  doc, addingPin = false, onPlace = () => {}, onPageChange, overlay,
+  doc, disablePan = false, onPlace = () => {}, onPageChange, overlay,
 }: {
   doc: ProjectDocument;
-  addingPin?: boolean;
+  disablePan?: boolean;
   onPlace?: (x: number, y: number) => void;
   onPageChange?: (page: number) => void;
   overlay?: React.ReactNode;
@@ -58,10 +58,10 @@ export function DrawingDoc({
   }
 
   if (isPdf(doc.mime)) {
-    return <PdfCanvas url={url} addingPin={addingPin} onPlace={onPlace} onPageChange={onPageChange} overlay={overlay} />;
+    return <PdfCanvas url={url} disablePan={disablePan} onPlace={onPlace} onPageChange={onPageChange} overlay={overlay} />;
   }
   return (
-    <DrawingStage addingPin={addingPin} onPlace={onPlace} overlay={overlay}>
+    <DrawingStage disablePan={disablePan} onPlace={onPlace} overlay={overlay}>
       <img src={url} alt={doc.label} className="block w-full rounded-lg shadow-resting" />
     </DrawingStage>
   );
@@ -77,10 +77,10 @@ function DrawingSkeleton() {
 }
 
 function PdfCanvas({
-  url, addingPin, onPlace, onPageChange, overlay,
+  url, disablePan, onPlace, onPageChange, overlay,
 }: {
   url: string;
-  addingPin: boolean;
+  disablePan: boolean;
   onPlace: (x: number, y: number) => void;
   onPageChange?: (page: number) => void;
   overlay?: React.ReactNode;
@@ -138,7 +138,7 @@ function PdfCanvas({
         </button>
       </div>
       <div className="overflow-hidden rounded-lg border border-border bg-surface-muted">
-        <DrawingStage addingPin={addingPin} onPlace={onPlace} overlay={overlay}>
+        <DrawingStage disablePan={disablePan} onPlace={onPlace} overlay={overlay}>
           <canvas ref={canvasRef} className="block w-full" />
         </DrawingStage>
       </div>

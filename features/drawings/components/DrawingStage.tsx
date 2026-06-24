@@ -6,14 +6,16 @@ import { normalizePoint } from "../lib/geometry";
 
 /**
  * Wraps a rendered drawing (PDF canvas / image) in a pinch/double-tap/drag
- * transform. In `addingPin` mode a tap on the content becomes a normalized
- * (0–1) `onPlace`. `overlay` (pins) renders in the same transformed content
- * box, so pins stay locked to the drawing through zoom + pan.
+ * transform. When `disablePan` is set (any non-pan markup tool active),
+ * panning is off and the overlay receives pointer events — a tap becomes a
+ * normalized (0–1) `onPlace` (the caller decides whether to act on it, e.g.
+ * only in pin mode). `overlay` (pins + ink) renders in the same transformed
+ * content box, so markup stays locked to the drawing through zoom + pan.
  */
 export function DrawingStage({
-  addingPin, onPlace, overlay, children,
+  disablePan, onPlace, overlay, children,
 }: {
-  addingPin: boolean;
+  disablePan: boolean;
   onPlace: (x: number, y: number) => void;
   overlay?: ReactNode;
   children: ReactNode;
@@ -21,7 +23,7 @@ export function DrawingStage({
   const contentRef = useRef<HTMLDivElement>(null);
 
   function handleCapture(e: React.MouseEvent<HTMLDivElement>) {
-    if (!addingPin) return;
+    if (!disablePan) return;
     const el = contentRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect(); // post-transform box
@@ -34,7 +36,7 @@ export function DrawingStage({
   return (
     <TransformWrapper
       doubleClick={{ mode: "toggle", step: 0.7 }}
-      panning={{ disabled: addingPin }}
+      panning={{ disabled: disablePan }}
       pinch={{ step: 5 }}
       wheel={{ step: 0.2 }}
       minScale={1}
@@ -43,7 +45,7 @@ export function DrawingStage({
       <TransformComponent wrapperClass="!w-full !h-full" contentClass="!w-full">
         <div ref={contentRef} className="relative w-full" onClick={handleCapture}>
           {children}
-          <div className={addingPin ? "absolute inset-0 cursor-crosshair" : "pointer-events-none absolute inset-0"}>
+          <div className={disablePan ? "absolute inset-0 cursor-crosshair" : "pointer-events-none absolute inset-0"}>
             {overlay}
           </div>
         </div>
