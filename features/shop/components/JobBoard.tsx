@@ -6,6 +6,7 @@ import { WorkCardItem } from "./WorkCardItem";
 import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 import { partyLabel, blockerAgeDays, phaseGatingBlocker } from "@features/jobs/lib/jobBlockers";
 import { useContacts } from "@features/contacts/lib/contactsStore";
+import { DrawingsButton } from "@shared/components/ui/DrawingsButton";
 
 export function JobBoard({ jobId, jobName }: { jobId: string; jobName: string }) {
   const { cardsForJob } = useWorkCards();
@@ -22,7 +23,8 @@ export function JobBoard({ jobId, jobName }: { jobId: string; jobName: string })
 
   return (
     <div>
-      <h2 className="text-base font-semibold text-text-primary mb-3">{jobName}</h2>
+      <h2 className="text-base font-semibold text-text-primary mb-2">{jobName}</h2>
+      <div className="mb-3"><DrawingsButton jobId={jobId} /></div>
       {wholeJobBlockers.map((b) => (
         <span
           key={b.id}

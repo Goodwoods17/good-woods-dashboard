@@ -2,11 +2,10 @@
 /** Thin pdf.js wrapper. Browser-only (worker + canvas). */
 import { GlobalWorkerOptions, getDocument, type PDFDocumentProxy } from "pdfjs-dist";
 
-// Next 14 (webpack) resolves this asset URL at build time.
-GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
+// Served as a static asset from /public (copied by scripts/copy-pdf-worker.mjs
+// on predev/prebuild). We intentionally do NOT bundle the worker via webpack
+// (`new URL(..., import.meta.url)`) — Terser fails to minify the worker .mjs.
+GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
 export const MIN_SCALE = 0.5;
 export const MAX_SCALE = 4;

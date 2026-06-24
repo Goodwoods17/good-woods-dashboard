@@ -25,6 +25,7 @@ import { useJobBlockers } from "@features/jobs/lib/jobBlockersStore";
 import { phaseGatingBlocker, partyLabel } from "@features/jobs/lib/jobBlockers";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { formatCAD, formatDate, formatPct } from "@shared/lib/format";
+import { DrawingsButton } from "@shared/components/ui/DrawingsButton";
 import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
@@ -159,6 +160,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 <CalendarPlus className="h-3.5 w-3.5" strokeWidth={1.75} />
                 Add to calendar
               </button>
+              <DrawingsButton jobId={job.id} />
             </div>
           </div>
 

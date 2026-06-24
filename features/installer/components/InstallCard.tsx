@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
+import { DrawingsButton } from "@shared/components/ui/DrawingsButton";
 import type { Job, PetType, SiteAccess } from "@shared/lib/types";
 
 const PET_ICON: Record<PetType, typeof Dog> = {
@@ -189,6 +190,7 @@ export function InstallCard({
           <CalendarIcon className="h-4 w-4" strokeWidth={1.75} />
           Job details
         </Link>
+        <DrawingsButton jobId={job.id} className="min-h-[44px] px-4 py-2 text-sm" />
         <button
           type="button"
           onClick={handleComplete}
