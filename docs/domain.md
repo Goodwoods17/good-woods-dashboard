@@ -289,8 +289,20 @@ projected job cost`, where projected cost locks completed phases to their
   **printed on the shop drawing** and is the **join key** tying a pin on the drawing ↔ its
   checklist piece ↔ Mozaik data ↔ the piece's child components. Finish pieces inherit their
   parent cabinet's code.
-- **Pin** — a piece's marker placed on a drawing at a normalized (0–1) point; carries the
-  piece's `R#C#` code and a status badge. The drawing-side half of the pin↔checklist pair.
+- **Stage** — one milestone in a piece's build pipeline (cabinet: cut · assembled · finished ·
+  packed · delivered · installed · final_adjustments; finish piece swaps the middle for
+  edgebanded · sanded · sprayed). Defined in code (`pipelines.ts`), never in the DB.
+- **Status / lifecycle** — a piece's position through its stages, **as completed milestones**.
+  Every pipeline is bracketed by two universal bookends: **`not_started`** (a new piece, 0%)
+  and **`done`** (terminal, past the last stage). Advancing ticks the next milestone complete;
+  progress reads *position / total*. The status is page-independent (you can advance a piece
+  from any open drawing).
+- **Cut method** — recorded when a piece's `cut` milestone is ticked: **`inhouse`** (table saw)
+  or **`cnc_sub`** (Toolpath subbed). The per-piece as-built half of the make-vs-buy decision
+  (the *pricing* decision is per-job; see ADR 0012).
+- **Pin** — a piece's marker placed on a drawing at a normalized (0–1) point on a specific
+  `(document, page)`; carries the piece's `R#C#` code and a status badge. The drawing-side half
+  of the pin↔checklist pair. A piece may have **no pin** (e.g. Mozaik-seeded before placement).
 - **Markup / annotation** — ink, highlighter, shape/arrow, or typed text note drawn on a
   document page (or a sketch). Stored as vector data in normalized (0–1) coordinates.
 - **Document** — any per-project file or link reference (uploaded PDF, uploaded image,
