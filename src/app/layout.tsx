@@ -8,6 +8,7 @@ import { JobsProvider } from "@features/jobs/lib/jobsStore";
 import { JobBlockersProvider } from "@features/jobs/lib/jobBlockersStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
+import { PiecesProvider } from "@features/drawings/lib/piecesStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { WorkCardsProvider } from "@features/shop/lib/workCardsStore";
 import { RefaceProvider } from "@features/reface/lib/refaceStore";
@@ -60,7 +61,9 @@ export default function RootLayout({
                               <SubtradesProvider>
                                 <JobTradesProvider>
                                   <PartnerPeopleProvider>
-                                    <AppShell>{children}</AppShell>
+                                    <PiecesProvider>
+                                      <AppShell>{children}</AppShell>
+                                    </PiecesProvider>
                                   </PartnerPeopleProvider>
                                 </JobTradesProvider>
                               </SubtradesProvider>
