@@ -8,6 +8,29 @@
 
 **Tech Stack:** Next.js 14.2 (App Router) · React 18 · TypeScript strict · Supabase Storage (`@supabase/ssr`) · `pdfjs-dist` (new) · Tailwind design tokens · Vitest.
 
+## Grill deltas (2026-06-23, grill-with-docs)
+
+Four build decisions resolved after the plan was written. The task bodies below
+predate these; where they conflict, **these win**:
+
+- **Q1 — Upload `kind` is user-chosen, not hardcoded.** T7's `DrawingUpload` adds
+  an inline `<select>` of `DOCUMENT_KIND_ORDER` (default `shop`); the chosen kind
+  is written to the doc (the plan's literal `kind: "shop"` is replaced).
+- **Q2 — Overview lists uploads as link-out rows (does not hide them).** T8's
+  `DocumentsCard` change is NOT a `source !== "upload"` filter. Instead, an
+  `upload`/`sketch` doc renders a lightweight row (label + kind + "View in
+  Drawings →" link) rather than a Drive `<iframe>`. Keeps **Document** one list
+  per `domain.md`.
+- **Q3 — `uploaded_by` = login email.** T7 stamps `uploaded_by =
+  useAuth().user?.email ?? null`. The User↔Worker "Employee" unification is
+  flagged in `domain.md` as a future, ADR-worthy slice — not built here.
+- **Q4 — Delete control in the Drawings sidebar.** T7 adds a per-item trash
+  button: for `source='upload'` it calls `removeDrawing(storagePath)` then
+  `deleteDocument(id)`; for link/sketch just `deleteDocument(id)`. The store
+  already exposes `deleteDocument`.
+- **Note (no action):** signed-URL TTL stays 1 h; mark `SIGNED_URL_TTL` with a
+  `TODO(slice-3)` for refresh-on-expiry once markup lands.
+
 ## Global Constraints
 
 - Path aliases only: `@/*`, `@features/*`, `@shared/*`. No deep `../../../` across boundaries.

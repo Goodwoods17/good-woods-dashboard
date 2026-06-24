@@ -305,3 +305,17 @@ projected job cost`, where projected cost locks completed phases to their
 ## Add new terms here
 
 When introducing a domain term in code, add it here first.
+
+- **User** — a person logged into the app (a Supabase auth account: `id` + `email`).
+  This is the in-house crew / employee identity for _attribution_ — e.g. a
+  document's `uploaded_by` records the uploading **User's email** so we know who
+  drew or uploaded something.
+- **Worker** — the labour entity in `labour_workers` used for shop-floor time
+  tracking (timers, time-cards). **Distinct from User:** a Worker is _not_
+  currently linked to an auth account.
+- **Employee (future)** — the intended unification of **User** and **Worker** so
+  every action (upload, timer, pin, markup) traces to one named person. Needs an
+  `auth_user_id` link on `labour_workers` (or a dedicated `employees` table) plus
+  a backfill. **Not built yet** — flagged during the Drawings Slice 0 grill
+  (2026-06-23); will get its own ADR when built. Until then, attribution is by
+  login email only.
