@@ -44,7 +44,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const { user } = useAuth();
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
-  const { createAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
+  const { createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [armedId, setArmedId] = useState<string | null>(null);
@@ -67,6 +67,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const history = useMarkupHistory({
     onAdd: (a) => restoreAnnotation(a),
     onRemove: (id) => deleteAnnotation(id),
+    onUpdate: (a) => updateAnnotation(a.id, a),
   });
 
   // ⌘Z / Ctrl+Z undo, ⇧⌘Z redo — markup only, ignored while typing in a field.
