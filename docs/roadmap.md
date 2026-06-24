@@ -76,10 +76,36 @@ shows real margin per job from captured budget + timer actuals.
 
 ---
 
+## 2b. Job Drawings & Markup — shipped frontier 🆕
+
+PDF/image drawings per job, with piece tracking + live status. Spec:
+`docs/superpowers/specs/2026-06-23-job-drawings-markup-design.md`; ADR 0016.
+
+### Shipped ✅ (2026-06-23 → 24, PRs #20/#21/#22 merged to main)
+- **Slice 0** storage + viewer — `job-documents` bucket (auth-gated), `documents` upload
+  columns, `/jobs/[id]/drawings` route + shared `<DrawingsButton/>` (job/shop/installer),
+  pdf.js + image render, Overview link-out. Also hardened legacy `reface-photos` RLS.
+- **Slice 1** pieces + pins + status — `job_pieces` table + dual-mode `piecesStore`,
+  `pipelines.ts` (`not_started → stages → done`), add-pin mode + `react-zoom-pan-pinch`
+  gestures, grouped checklist (advance/stepper/two-step delete), forced cut-method prompt.
+- **Slice 2** realtime — `postgres_changes` subscription; piece changes sync < ~1s, no refresh.
+
+### Remaining 🗂️ (build order)
+```
+🗂️ Slice 3   ink markup (perfect-freehand; object-erase; load-on-open) ... not built
+🗂️ Slice 4   shapes / arrows / typed text notes ......................... not built
+🗂️ Slice 5   sketchpad (blank-canvas, source='sketch') ................. not built
+🗂️ later     Mozaik CSV seeding + pin-an-existing-piece ................. not built
+```
+Pre-decided for Slice 3: eraser = **object-erase**; ink = **load-on-open** (not realtime).
+
+---
+
 ## 3. Open PRs
 
-**None.** The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), and the
-CI/security pass (#18) are all merged to `main`; their branches are pruned.
+**None.** The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
+CI/security pass (#18), and the **Drawings Slices 0–2 (#20/#21/#22)** are all merged to `main`;
+their branches are pruned (drawings branches kept locally for now).
 
 **In flight:** `feat/reface-forms` (`gw-reface` worktree) — Reface end-panel/toe-kick forms +
 hinge-boring logic, in design.
