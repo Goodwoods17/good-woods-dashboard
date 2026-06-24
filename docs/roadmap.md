@@ -116,12 +116,11 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
 
 ## 3. Open PRs
 
-**Drawings Slices 3–5** — open for review, stacked:
-`feat/drawings-slice-3` (#24, ink) → `feat/drawings-slice-4` (#25, shapes/text) →
-`feat/drawings-slice-5` (sketchpad). Merge bottom-up; retarget each to `main` as the one below lands.
-The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
-CI/security pass (#18), and the **Drawings Slices 0–2 (#20/#21/#22)** are all merged to `main`;
-their branches are pruned (drawings branches kept locally for now).
+**None.** **Drawings Slices 3–5 are all merged to `main`** (#24 ink, #27 shapes/text, #26 sketchpad —
+verified green, branches pruned). The cost-codes stack (Slices A–D + P2b), the catalog attributes
+editor (#14), the CI/security pass (#18), and **Drawings Slices 0–2 (#20/#21/#22)** are also on `main`.
+With 3–5 landed, the Drawings spec's slice list (0–5) is complete; only the later **Mozaik CSV
+seeding** remains.
 
 **In flight:** `feat/reface-forms` (`gw-reface` worktree) — Reface end-panel/toe-kick forms +
 hinge-boring logic, in design.
