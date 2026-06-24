@@ -47,13 +47,23 @@ Each new piece of work:
 ```
 
 One rule: **a branch holds one thing, then it's retired.** Don't let it
-accumulate unrelated features (that's how we ended up on the misnamed
-`feat/crm-contacts` holding five of them).
+accumulate unrelated features.
 
-**Current exception:** `feat/crm-contacts` is already a grab-bag of interdependent,
-untested features (Catalog → Labour → Estimator are stacked). We keep it as the
-*integration/testing branch*, you test, we merge the whole batch into `main` once
-you're happy, then delete it — and start doing one-thing branches from there.
+### Never stack branches (the hard-won rule — ADR 0017)
+
+When a feature is several **slices** that build on each other (Slice 3 → 4 → 5),
+the tempting move is to base each branch on the one below it (a "stack"). **We
+don't do that** — it bit us twice (the Drawings 3–5 stack on 2026-06-24 cost ~30
+min of cleanup: merging the bottom slice auto-broke the ones above it).
+
+Instead: **finish a slice, merge it to `main`, *then* start the next slice off the
+fresh `main`.** Slice 4 branches from a `main` that already has Slice 3 — the
+dependency is just *there*. Small diffs, each slice testable on its own, nothing
+to break. Stacks are a tool for big teams of reviewers; for us they're all cost.
+
+**If a slice isn't ready for you to use yet,** we hide it behind a simple on/off
+switch (a "feature flag") and merge it anyway — so `main` always moves forward and
+we never sit on a long-lived branch.
 
 ---
 
@@ -79,6 +89,37 @@ real, I run it in the app. If something failed, I say so plainly.
 - **Resuming is nearly free.** Your place is saved to a file the next session
   auto-loads (below) — no paying me to re-learn where we were.
 - Want to know what's burning your limits? Type `/usage`.
+
+---
+
+## How we plan, decide, and test (the build loop)
+
+**One big plan first, then heads-down building.** For a real feature we (1)
+brainstorm it, (2) "grill" the design against what's already built, (3) write a
+plan that breaks it into **slices** (small, shippable steps), each with a clear
+"done when…" checklist. The first slice is always a thin end-to-end "tracer
+bullet" that actually works, so we find integration problems early.
+
+**You answer all the questions for a slice up front — then I build till done.**
+Before I write code for a slice, I put **every decision that slice needs into one
+question prompt** (with my recommendation first). You answer them all at once, I
+lock them into the plan, and then I build the whole slice without pestering you.
+This is the rhythm you liked on the Drawings shapes/sketchpad slices.
+
+**Set the "ship it" rule once per session.** Merging to `main` deploys to the
+live site, so at the start just tell me which you want: *"merge is mine — ping me
+when it's green"* or *"merge automatically once the tests pass."* That saves us
+the back-and-forth we hit asking permission every time.
+
+**How we test (and what we're improving).** Today: the computer checks types,
+lint, and the math/logic automatically, plus I drive the real app in a browser at
+the end of each slice. The gap we found: the *interactive* bugs (a button that
+silently doesn't fire, an editor that flickers closed) only get caught by that
+manual browser run. **The upgrade** (its own little project to do): make that
+browser run **automatic on every change**, against a *copy* of the database
+instead of the real one, and turn on a couple of compiler/lint guards that prevent
+the most common React glitches before they ship. Plain version: fewer "found it
+by hand at the end," more "the robot caught it the moment I typed it."
 
 ---
 
