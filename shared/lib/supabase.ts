@@ -27,3 +27,4 @@ export const JOBS_TABLE = "jobs";
 export const CONTACTS_TABLE = "contacts";
 export const DOCUMENTS_TABLE = "documents";
 export const JOB_PIECES_TABLE = "job_pieces";
+export const DOCUMENT_ANNOTATIONS_TABLE = "document_annotations";
