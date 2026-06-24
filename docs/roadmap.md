@@ -101,10 +101,14 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
   Plain colored text with a white halo (legible, never boxes the drawing). `updateAnnotation` +
   history `update` entry (move/resize/edit are undoable). Stacked PR on Slice 3 (review). Authed
   smoke green: arrow/rect/line draw, text place+halo, move, resize, edit, erase, undo, per-page, reload.
+- **Slice 5** sketchpad — blank-canvas sketches as `documents` with `source='sketch'` (page 0,
+  no migration — Slice 0 seam), reusing the whole markup engine. `SketchCanvas` = 4:3 white surface
+  + a toggleable **dot grid**; "New sketch" creates a named sketch (`Sketch N`) listed beside drawings.
+  Stacked PR on Slice 4 (review). Authed smoke green: create, draw ink+shape+text, dots on/off,
+  reopen + reload persist.
 
 ### Remaining 🗂️ (build order)
 ```
-🗂️ Slice 5   sketchpad (blank-canvas, source='sketch', dot-grid toggle) .. not built
 🗂️ later     Mozaik CSV seeding + pin-an-existing-piece ................. not built
 ```
 
@@ -112,8 +116,9 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
 
 ## 3. Open PRs
 
-**Drawings Slice 3 (ink markup)** + **Slice 4 (shapes/text)** — open for review, stacked:
-`feat/drawings-slice-3` (#24) → `feat/drawings-slice-4` (PR base = slice-3 until #24 merges).
+**Drawings Slices 3–5** — open for review, stacked:
+`feat/drawings-slice-3` (#24, ink) → `feat/drawings-slice-4` (#25, shapes/text) →
+`feat/drawings-slice-5` (sketchpad). Merge bottom-up; retarget each to `main` as the one below lands.
 The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
 CI/security pass (#18), and the **Drawings Slices 0–2 (#20/#21/#22)** are all merged to `main`;
 their branches are pruned (drawings branches kept locally for now).
