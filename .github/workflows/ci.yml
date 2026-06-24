@@ -48,3 +48,62 @@ jobs:
           # Vercel. These are non-secret, build-time-only stand-ins.
           NEXT_PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+
+  # Authed browser smoke against a seeded LOCAL Supabase (Auth + RLS + Postgres),
+  # booted via the Supabase CLI on the runner. Catches the interactive class of
+  # bugs that tsc/lint/jsdom can't see, off prod data. See ADR 0018.
+  e2e:
+    runs-on: ubuntu-latest
+    env:
+      E2E_EMAIL: e2e@goodwoods.local
+      E2E_PASSWORD: e2e-smoke-password
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start local Supabase (replays all migrations from zero)
+        run: supabase start
+
+      - name: Export local Supabase env
+        run: |
+          eval "$(supabase status -o env)"
+          {
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Seed the E2E smoke user
+        run: node scripts/seed-e2e.mjs
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Build (against local Supabase)
+        run: npm run build
+
+      - name: Run E2E smoke (Playwright starts the built app)
+        run: npx playwright test
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
