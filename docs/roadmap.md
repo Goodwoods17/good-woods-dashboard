@@ -94,11 +94,17 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
   (pan/pin/pen/highlighter/eraser) + color swatches, tap-to-erase, session-scoped
   undo/redo (⌘Z/⇧⌘Z), lifted PDF page state so ink **and** pins filter per `(document, page)`.
   PR (review). Authed browser smoke green: pen/highlighter/erase/undo/redo/per-page/reload.
+- **Slice 4** shapes + text — widened `Annotation.data` union (`StrokeData|ShapeData|TextData`),
+  `shapes.ts` geometry (TDD), `InkLayer`→`MarkupLayer` rendering all four types. Toolbar gains
+  **shape** (arrow/rect/line), **text**, **select** tools. Select = tap to pick, drag to move,
+  corner handles to resize (shapes + text); double-tap text to edit; Delete key / Trash removes.
+  Plain colored text with a white halo (legible, never boxes the drawing). `updateAnnotation` +
+  history `update` entry (move/resize/edit are undoable). Stacked PR on Slice 3 (review). Authed
+  smoke green: arrow/rect/line draw, text place+halo, move, resize, edit, erase, undo, per-page, reload.
 
 ### Remaining 🗂️ (build order)
 ```
-🗂️ Slice 4   shapes / arrows / typed text notes ......................... not built
-🗂️ Slice 5   sketchpad (blank-canvas, source='sketch') ................. not built
+🗂️ Slice 5   sketchpad (blank-canvas, source='sketch', dot-grid toggle) .. not built
 🗂️ later     Mozaik CSV seeding + pin-an-existing-piece ................. not built
 ```
 
@@ -106,7 +112,8 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
 
 ## 3. Open PRs
 
-**Drawings Slice 3 (ink markup)** — open for review on `feat/drawings-slice-3`.
+**Drawings Slice 3 (ink markup)** + **Slice 4 (shapes/text)** — open for review, stacked:
+`feat/drawings-slice-3` (#24) → `feat/drawings-slice-4` (PR base = slice-3 until #24 merges).
 The cost-codes stack (Slices A–D + P2b), the catalog attributes editor (#14), the
 CI/security pass (#18), and the **Drawings Slices 0–2 (#20/#21/#22)** are all merged to `main`;
 their branches are pruned (drawings branches kept locally for now).
