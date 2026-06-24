@@ -64,6 +64,37 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
     if (!loading && backend === "localStorage") localSave(pieces);
   }, [pieces, loading, backend]);
 
+  // Slice 2: live sync. Patch by id is idempotent, so our own optimistic
+  // writes echo back harmlessly and other clients' changes merge in (LWW).
+  useEffect(() => {
+    if (backend !== "supabase") return;
+    const sb = getSupabase();
+    const channel = sb
+      .channel("job_pieces_changes")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: JOB_PIECES_TABLE },
+        (payload) => {
+          setPieces((cur) => {
+            let next = cur;
+            if (payload.eventType === "DELETE") {
+              const id = (payload.old as { id?: string })?.id;
+              next = id ? cur.filter((x) => x.id !== id) : cur;
+            } else {
+              const piece = rowToPiece(payload.new as PieceRow);
+              next = cur.some((x) => x.id === piece.id)
+                ? cur.map((x) => (x.id === piece.id ? piece : x))
+                : [...cur, piece];
+            }
+            piecesRef.current = next;
+            return next;
+          });
+        }
+      )
+      .subscribe();
+    return () => { sb.removeChannel(channel); };
+  }, [backend]);
+
   const createPiece = useCallback(async (p: JobPiece) => {
     piecesRef.current = [...piecesRef.current, p];
     setPieces(piecesRef.current);
