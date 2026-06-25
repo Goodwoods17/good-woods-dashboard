@@ -1,7 +1,10 @@
 "use client";
 
-import type { ComponentType } from "react";
+import { useEffect, useRef, useState, type ComponentType, type PointerEvent } from "react";
+import { Camera, Eraser, Loader2 } from "lucide-react";
+import { getStroke } from "perfect-freehand";
 import type { FieldType, FormInstanceField } from "@shared/lib/types";
+import { resolveFormPhotoUrl, uploadFormPhoto, uploadSignaturePng } from "./storage";
 
 /**
  * Fill-time React controls, keyed by field type. Kept in a `.tsx` sibling of the
@@ -179,6 +182,311 @@ function DateFill({ field, onChange, disabled }: FillControlProps) {
   );
 }
 
+// ─── Photo ─────────────────────────────────────────────────────────────────
+// Capture/upload an image to the form-photos bucket (data: URL fallback when
+// Supabase is absent), persist the storage path on photoUrl, and re-render it
+// via a freshly-resolved (signed) URL.
+function PhotoFill({ field, onChange, disabled }: FillControlProps) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Resolve the stored path → renderable URL whenever it changes.
+  useEffect(() => {
+    let cancelled = false;
+    if (!field.photoUrl) {
+      setPreview(null);
+      return;
+    }
+    resolveFormPhotoUrl(field.photoUrl)
+      .then((url) => {
+        if (!cancelled) setPreview(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [field.photoUrl]);
+
+  async function handleFile(file: File) {
+    setBusy(true);
+    setError(null);
+    try {
+      const { storagePath } = await uploadFormPhoto(field.instanceId, field.id, file);
+      onChange({ photoUrl: storagePath });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="py-1">
+      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      {preview && (
+        // Stored capture — a data: or signed URL, not optimizable by next/image.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={preview}
+          alt={field.label}
+          data-testid="form-photo-preview"
+          className="mb-2 max-h-48 rounded-md border border-border object-contain"
+        />
+      )}
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label={field.label}
+        className="sr-only"
+        disabled={disabled || busy}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleFile(file);
+          e.target.value = "";
+        }}
+      />
+      <button
+        type="button"
+        disabled={disabled || busy}
+        onClick={() => inputRef.current?.click()}
+        className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-muted px-4 py-1.5 text-sm text-text-secondary hover:border-border-strong disabled:opacity-50"
+      >
+        {busy ? (
+          <Loader2 className="h-4 w-4 animate-spin" strokeWidth={2} />
+        ) : (
+          <Camera className="h-4 w-4" strokeWidth={1.75} />
+        )}
+        {field.photoUrl ? "Replace photo" : "Add photo"}
+      </button>
+      {error && <p className="mt-1 text-xs text-status-blocked">{error}</p>}
+    </div>
+  );
+}
+
+// ─── Signature ─────────────────────────────────────────────────────────────
+// Draw on a canvas (perfect-freehand smoothing — same engine as drawings), save
+// the result as a PNG to form-photos, and record the typed signer name + an
+// exact timestamp (signed_at) alongside it. That audit pair is what makes the
+// eventual signoff dispute-proof (renders on the slice-4 PDF).
+function SignatureFill({ field, onChange, disabled }: FillControlProps) {
+  const cfg = field.config as Record<string, unknown>;
+  const [signerName, setSignerName] = useState(
+    typeof cfg?.signerName === "string" ? (cfg.signerName as string) : ""
+  );
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  const signedAt = typeof cfg?.signedAt === "string" ? (cfg.signedAt as string) : null;
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!field.photoUrl) {
+      setPreview(null);
+      return;
+    }
+    resolveFormPhotoUrl(field.photoUrl)
+      .then((url) => {
+        if (!cancelled) setPreview(url);
+      })
+      .catch(() => {
+        if (!cancelled) setPreview(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [field.photoUrl]);
+
+  async function handleSave(dataUrl: string) {
+    if (!signerName.trim()) {
+      setError("Type the signer's name first.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const { storagePath } = await uploadSignaturePng(field.instanceId, field.id, dataUrl);
+      onChange({
+        photoUrl: storagePath,
+        config: {
+          ...cfg,
+          signerName: signerName.trim(),
+          signedAt: new Date().toISOString(),
+        },
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not save signature");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const signed = Boolean(field.photoUrl);
+
+  return (
+    <div className="py-1">
+      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <input
+        type="text"
+        className={inputCls + " mb-2"}
+        value={signerName}
+        disabled={disabled || signed}
+        aria-label={`${field.label} — signer name`}
+        placeholder="Signed by (full name)"
+        onChange={(e) => setSignerName(e.target.value)}
+      />
+      {signed && preview ? (
+        <div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={preview}
+            alt={`Signature of ${signerName || "signer"}`}
+            data-testid="form-signature-preview"
+            className="max-h-32 rounded-md border border-border bg-white object-contain"
+          />
+          <p className="mt-1 text-xs text-text-tertiary">
+            Signed by {signerName || "—"}
+            {signedAt ? ` · ${new Date(signedAt).toLocaleString()}` : ""}
+          </p>
+          {!disabled && (
+            <button
+              type="button"
+              onClick={() => onChange({ photoUrl: null })}
+              className="mt-1 inline-flex items-center gap-1 text-xs text-text-tertiary hover:text-text-secondary"
+            >
+              <Eraser className="h-3 w-3" strokeWidth={2} /> Sign again
+            </button>
+          )}
+        </div>
+      ) : (
+        <SignaturePad disabled={disabled || busy} busy={busy} onSave={handleSave} />
+      )}
+      {error && <p className="mt-1 text-xs text-status-blocked">{error}</p>}
+    </div>
+  );
+}
+
+// A touch/mouse signature canvas. Captures pointer strokes, renders them with
+// perfect-freehand, and exports a trimmed PNG data URL on "Save".
+function SignaturePad({
+  disabled,
+  busy,
+  onSave,
+}: {
+  disabled?: boolean;
+  busy?: boolean;
+  onSave: (dataUrl: string) => void;
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const strokesRef = useRef<[number, number, number][][]>([]);
+  const currentRef = useRef<[number, number, number][]>([]);
+  const drawingRef = useRef(false);
+  const [hasInk, setHasInk] = useState(false);
+
+  function redraw() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#1A1916";
+    const all = [...strokesRef.current, currentRef.current].filter((s) => s.length > 0);
+    for (const points of all) {
+      const outline = getStroke(points, {
+        size: 4,
+        thinning: 0.6,
+        smoothing: 0.5,
+        streamline: 0.5,
+        simulatePressure: true,
+        last: !drawingRef.current,
+      });
+      if (outline.length === 0) continue;
+      ctx.beginPath();
+      ctx.moveTo(outline[0][0], outline[0][1]);
+      for (let i = 1; i < outline.length; i++) {
+        ctx.lineTo(outline[i][0], outline[i][1]);
+      }
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  function pointFromEvent(e: PointerEvent<HTMLCanvasElement>): [number, number, number] {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return [e.clientX - rect.left, e.clientY - rect.top, e.pressure || 0.5];
+  }
+
+  function clear() {
+    strokesRef.current = [];
+    currentRef.current = [];
+    setHasInk(false);
+    redraw();
+  }
+
+  return (
+    <div>
+      <canvas
+        ref={canvasRef}
+        width={480}
+        height={160}
+        data-testid="form-signature-canvas"
+        aria-label="Signature canvas"
+        className="w-full touch-none rounded-md border border-border bg-white"
+        style={{ maxWidth: 480 }}
+        onPointerDown={(e) => {
+          if (disabled) return;
+          e.currentTarget.setPointerCapture(e.pointerId);
+          drawingRef.current = true;
+          currentRef.current = [pointFromEvent(e)];
+          redraw();
+        }}
+        onPointerMove={(e) => {
+          if (!drawingRef.current) return;
+          currentRef.current = [...currentRef.current, pointFromEvent(e)];
+          redraw();
+        }}
+        onPointerUp={() => {
+          if (!drawingRef.current) return;
+          drawingRef.current = false;
+          if (currentRef.current.length > 0) {
+            strokesRef.current = [...strokesRef.current, currentRef.current];
+            currentRef.current = [];
+            setHasInk(true);
+          }
+          redraw();
+        }}
+      />
+      <div className="mt-1 flex items-center gap-2">
+        <button
+          type="button"
+          disabled={disabled || !hasInk}
+          onClick={clear}
+          className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-text-secondary hover:text-text-primary disabled:opacity-40"
+        >
+          <Eraser className="h-3 w-3" strokeWidth={2} /> Clear
+        </button>
+        <button
+          type="button"
+          disabled={disabled || busy || !hasInk}
+          onClick={() => {
+            const canvas = canvasRef.current;
+            if (canvas) onSave(canvas.toDataURL("image/png"));
+          }}
+          className="inline-flex items-center gap-1 rounded-full bg-ink-pill px-4 py-1 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {busy && <Loader2 className="h-3 w-3 animate-spin" strokeWidth={2} />}
+          Save signature
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export const FILL_CONTROLS: Partial<Record<FieldType, ComponentType<FillControlProps>>> = {
   section: SectionFill,
   checkbox: CheckboxFill,
@@ -188,6 +496,8 @@ export const FILL_CONTROLS: Partial<Record<FieldType, ComponentType<FillControlP
   yes_no: YesNoFill,
   dropdown: DropdownFill,
   date: DateFill,
+  photo: PhotoFill,
+  signature: SignatureFill,
 };
 
 export function getFillControl(type: string): ComponentType<FillControlProps> | undefined {

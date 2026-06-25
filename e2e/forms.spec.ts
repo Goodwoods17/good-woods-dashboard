@@ -140,3 +140,106 @@ test.describe("forms slice 2 — full registry + builder + defaults/standalone",
     });
   });
 });
+
+test.describe("forms slice 3 — photo + signature fields", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // A 1x1 transparent PNG — enough to prove the upload → persist → re-render path
+  // without shipping a binary fixture.
+  const PNG_1x1 = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64"
+  );
+
+  async function attachPreInstall(page: Page) {
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+    await expect(page.getByRole("checkbox", { name: FIRST_CHECKBOX }).first()).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+
+  // Add an ad-hoc field of the given type to the just-attached instance via the
+  // "Add field to this copy" panel (slice 2 mechanism). Returns once it renders.
+  async function addAdHocField(page: Page, label: string, type: "photo" | "signature") {
+    await page
+      .getByRole("button", { name: /add field to this copy/i })
+      .first()
+      .click();
+    await page.getByPlaceholder("Field label").last().fill(label);
+    // The type <select> uses the registry label as the option text.
+    const typeLabel = type === "photo" ? "Photo" : "Signature";
+    await page.locator("select").last().selectOption({ label: typeLabel });
+    await page.getByRole("button", { name: "Add", exact: true }).click();
+    await expect(page.getByText(label).first()).toBeVisible({ timeout: 10_000 });
+  }
+
+  test("photo field: upload an image, persists + re-renders after reload", async ({ page }) => {
+    await login(page);
+    await attachPreInstall(page);
+
+    const label = `Site photo ${Date.now()}`;
+    await addAdHocField(page, label, "photo");
+
+    // The hidden file input carries aria-label={field.label}. Upload the PNG.
+    await page.getByLabel(label).setInputFiles({
+      name: "site.png",
+      mimeType: "image/png",
+      buffer: PNG_1x1,
+    });
+
+    // The preview <img> appears once the upload resolves to a signed URL.
+    await expect(page.getByTestId("form-photo-preview").last()).toBeVisible({ timeout: 15_000 });
+
+    // Reload — the captured photo must survive (Supabase persisted, store reloads).
+    await page.reload();
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await expect(page.getByText(label).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("form-photo-preview").last()).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("signature field: draw + name → persists name, timestamp, PNG after reload", async ({
+    page,
+  }) => {
+    await login(page);
+    await attachPreInstall(page);
+
+    const label = `Client signoff ${Date.now()}`;
+    const signer = "Jordan Tester";
+    await addAdHocField(page, label, "signature");
+
+    // Type the signer name (aria-label="<label> — signer name"; never select by
+    // [value=...] — React controlled inputs don't reflect value to the attribute).
+    await page.getByLabel(`${label} — signer name`).fill(signer);
+
+    // Draw a stroke on the canvas.
+    const canvas = page.getByTestId("form-signature-canvas").last();
+    await expect(canvas).toBeVisible();
+    const box = await canvas.boundingBox();
+    if (!box) throw new Error("signature canvas has no bounding box");
+    await page.mouse.move(box.x + 20, box.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 120, box.y + 40);
+    await page.mouse.move(box.x + 220, box.y + 110);
+    await page.mouse.move(box.x + 320, box.y + 50);
+    await page.mouse.up();
+
+    await page.getByRole("button", { name: /save signature/i }).click();
+
+    // The saved signature renders as an <img>, with the signer name shown.
+    await expect(page.getByTestId("form-signature-preview").last()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(new RegExp(`Signed by ${signer}`)).first()).toBeVisible();
+
+    // Reload — the PNG + audit (signer name + timestamp) must survive.
+    await page.reload();
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await expect(page.getByTestId("form-signature-preview").last()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.getByText(new RegExp(`Signed by ${signer}`)).first()).toBeVisible();
+  });
+});
