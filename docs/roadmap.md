@@ -60,6 +60,13 @@ shows real margin per job from captured budget + timer actuals.
 
 - **CI** — GitHub Actions (`.github/workflows/ci.yml`) runs tsc → lint → Vitest → build on every
   PR to `main` and push to `main`. The repo's first automated gate. (PR #18)
+- **CI E2E browser smoke** ✅ — a second `e2e` job boots a **local Supabase** (Auth + RLS) via the
+  CLI, replays all migrations from zero, seeds a smoke user (admin API), builds against it, and runs
+  an **authed Playwright smoke** (login → reach the authed dashboard) headless, off prod data.
+  Catches the interactive bug class tsc/lint/jsdom can't see. The from-zero replay also fixed a
+  migration-version-drift collision (6 files renamed to unique timestamps). Phase 1 of the
+  **autonomous build workflow** (ADR 0018). (PR #28) · Follow-ons in this milestone: render-seeded-
+  data assertion · React Compiler + `react-hooks/unsupported-syntax` lint · pgTAP RLS tests.
 - **Security** — pinned `search_path = ''` on the 5 advisor-flagged functions
   (`function_search_path_mutable` finding closed). (PR #18) · Known/intentional leftovers: the
   `authenticated`-all RLS policies (single-tenant model) and the leaked-password-protection auth
@@ -116,7 +123,8 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
 
 ## 3. Open PRs
 
-**None.** **Drawings Slices 3–5 are all merged to `main`** (#24 ink, #27 shapes/text, #26 sketchpad —
+**None.** **CI E2E browser smoke shipped** (#28 — autonomous-workflow Phase 1, ADR 0018).
+**Drawings Slices 3–5 are all merged to `main`** (#24 ink, #27 shapes/text, #26 sketchpad —
 verified green, branches pruned). The cost-codes stack (Slices A–D + P2b), the catalog attributes
 editor (#14), the CI/security pass (#18), and **Drawings Slices 0–2 (#20/#21/#22)** are also on `main`.
 With 3–5 landed, the Drawings spec's slice list (0–5) is complete; only the later **Mozaik CSV
@@ -160,8 +168,10 @@ Carried over from the original prototype roadmap — revisit when the costing sp
 ADRs `docs/decisions/`: **0008** milestones=phases · **0009** budget-on-job · **0010**
 QuickBooks-ready costing · **0012** unified template + Mozaik · **0013** external blockers as
 derived source-of-truth · **0014** BvA P4 scope + margin · **0015** subtrade actuals per
-trade-line (Slice C, supersedes 0014 subtrade deferral). (0002/0003 = the build process:
-deliberate-plan-then-autonomous-build.)
+trade-line (Slice C, supersedes 0014 subtrade deferral) · **0016** active drawings in Supabase /
+archive to Drive · **0017** trunk-based vertical slices, no stacked PRs · **0018** autonomous
+build workflow (plan-first, run-till-done; global but fenced to software work). (0002/0003 = the
+build process: deliberate-plan-then-autonomous-build.)
 
 ---
 
