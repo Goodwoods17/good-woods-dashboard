@@ -28,19 +28,20 @@ export type FieldRegistryEntry = {
   isComplete: (field: FormInstanceField) => boolean;
 };
 
-function scaffold(type: FieldType, label: string, isLayout = false): FieldRegistryEntry {
-  return {
-    type,
-    label,
-    isLayout,
-    implemented: false,
-    isComplete: () => true, // unimplemented types never block completion in v1
-  };
-}
-
 /** Returns true when a value is a non-empty string (used by text/number/date). */
 function hasValue(field: FormInstanceField): boolean {
   return typeof field.value === "string" && field.value.trim() !== "";
+}
+
+/** Returns true when a media field has a stored photo/signature path. */
+function hasPhoto(field: FormInstanceField): boolean {
+  return typeof field.photoUrl === "string" && field.photoUrl.trim() !== "";
+}
+
+/** Returns true when a signature records a typed signer name (audit detail). */
+function hasSignerName(field: FormInstanceField): boolean {
+  const name = (field.config as Record<string, unknown>)?.signerName;
+  return typeof name === "string" && name.trim() !== "";
 }
 
 /** If config.required is set, an empty answer blocks completion. Otherwise pass. */
@@ -106,9 +107,24 @@ export const FIELD_REGISTRY: Record<FieldType, FieldRegistryEntry> = {
     implemented: true,
     isComplete: (f) => requiredOrPass(f, hasValue(f)),
   },
-  // Slice 3 types — scaffold, wired later.
-  photo: scaffold("photo", "Photo"),
-  signature: scaffold("signature", "Signature"),
+  // Slice 3 media types.
+  photo: {
+    type: "photo",
+    label: "Photo",
+    isLayout: false,
+    implemented: true,
+    // A photo is answered once an image is captured/uploaded (photoUrl set).
+    isComplete: (f) => requiredOrPass(f, hasPhoto(f)),
+  },
+  signature: {
+    type: "signature",
+    label: "Signature",
+    isLayout: false,
+    implemented: true,
+    // A signature is answered only with BOTH the PNG and the typed signer name —
+    // the audit pair that makes the eventual signoff dispute-proof.
+    isComplete: (f) => requiredOrPass(f, hasPhoto(f) && hasSignerName(f)),
+  },
 };
 
 /** Lookup that tolerates an unknown DB `type` (forward-compat fallback). */

@@ -180,18 +180,70 @@ describe("fieldRegistry", () => {
     }
   });
 
-  it("wires section, checkbox, and the 6 non-media types; photo + signature remain scaffold", () => {
-    expect(FIELD_REGISTRY.section.implemented).toBe(true);
-    expect(FIELD_REGISTRY.checkbox.implemented).toBe(true);
-    expect(FIELD_REGISTRY.short_text.implemented).toBe(true);
-    expect(FIELD_REGISTRY.long_text.implemented).toBe(true);
-    expect(FIELD_REGISTRY.number.implemented).toBe(true);
-    expect(FIELD_REGISTRY.yes_no.implemented).toBe(true);
-    expect(FIELD_REGISTRY.dropdown.implemented).toBe(true);
-    expect(FIELD_REGISTRY.date.implemented).toBe(true);
-    // slice 3 types remain scaffold
-    expect(FIELD_REGISTRY.photo.implemented).toBe(false);
-    expect(FIELD_REGISTRY.signature.implemented).toBe(false);
+  it("wires every field type — section, checkbox, the 6 non-media types, photo + signature", () => {
+    for (const t of ALL_TYPES) {
+      expect(FIELD_REGISTRY[t].implemented).toBe(true);
+    }
+  });
+
+  it("photo: complete once a photoUrl is set; incomplete when blank + required", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    expect(FIELD_REGISTRY.photo.isComplete({ ...base, type: "photo", photoUrl: "i1/f1.jpg" })).toBe(
+      true
+    );
+    // Required + no photo → incomplete.
+    expect(
+      FIELD_REGISTRY.photo.isComplete({
+        ...base,
+        type: "photo",
+        photoUrl: null,
+        config: { required: true },
+      })
+    ).toBe(false);
+    // Not required + no photo → complete (optional).
+    expect(
+      FIELD_REGISTRY.photo.isComplete({ ...base, type: "photo", photoUrl: null, config: {} })
+    ).toBe(true);
+  });
+
+  it("signature: complete only with BOTH the PNG and a typed signer name", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    // PNG + signer name → complete.
+    expect(
+      FIELD_REGISTRY.signature.isComplete({
+        ...base,
+        type: "signature",
+        photoUrl: "i1/f1.png",
+        config: { signerName: "Andrew Chilton", signedAt: "2026-06-25T12:00:00Z" },
+      })
+    ).toBe(true);
+    // PNG but no signer name → incomplete when required.
+    expect(
+      FIELD_REGISTRY.signature.isComplete({
+        ...base,
+        type: "signature",
+        photoUrl: "i1/f1.png",
+        config: { required: true },
+      })
+    ).toBe(false);
+    // Signer name but no PNG → incomplete when required.
+    expect(
+      FIELD_REGISTRY.signature.isComplete({
+        ...base,
+        type: "signature",
+        photoUrl: null,
+        config: { required: true, signerName: "Andrew Chilton" },
+      })
+    ).toBe(false);
+    // Not required + empty → complete (optional).
+    expect(
+      FIELD_REGISTRY.signature.isComplete({
+        ...base,
+        type: "signature",
+        photoUrl: null,
+        config: {},
+      })
+    ).toBe(true);
   });
 
   it("gates a checkbox on checked === true; a section is always complete", () => {
@@ -214,9 +266,9 @@ describe("fieldRegistry", () => {
         FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: null, config: { required: true } })
       ).toBe(false);
       // Not required + empty → complete (field is optional).
-      expect(
-        FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: null, config: {} })
-      ).toBe(true);
+      expect(FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: null, config: {} })).toBe(
+        true
+      );
     }
   });
 

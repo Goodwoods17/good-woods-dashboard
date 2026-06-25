@@ -274,6 +274,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
             checked: row.checked,
             note: row.note,
             photo_url: row.photo_url,
+            // Signature fields stash their audit pair (signerName + signedAt) in
+            // config at fill time, so the answer write must persist config too.
+            config: row.config,
           })
           .eq("id", fieldId);
         if (upErr) throw upErr;

@@ -48,8 +48,9 @@ is still a draft. The instance also snapshots the template's **phase** tag.
 features/forms/
 ├── CLAUDE.md / PLAN.md / CONTEXT.md
 ├── lib/
-│   ├── fieldRegistry.ts          (pure registry: metadata + isComplete, per FieldType)
-│   ├── fieldControls.tsx         (React fill controls: section + checkbox)
+│   ├── fieldRegistry.ts          (pure registry: metadata + isComplete, per FieldType — all 10 wired)
+│   ├── fieldControls.tsx         (React fill controls for every type, incl. photo + signature pad)
+│   ├── storage.ts                (form-photos bucket: upload photo / signature PNG / resolve / remove, data: fallback)
 │   ├── snapshot.ts               (snapshotTemplate — the single snapshot point)
 │   ├── phase.ts                  (FormPhase labels)
 │   ├── formTemplatesRowMap.ts    (row ↔ FormTemplate / FormTemplateField)
@@ -75,8 +76,9 @@ bucket stood up now (photos land in slice 3).
 
 - Template CRUD / dnd-kit reorder / mark default+active (slice 2).
 - `attachDefaultForms` auto-attach on `/jobs/new` + standalone forms (slice 2).
-- Photo + signature field types (slice 3).
-- Lock + PDF signoff (slice 4).
+- Lock + PDF signoff (slice 4). The signature field already records the signer's
+  typed name + an exact `signedAt` timestamp in the field's `config` (the
+  dispute-proof audit pair) — slice 4 renders that on the PDF.
 - The client token-link fill portal (Phase 2 — touches the auth boundary).
 
 ## What this feature does NOT own
