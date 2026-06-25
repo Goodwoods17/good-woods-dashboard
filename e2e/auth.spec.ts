@@ -30,6 +30,10 @@ test.describe("authenticated smoke", () => {
       timeout: 15_000,
     });
     await expect(page).not.toHaveURL(/\/login/);
+
+    // Version badge in the sidebar footer (issue #30): proves the authed shell
+    // renders the brand + version stamp derived from package.json.
+    await expect(page.getByText("Good Woods · v0.1")).toBeVisible();
   });
 
   test("renders seeded job data from the database", async ({ page }) => {
