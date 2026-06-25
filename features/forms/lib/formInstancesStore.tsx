@@ -50,6 +50,8 @@ type FormInstancesContextValue = {
   error: string | null;
   refresh: () => Promise<void>;
   instancesForJob: (jobId: string) => FormInstance[];
+  /** Standalone instances (jobId = null). */
+  standaloneInstances: FormInstance[];
   fieldsForInstance: (instanceId: string) => FormInstanceField[];
   /** Snapshot a template onto a job (or null = standalone). Returns the new instance. */
   attachTemplate: (
@@ -57,8 +59,18 @@ type FormInstancesContextValue = {
     templateFields: FormTemplateField[],
     jobId: string | null
   ) => Promise<FormInstance>;
-  /** Patch a single instance field's answer; bumps a draft instance to in_progress. */
+  /** Patch a single instance field's answer (checked/value/note/photoUrl). Bumps draft → in_progress. */
   updateInstanceField: (fieldId: string, patch: Partial<FormInstanceField>) => Promise<void>;
+  /** Add an ad-hoc field to an existing instance (per-instance edit, does not touch the master). */
+  addInstanceField: (field: FormInstanceField) => Promise<void>;
+  /** Update an instance field's definition (label/type/config — not the answer). */
+  editInstanceField: (id: string, patch: Partial<FormInstanceField>) => Promise<void>;
+  /** Delete a field from an instance. */
+  deleteInstanceField: (id: string) => Promise<void>;
+  /** Update instance metadata (title, phase, status, sortOrder). */
+  updateInstance: (id: string, patch: Partial<FormInstance>) => Promise<void>;
+  /** Delete an instance and all its fields. */
+  deleteInstance: (id: string) => Promise<void>;
 };
 
 const FormInstancesContext = createContext<FormInstancesContextValue | null>(null);
@@ -97,7 +109,7 @@ function localSaveInstances(instances: FormInstance[]) {
       JSON.stringify({ schema: SCHEMA_VERSION, instances })
     );
   } catch {
-    /* quota / denied — silent fail, matches jobsStore */
+    /* quota / denied — silent fail */
   }
 }
 
@@ -283,9 +295,135 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
+  // ─── Per-instance ad-hoc field edits ────────────────────────────────────
+
+  const addInstanceField = useCallback(
+    async (field: FormInstanceField) => {
+      setFields((prev) => [...prev, field]);
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_INSTANCE_FIELDS_TABLE)
+          .insert(formInstanceFieldToRow(field));
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setFields((prev) => prev.filter((f) => f.id !== field.id));
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const editInstanceField = useCallback(
+    async (id: string, patch: Partial<FormInstanceField>) => {
+      const prev = fieldsRef.current;
+      setFields((f) => f.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const target = prev.find((f) => f.id === id);
+        if (!target) return;
+        const merged = formInstanceFieldToRow({ ...target, ...patch });
+        const { error: err } = await sb
+          .from(FORM_INSTANCE_FIELDS_TABLE)
+          .update({ label: merged.label, type: merged.type, config: merged.config })
+          .eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setFields(prev);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const deleteInstanceField = useCallback(
+    async (id: string) => {
+      const prev = fieldsRef.current;
+      setFields((f) => f.filter((x) => x.id !== id));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb.from(FORM_INSTANCE_FIELDS_TABLE).delete().eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setFields(prev);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const updateInstance = useCallback(
+    async (id: string, patch: Partial<FormInstance>) => {
+      setInstances((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const target = instancesRef.current.find((i) => i.id === id);
+        if (!target) return;
+        const merged = formInstanceToRow({ ...target, ...patch });
+        const { error: err } = await sb
+          .from(FORM_INSTANCES_TABLE)
+          .update({
+            title: merged.title,
+            phase: merged.phase,
+            status: merged.status,
+            sort_order: merged.sort_order,
+          })
+          .eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const deleteInstance = useCallback(
+    async (id: string) => {
+      const prevInstances = instancesRef.current;
+      const prevFields = fieldsRef.current;
+      setInstances((prev) => prev.filter((i) => i.id !== id));
+      setFields((prev) => prev.filter((f) => f.instanceId !== id));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: fErr } = await sb
+          .from(FORM_INSTANCE_FIELDS_TABLE)
+          .delete()
+          .eq("instance_id", id);
+        if (fErr) throw fErr;
+        const { error: iErr } = await sb.from(FORM_INSTANCES_TABLE).delete().eq("id", id);
+        if (iErr) throw iErr;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setInstances(prevInstances);
+        setFields(prevFields);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
   const instancesForJob = useCallback(
     (jobId: string) =>
       instances.filter((i) => i.jobId === jobId).sort((a, b) => a.sortOrder - b.sortOrder),
+    [instances]
+  );
+
+  const standaloneInstances = useMemo(
+    () => instances.filter((i) => i.jobId === null).sort((a, b) => a.sortOrder - b.sortOrder),
     [instances]
   );
 
@@ -304,9 +442,15 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       instancesForJob,
+      standaloneInstances,
       fieldsForInstance,
       attachTemplate,
       updateInstanceField,
+      addInstanceField,
+      editInstanceField,
+      deleteInstanceField,
+      updateInstance,
+      deleteInstance,
     }),
     [
       instances,
@@ -316,9 +460,15 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       instancesForJob,
+      standaloneInstances,
       fieldsForInstance,
       attachTemplate,
       updateInstanceField,
+      addInstanceField,
+      editInstanceField,
+      deleteInstanceField,
+      updateInstance,
+      deleteInstance,
     ]
   );
 
