@@ -9,7 +9,12 @@ export type FormShareLinkRow = {
   locked_field_ids: unknown;
   sent_at: string | null;
   viewed_at: string | null;
+  started_at: string | null;
   submitted_at: string | null;
+  progress: number | null;
+  signature_affirmed: boolean | null;
+  signed_ip: string | null;
+  signed_user_agent: string | null;
   revoked_at: string | null;
   created_at: string;
   created_by: string | null;
@@ -38,7 +43,12 @@ export function rowToFormShareLink(row: FormShareLinkRow): FormShareLink {
     lockedFieldIds: toLockedFieldIds(row.locked_field_ids),
     sentAt: row.sent_at,
     viewedAt: row.viewed_at,
+    startedAt: row.started_at,
     submittedAt: row.submitted_at,
+    progress: row.progress,
+    signatureAffirmed: row.signature_affirmed,
+    signedIp: row.signed_ip,
+    signedUserAgent: row.signed_user_agent,
     revokedAt: row.revoked_at,
     createdAt: row.created_at,
     createdBy: row.created_by,
@@ -55,7 +65,12 @@ export function formShareLinkToRow(l: FormShareLink): FormShareLinkRow {
     locked_field_ids: l.lockedFieldIds,
     sent_at: l.sentAt ?? null,
     viewed_at: l.viewedAt ?? null,
+    started_at: l.startedAt ?? null,
     submitted_at: l.submittedAt ?? null,
+    progress: l.progress ?? null,
+    signature_affirmed: l.signatureAffirmed ?? null,
+    signed_ip: l.signedIp ?? null,
+    signed_user_agent: l.signedUserAgent ?? null,
     revoked_at: l.revokedAt ?? null,
     created_at: l.createdAt,
     created_by: l.createdBy ?? null,

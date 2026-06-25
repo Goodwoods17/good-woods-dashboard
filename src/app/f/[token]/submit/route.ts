@@ -12,9 +12,21 @@ export const dynamic = "force-dynamic";
  */
 export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
   try {
-    const body = (await request.json().catch(() => ({}))) as { answers?: ShareAnswers };
+    const body = (await request.json().catch(() => ({}))) as {
+      answers?: ShareAnswers;
+      affirmed?: boolean;
+    };
     const answers = body.answers ?? {};
-    const result = await submitShareLink(params.token, answers);
+    // Audit context captured server-side (the client never sets these). The IP
+    // comes from the proxy's x-forwarded-for (first hop) or x-real-ip.
+    const forwarded = request.headers.get("x-forwarded-for");
+    const ip = forwarded?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || null;
+    const userAgent = request.headers.get("user-agent") || null;
+    const result = await submitShareLink(params.token, answers, {
+      ip,
+      userAgent,
+      affirmed: typeof body.affirmed === "boolean" ? body.affirmed : undefined,
+    });
     if (!result.ok) {
       const status = result.reason === "unconfigured" ? 503 : 404;
       return NextResponse.json({ ok: false, reason: result.reason }, { status });

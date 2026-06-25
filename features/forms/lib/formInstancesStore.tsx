@@ -25,7 +25,11 @@ import {
   getSupabase,
   hasSupabase,
 } from "@shared/lib/supabase";
-import { formShareLinkToRow } from "./formShareLinksRowMap";
+import {
+  formShareLinkToRow,
+  rowToFormShareLink,
+  type FormShareLinkRow,
+} from "./formShareLinksRowMap";
 import { generateShareToken } from "./shareLink";
 import { formatError } from "@shared/lib/formatError";
 import {
@@ -57,6 +61,12 @@ type FormInstancesContextValue = {
   error: string | null;
   refresh: () => Promise<void>;
   instancesForJob: (jobId: string) => FormInstance[];
+  /**
+   * Share links minted for an instance (owner-private tracking surface). The
+   * authenticated owner reads these to see each recipient's status + dates; the
+   * public /f/<token> path never touches this store (service-role server-side).
+   */
+  shareLinksForInstance: (instanceId: string) => FormShareLink[];
   /** Standalone instances (jobId = null). */
   standaloneInstances: FormInstance[];
   fieldsForInstance: (instanceId: string) => FormInstanceField[];
@@ -160,17 +170,21 @@ function localSaveFields(fields: FormInstanceField[]) {
 async function supabaseLoad(): Promise<{
   instances: FormInstance[];
   fields: FormInstanceField[];
+  shareLinks: FormShareLink[];
 }> {
   const sb = getSupabase();
-  const [insRes, fldRes] = await Promise.all([
+  const [insRes, fldRes, linkRes] = await Promise.all([
     sb.from(FORM_INSTANCES_TABLE).select("*").order("sort_order", { ascending: true }),
     sb.from(FORM_INSTANCE_FIELDS_TABLE).select("*").order("sort_order", { ascending: true }),
+    sb.from(FORM_SHARE_LINKS_TABLE).select("*").order("created_at", { ascending: true }),
   ]);
   if (insRes.error) throw insRes.error;
   if (fldRes.error) throw fldRes.error;
+  if (linkRes.error) throw linkRes.error;
   return {
     instances: (insRes.data as FormInstanceRow[] | null)?.map(rowToFormInstance) ?? [],
     fields: (fldRes.data as FormInstanceFieldRow[] | null)?.map(rowToFormInstanceField) ?? [],
+    shareLinks: (linkRes.data as FormShareLinkRow[] | null)?.map(rowToFormShareLink) ?? [],
   };
 }
 
@@ -178,6 +192,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   const backend: FormsBackend = hasSupabase() ? "supabase" : "localStorage";
   const [instances, setInstances] = useState<FormInstance[]>([]);
   const [fields, setFields] = useState<FormInstanceField[]>([]);
+  // Share links are owner-private tracking metadata; they only exist in the
+  // Supabase backend (the localStorage fallback can't mint a reachable link).
+  const [shareLinks, setShareLinks] = useState<FormShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const instancesRef = useRef<FormInstance[]>([]);
@@ -199,6 +216,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
           if (!cancelled) {
             setInstances(remote.instances);
             setFields(remote.fields);
+            setShareLinks(remote.shareLinks);
           }
         } else if (!cancelled) {
           setInstances(localLoadInstances());
@@ -234,6 +252,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       const remote = await supabaseLoad();
       setInstances(remote.instances);
       setFields(remote.fields);
+      setShareLinks(remote.shareLinks);
       setError(null);
     } catch (e) {
       setError(formatError(e));
@@ -570,7 +589,12 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
         lockedFieldIds: args.lockedFieldIds ?? [],
         sentAt: null,
         viewedAt: null,
+        startedAt: null,
         submittedAt: null,
+        progress: null,
+        signatureAffirmed: null,
+        signedIp: null,
+        signedUserAgent: null,
         revokedAt: null,
         createdAt: new Date().toISOString(),
         createdBy: args.createdBy ?? null,
@@ -582,10 +606,20 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
         setError(formatError(err));
         throw err;
       }
+      // Reflect the new link in the owner-private tracking surface immediately.
+      setShareLinks((prev) => [...prev, link]);
       setError(null);
       return link;
     },
     [backend]
+  );
+
+  const shareLinksForInstance = useCallback(
+    (instanceId: string) =>
+      shareLinks
+        .filter((l) => l.instanceId === instanceId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [shareLinks]
   );
 
   const instancesForJob = useCallback(
@@ -614,6 +648,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       instancesForJob,
+      shareLinksForInstance,
       standaloneInstances,
       fieldsForInstance,
       attachTemplate,
@@ -636,6 +671,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       error,
       refresh,
       instancesForJob,
+      shareLinksForInstance,
       standaloneInstances,
       fieldsForInstance,
       attachTemplate,

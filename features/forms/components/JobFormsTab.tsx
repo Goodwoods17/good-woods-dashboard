@@ -10,6 +10,7 @@ import { formPhaseLabel } from "../lib/phase";
 import { FormFillSurface } from "./FormFillSurface";
 import { FormCompletionBar } from "./FormCompletionBar";
 import { ShareFormButton } from "./ShareFormButton";
+import { RecipientStatusList } from "./RecipientStatusList";
 
 const PHASE_ORDER: (FormPhase | null)[] = [
   "design",
@@ -159,6 +160,7 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
                     <FormFillSurface instance={instance} />
                     <FormCompletionBar instance={instance} jobContext={jobContext} />
                     <ShareFormButton instance={instance} />
+                    <RecipientStatusList instance={instance} />
                   </section>
                 ))}
               </div>

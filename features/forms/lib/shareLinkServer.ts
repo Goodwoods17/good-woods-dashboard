@@ -13,6 +13,7 @@ import {
 } from "./formInstancesRowMap";
 import { rowToFormShareLink, type FormShareLinkRow } from "./formShareLinksRowMap";
 import { filterLockedAnswers, isShareLinkActive, type ShareAnswers } from "./shareLink";
+import { computeProgress } from "./shareTracking";
 
 /**
  * Server-only data access for the no-login /f/<token> portal. Uses the SERVICE
@@ -114,11 +115,28 @@ export type SubmitResult =
   | { ok: false; reason: "not_found" | "revoked" | "unconfigured" };
 
 /**
+ * Per-request audit context captured server-side on a public submit. The IP +
+ * user-agent are logged quietly (the recipient never sees them); `affirmed` is
+ * the "I confirm" checkbox state. All three feed the signature audit trail.
+ */
+export type SubmitContext = {
+  ip?: string | null;
+  userAgent?: string | null;
+  affirmed?: boolean;
+};
+
+/**
  * Persist a public submission. Server-side it IGNORES any value aimed at a
  * locked field id (via filterLockedAnswers) — the token holder cannot edit a
- * locked field even by crafting the payload. Stamps viewed_at/submitted_at.
+ * locked field even by crafting the payload. Stamps started_at (first answer)
+ * + submitted_at, recomputes the owner-visible progress %, and records the
+ * signature audit trail (IP/UA/affirmation) when the form is being signed.
  */
-export async function submitShareLink(token: string, answers: ShareAnswers): Promise<SubmitResult> {
+export async function submitShareLink(
+  token: string,
+  answers: ShareAnswers,
+  context: SubmitContext = {}
+): Promise<SubmitResult> {
   const sb = getServiceClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
@@ -146,14 +164,25 @@ export async function submitShareLink(token: string, answers: ShareAnswers): Pro
     (id) => !(id in safe) && link.lockedFieldIds.includes(id)
   );
 
+  // Build a working copy of the fields so we can recompute progress from the
+  // merged (post-submit) state.
+  const byId = new Map(fields.map((f) => [f.id, { ...f }]));
+
   // Persist each surviving answer. Sequential keeps it simple + ordered; the
   // payload is a handful of fields per form.
   for (const [fieldId, patch] of Object.entries(safe)) {
+    const target = byId.get(fieldId);
     const update: Record<string, unknown> = {};
     if ("checked" in patch) update.checked = patch.checked ?? null;
     if ("value" in patch) update.value = patch.value ?? null;
     if ("note" in patch) update.note = patch.note ?? null;
     if (Object.keys(update).length === 0) continue;
+    // Mirror onto the working copy for the progress recompute.
+    if (target) {
+      if ("checked" in update) target.checked = update.checked as boolean | null;
+      if ("value" in update) target.value = update.value;
+      if ("note" in update) target.note = update.note as string | null;
+    }
     const { error: upErr } = await sb
       .from(FORM_INSTANCE_FIELDS_TABLE)
       .update(update)
@@ -163,8 +192,49 @@ export async function submitShareLink(token: string, answers: ShareAnswers): Pro
   }
 
   const now = new Date().toISOString();
-  const stamp: Record<string, unknown> = { submitted_at: now };
+
+  // Does this form even carry a signature field? The "I confirm" affirmation is
+  // only meaningful (and only shown to the client) when something is being signed.
+  const signatureFields = fields.filter((f) => f.type === "signature");
+  const hasSignature = signatureFields.length > 0;
+
+  // When the signer affirms, stamp the affirmation into each signature field's
+  // config so it travels onto the signoff PDF (which renders from the fields).
+  // Server-authoritative: the client cannot fabricate this — it is set here only
+  // when the request carried affirmed === true.
+  if (hasSignature && context.affirmed === true) {
+    for (const sig of signatureFields) {
+      const cfg = (sig.config ?? {}) as Record<string, unknown>;
+      const nextConfig = {
+        ...cfg,
+        affirmed: true,
+        signedAt: typeof cfg.signedAt === "string" ? cfg.signedAt : now,
+      };
+      const { error: cfgErr } = await sb
+        .from(FORM_INSTANCE_FIELDS_TABLE)
+        .update({ config: nextConfig })
+        .eq("id", sig.id)
+        .eq("instance_id", link.instanceId);
+      if (cfgErr) throw cfgErr;
+    }
+  }
+
+  const stamp: Record<string, unknown> = {
+    submitted_at: now,
+    progress: computeProgress(Array.from(byId.values())),
+  };
   if (link.viewedAt === null) stamp.viewed_at = now;
+  // A submit implies the recipient started; backfill started_at if not yet set.
+  if (link.startedAt === null) stamp.started_at = now;
+  // Signature audit trail: when the form is being signed, capture the "I confirm"
+  // affirmation + the IP/UA server-side (the recipient never sees these). Only
+  // stamped on a signing submit, so a plain answer-update never clobbers a prior
+  // signing's audit record.
+  if (hasSignature && context.affirmed !== undefined) {
+    stamp.signature_affirmed = context.affirmed === true;
+    stamp.signed_ip = context.ip ?? null;
+    stamp.signed_user_agent = context.userAgent ?? null;
+  }
   await sb.from(FORM_SHARE_LINKS_TABLE).update(stamp).eq("id", link.id);
 
   return { ok: true, rejectedLocked };

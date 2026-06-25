@@ -33,9 +33,13 @@ export function PublicFillView({
   alreadySubmitted: boolean;
 }) {
   const locked = useMemo(() => new Set(lockedFieldIds), [lockedFieldIds]);
+  // A form carrying a signature is a signing — gate submit on the "I confirm"
+  // affirmation, and send it so the server can record the audit trail.
+  const hasSignature = useMemo(() => fields.some((f) => f.type === "signature"), [fields]);
 
   // Local working copy of each field's answer, seeded from the persisted values.
   const [working, setWorking] = useState<FormInstanceField[]>(fields);
+  const [affirmed, setAffirmed] = useState(false);
   const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">(
     alreadySubmitted ? "saved" : "idle"
   );
@@ -47,6 +51,11 @@ export function PublicFillView({
   }
 
   async function submit() {
+    if (hasSignature && !affirmed) {
+      setStatus("error");
+      setErrorMsg("Please confirm the affirmation before submitting.");
+      return;
+    }
     setStatus("saving");
     setErrorMsg(null);
     // Build the answer payload for the OPEN fields only; the server also strips
@@ -67,7 +76,7 @@ export function PublicFillView({
       const res = await fetch(`/f/${encodeURIComponent(token)}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ answers }),
+        body: JSON.stringify({ answers, ...(hasSignature ? { affirmed } : {}) }),
       });
       const body = (await res.json().catch(() => ({}))) as { ok?: boolean; reason?: string };
       if (!res.ok || !body.ok) {
@@ -133,6 +142,25 @@ export function PublicFillView({
               );
             })}
           </div>
+
+          {hasSignature && (
+            <label className="mt-5 flex items-start gap-2 text-sm text-text-secondary">
+              <input
+                type="checkbox"
+                checked={affirmed}
+                disabled={status === "saving"}
+                onChange={(e) => {
+                  setAffirmed(e.target.checked);
+                  if (status === "error") setStatus("idle");
+                }}
+                data-testid="signature-affirmation"
+                className="mt-0.5 h-4 w-4 shrink-0 rounded border-border accent-ink-pill"
+              />
+              <span>
+                I confirm the information above is accurate and that this signature is my own.
+              </span>
+            </label>
+          )}
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <div className="min-h-[20px] text-sm">

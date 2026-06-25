@@ -378,3 +378,66 @@ test.describe("forms P2 slice 1 — token link + public /f/<token> fill page", (
     }
   });
 });
+
+test.describe("forms P2 slice 3 — owner tracking (sent/opened) + audit", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner mints a link → the recipient-status surface shows it (default "Sent",
+  // since a sent date falls back to created). A no-login open stamps viewed_at →
+  // back as owner, the same link's pill transitions to "Opened" and the opened
+  // date appears. Proves open→viewed_at and a live status transition (the DoD).
+  test("owner sees the status pill transition Sent → Opened after a no-login open", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    // Attach a fresh Pre-Install instance and mint a link from it.
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+    await instance.getByTestId("create-share-link").click();
+
+    const urlInput = instance.getByTestId("share-link-url");
+    await expect(urlInput).toBeVisible({ timeout: 10_000 });
+    const shareUrl = await urlInput.inputValue();
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // The owner-private status surface shows the new recipient, pill = "Sent".
+    const statusRow = instance.getByTestId("recipient-status-row").last();
+    await expect(statusRow).toBeVisible({ timeout: 10_000 });
+    await expect(statusRow.getByTestId("recipient-status-pill")).toHaveText("Sent");
+    // The "sent date · N days ago" counter renders.
+    await expect(statusRow.getByTestId("recipient-sent")).toContainText(/ago|today/);
+
+    // A no-login visitor opens the link → server stamps viewed_at.
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await guest.close();
+    }
+
+    // Back as the owner: reload, reopen the Forms tab, and the SAME link's pill
+    // now reads "Opened" with an opened date (the transition the owner watches).
+    await page.reload();
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    const reopened = page.getByTestId("form-instance").last();
+    const reloadedRow = reopened.getByTestId("recipient-status-row").last();
+    await expect(reloadedRow.getByTestId("recipient-status-pill")).toHaveText("Opened", {
+      timeout: 15_000,
+    });
+    await expect(reloadedRow.getByTestId("recipient-opened")).toBeVisible();
+  });
+});

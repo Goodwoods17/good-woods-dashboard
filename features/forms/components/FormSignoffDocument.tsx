@@ -220,6 +220,11 @@ function signedAt(field: FormInstanceField): string | null {
   return typeof at === "string" && at.trim() ? at : null;
 }
 
+/** Did the signer tick the "I confirm" affirmation (audit trail)? */
+function signatureAffirmed(field: FormInstanceField): boolean {
+  return (field.config as Record<string, unknown>)?.affirmed === true;
+}
+
 export type FormSignoffDocumentProps = {
   instance: FormInstance;
   fields: FormInstanceField[];
@@ -310,6 +315,11 @@ export function FormSignoffDocument({
                     <Text style={styles.signerMeta}>
                       Signed by {name}
                       {at ? ` · ${fmtDateTime(at)}` : ""}
+                    </Text>
+                  ) : null}
+                  {signatureAffirmed(field) ? (
+                    <Text style={styles.signerMeta}>
+                      Affirmed accurate by the signer (&ldquo;I confirm&rdquo;)
                     </Text>
                   ) : null}
                 </View>

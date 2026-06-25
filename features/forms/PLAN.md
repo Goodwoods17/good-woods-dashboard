@@ -45,15 +45,32 @@ side effects). No schema migration needed — columns + bucket shipped in slice 
 ### Slice 1 — Token model + public route + bare fill page (issue #40)
 
 `form_share_links` (token, recipient, `locked_field_ids`, no expiry, revoke-only)
-+ canonical RLS. `lib/shareLink.ts` (pure: `generateShareToken`,
-`isShareLinkActive`, `filterLockedAnswers` — the server-side lock gate) +
-`shareLinkServer.ts` (service-role, scoped-by-token load + submit). Public route
-`src/app/f/[token]/` — `page.tsx` (server load → `PublicFillView`) + `submit/route.ts`
-(POST; strips locked + unknown ids before writing). `/f` added to middleware
-`PUBLIC_ROUTES` + AppShell `BARE_PATHS`. Owner mints a link via
-`createShareLink` on the instances store + `ShareFormButton` on the job Forms tab.
-Vitest covers the token + locked-field filter + row-map; Playwright covers
-owner-mints-link → no-login open → submit → resume. Touches the auth boundary +
-adds a schema migration — stop-and-ping before the prod migration.
+
+- canonical RLS. `lib/shareLink.ts` (pure: `generateShareToken`,
+  `isShareLinkActive`, `filterLockedAnswers` — the server-side lock gate) +
+  `shareLinkServer.ts` (service-role, scoped-by-token load + submit). Public route
+  `src/app/f/[token]/` — `page.tsx` (server load → `PublicFillView`) + `submit/route.ts`
+  (POST; strips locked + unknown ids before writing). `/f` added to middleware
+  `PUBLIC_ROUTES` + AppShell `BARE_PATHS`. Owner mints a link via
+  `createShareLink` on the instances store + `ShareFormButton` on the job Forms tab.
+  Vitest covers the token + locked-field filter + row-map; Playwright covers
+  owner-mints-link → no-login open → submit → resume. Touches the auth boundary +
+  adds a schema migration — stop-and-ping before the prod migration.
 
 ### Slice 2 (next) — Owner share UI + per-field lock controls + QR + branding.
+
+### Slice 3 — Owner tracking + signature audit trail (issue #42)
+
+Additive migration (`20260625140000_form_share_tracking.sql`) on `form_share_links`:
+`started_at`, `progress` (0..100 check), `signature_affirmed`, `signed_ip`,
+`signed_user_agent` — all nullable, prod-safe. `lib/shareTracking.ts` (pure:
+`recipientStatus` Created→Sent→Opened→Started→Submitted, `daysSince` /
+`daysSinceLabel`, `computeProgress`) + vitest. Owner-private surface
+`RecipientStatusList` on the job Forms tab — a status pill + funnel track + sent
+date · "N days ago" + opened date per recipient; reads the authenticated store
+(`shareLinksForInstance`), never the public page. `submitShareLink` stamps
+`started_at`/`submitted_at`, recomputes `progress`, and on a signing submit
+records the audit trail (IP/UA/`affirmed`) server-side from request headers;
+PublicFillView shows the "I confirm" affirmation (gates submit) when the form
+carries a signature, and the affirmation lands on the signoff PDF. Touches the
+auth boundary + a schema migration — stop-and-ping before the prod migration.

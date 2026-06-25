@@ -104,6 +104,11 @@ export type FormInstanceField = {
 // the vocabulary can evolve without a migration — mirrors FieldType / FormPhase.
 export type RecipientType = "designer" | "customer" | "other";
 
+// The owner-private lifecycle of a single share link, derived from its *_at
+// stamps. Strictly ordered: each later state implies all earlier ones reached.
+// "created" = minted but not yet sent (no recipient has the URL).
+export type RecipientStatus = "created" | "sent" | "opened" | "started" | "submitted";
+
 // A no-login token link to one form instance, scoped to a single recipient.
 // No expiry: reusable until manually revoked (revokedAt). The token is the only
 // key. lockedFieldIds are read-only for this recipient (enforced server-side in
@@ -117,7 +122,15 @@ export type FormShareLink = {
   lockedFieldIds: string[];
   sentAt: string | null;
   viewedAt: string | null;
+  // First answer change on /f/<token> (between opened and submitted).
+  startedAt: string | null;
   submittedAt: string | null;
+  // Owner-visible completion %, 0..100, recomputed on each public submit.
+  progress: number | null;
+  // Signature audit trail (quiet server-side capture; never shown to the client).
+  signatureAffirmed: boolean | null;
+  signedIp: string | null;
+  signedUserAgent: string | null;
   revokedAt: string | null;
   createdAt: string;
   createdBy: string | null;
