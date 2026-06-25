@@ -83,9 +83,10 @@ re-explaining.
 real, I run it in the app. If something failed, I say so plainly.
 
 ### On credits
-- **No autonomous spinning.** I won't run open-ended background loops that burn
-  credits while a task isn't actually progressing. I work in focused bursts and
-  stop at clean checkpoints.
+- **No aimless spinning.** I won't run open-ended loops that burn credits while a
+  task isn't actually progressing. The one deliberate exception is **`/cook`** (see
+  below): it only spends while making real progress against a locked plan, never
+  repeats a failing action, and stops to ask after a few honest tries.
 - **Resuming is nearly free.** Your place is saved to a file the next session
   auto-loads (below) — no paying me to re-learn where we were.
 - Want to know what's burning your limits? Type `/usage`.
@@ -111,15 +112,41 @@ live site, so at the start just tell me which you want: *"merge is mine — ping
 when it's green"* or *"merge automatically once the tests pass."* That saves us
 the back-and-forth we hit asking permission every time.
 
-**How we test (and what we're improving).** Today: the computer checks types,
-lint, and the math/logic automatically, plus I drive the real app in a browser at
-the end of each slice. The gap we found: the *interactive* bugs (a button that
-silently doesn't fire, an editor that flickers closed) only get caught by that
-manual browser run. **The upgrade** (its own little project to do): make that
-browser run **automatic on every change**, against a *copy* of the database
-instead of the real one, and turn on a couple of compiler/lint guards that prevent
-the most common React glitches before they ship. Plain version: fewer "found it
-by hand at the end," more "the robot caught it the moment I typed it."
+**How we test.** The computer checks types, lint, and the math/logic
+automatically. **And now (done 2026-06-24):** on every pull request, a robot
+**opens the real app in a browser, logs in, and checks that real data shows up**
+— run against a fresh *copy* of the database, never the live one. So the
+interactive bugs (a button that silently doesn't fire, an editor that flickers
+closed) get caught automatically, the moment a change is pushed — not by hand at
+the end. (Still to add later: a couple of compiler/lint guards and database
+security tests.)
+
+---
+
+## Letting it cook (`/cook`) — building while you're away
+
+The big upgrade: instead of you driving every step, you can **plan a feature once
+with me, then let me build it to completion on its own** while you watch from your
+phone. You type `/cook <the feature>`.
+
+- **First we plan it together** (at the desk): I research, we "grill" the design,
+  I write the slice plan, and I post each slice as a checklist item on a GitHub
+  **milestone** — that's the to-do list the robot works through.
+- **Then it cooks** (you can leave): for each slice it writes the code *and* its
+  test, pushes it, opens a PR, and waits for the robot tests to go green.
+- **Training wheels (on by default):** it does all that on its own, but **stops
+  and pings you before every merge** — you tap "merge" from your phone. Once you've
+  watched it work and trust it, we flip on auto-merge for the safe slices.
+- **Always asks first** before anything touching **money, the database structure,
+  or logins/security** — those never go live without your say-so.
+- **The hard wall:** `/cook` is for **code only**. It will *never* touch your
+  email, calendar, or business docs on its own. Those stay fully hands-on.
+- **Two at once?** Yes — run a second one from a second window (`gwcode 2`).
+  Before it starts, `/cook` checks for overlap and will stop you if two features
+  would step on each other (same folder, shared files, or database changes).
+
+If your laptop hiccups, a tiny background keeper restarts the phone-reachable
+session automatically, and `/cook --resume` picks up the remaining slices.
 
 ---
 
@@ -148,6 +175,7 @@ were we?"* work too — but `/resume` is the reliable one-word trigger.) No re-e
 | `go` / `next` / `continue` | the next step I teed up |
 | `/save` *(+ optional note)* | bank our place for next time |
 | `/resume` *(or "where were we?")* | pick up exactly where we left off last session |
+| `/cook <feature>` | plan a feature together, then I build + test it slice-by-slice (you tap merge) |
 | `push` | back the branch up to GitHub |
 | `merge` | fold the tested branch into `main` (I'll confirm first) |
 | *"explain like I'm not a dev"* | plain-English version of anything |

@@ -3,6 +3,9 @@
 Date: 2026-06-24
 Status: Accepted
 
+> Note (2026-06-24): the command was named **`/cook`** during Phase-2 build
+> (originally drafted as `/autobuild` below — same command, renamed before use).
+
 ## Context
 
 The build loop to date is **one long interactive session**: Andrew and the agent

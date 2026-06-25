@@ -1,7 +1,20 @@
-# Plan — Autonomous build workflow
+# Plan — Autonomous build workflow (the `/cook` command)
 
-**Status:** Planned (grilled + locked 2026-06-24). See ADR 0018 for the why.
-**Nothing built yet.** This plan changes no config and runs nothing until Andrew says go.
+**Status:** Phase 2 building (2026-06-24). See ADR 0018 for the why.
+**Command name:** `/cook <feature>` (chosen over `/cook`).
+
+**Phase-2 decisions locked 2026-06-24:**
+- **Training wheels first.** Early runs build + test + open PRs autonomously but
+  **stop-and-ping before every merge** (Andrew clicks merge from the phone); flip
+  to auto-merge-safe-slices once trust is earned. Money/schema/RLS always stop.
+- **Build local, stage global for review.** The `/cook` command, engine template,
+  and watchdog script are built locally; the global `~/.claude/CLAUDE.md` rule,
+  the permission allow/deny list, and the watchdog crontab are shown for explicit
+  approval before applying.
+- **Dry-run validated first.** Engine has a `--dry-run` (everything except merge);
+  logic verified via a mock-agent harness before any real run.
+- **Parallel-capable, start serial.** Each run uses its own git worktree; run a
+  second feature from `gwcode 2`. Prefer one cook at a time during training wheels.
 
 ## Goal
 
@@ -16,7 +29,7 @@ Gmail / Calendar / business-admin** (hard wall, ADR 0018 §8).
 - ADR 0018 + this plan. No behavior change.
 
 ### Phase 1 — Build the trust gate (the testing-upgrade slice) — semi-supervised
-`/autobuild` isn't trusted until the automated browser smoke exists, so this one is
+`/cook` isn't trusted until the automated browser smoke exists, so this one is
 built the normal way with Andrew watching. **It gets its own grill + plan** (it has
 real sub-decisions: seed strategy, which guards). Scope target:
 - **Playwright** installed + configured (`@playwright/test`).
@@ -30,7 +43,7 @@ real sub-decisions: seed strategy, which guards). Scope target:
   smoke runs against the seeded branch DB, never prod.
 
 ### Phase 2 — Build the autonomous harness (once Phase 1 is green)
-- **`/autobuild` command** (global, `~/.claude/commands/`) — orchestrates Phase A
+- **`/cook` command** (global, `~/.claude/commands/`) — orchestrates Phase A
   (research → grill-with-docs → writing-plans → to-issues/Milestone) then Phase B
   (the Workflow run-till-done loop). Coding-only.
 - **Workflow script template** — the engine: drain milestone in dependency order;
@@ -52,7 +65,7 @@ real sub-decisions: seed strategy, which guards). Scope target:
   not block on a prompt for the common safe commands.
 
 ### Phase 3 — Dogfood
-- Run the next real feature (e.g. Mozaik CSV seeding) through `/autobuild`
+- Run the next real feature (e.g. Mozaik CSV seeding) through `/cook`
   end-to-end. Watch from the phone. Retro → harden.
 
 ## Ship boundary (per ADR 0018 §7)
