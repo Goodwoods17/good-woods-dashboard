@@ -1,0 +1,104 @@
+name: Apply migrations to prod
+
+# Auto-applies any NEWLY-ADDED supabase/migrations/*.sql file to the production
+# database the moment it lands on `main` (i.e. right after a PR merge). This is
+# the "no more pasting SQL" pipeline:
+#
+#   merge a PR that adds a migration  →  this workflow runs the new file via psql
+#
+# Your approval gate is preserved: the merge click is the authorization, and a
+# gated (schema/RLS) slice still stops-and-pings for that click before it merges.
+#
+# Why psql and not `supabase db push`: the repo's migration-history versions have
+# drifted from what prod recorded (filename prefixes ≠ recorded versions), so
+# `db push` would try to re-run all 34 migrations. Applying only the files a push
+# ADDED, directly via psql, sidesteps the history table entirely. Our migrations
+# are written idempotent (`if not exists` / `drop policy if exists`), so a re-run
+# is safe.
+#
+# REQUIREMENTS:
+#   - Secret `SUPABASE_DB_URL` = the prod **Session pooler** connection string
+#     (IPv4; the direct db.<ref>.supabase.co endpoint is IPv6-only and GitHub
+#     runners are IPv4, so it must be the pooler URI).
+#
+# CONSTRAINTS:
+#   - Only ADDED files are applied. Never EDIT an applied migration — add a new
+#     one. Editing an existing file will NOT re-run it here (by design).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**.sql"
+  workflow_dispatch:
+    inputs:
+      check_only:
+        description: "Connection check only (SELECT 1), apply nothing"
+        type: boolean
+        default: true
+
+concurrency:
+  group: prod-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history for the push diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure psql is available
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          fi
+          psql --version
+
+      - name: Connection check
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SUPABASE_DB_URL:-}" ]; then
+            echo "::error::SUPABASE_DB_URL secret is not set."
+            exit 1
+          fi
+          psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -c 'select 1 as ok;'
+          echo "✓ prod DB reachable"
+
+      - name: Determine newly-added migration files
+        id: changed
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          BEFORE='${{ github.event.before }}'
+          AFTER='${{ github.sha }}'
+          # First push / unknown parent → fall back to the immediate parent.
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            BEFORE="$(git rev-parse "${AFTER}~1")"
+          fi
+          FILES="$(git diff --name-only --diff-filter=A "$BEFORE" "$AFTER" -- 'supabase/migrations/**.sql' | sort || true)"
+          echo "Added migration files:"
+          echo "${FILES:-(none)}"
+          {
+            echo "files<<__EOF__"
+            echo "$FILES"
+            echo "__EOF__"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply new migrations
+        if: github.event_name == 'push' && steps.changed.outputs.files != ''
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r f; do
+            [ -z "$f" ] && continue
+            echo "──→ applying $f"
+            psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -1 -f "$f"
+            echo "    ✓ $f applied"
+          done <<< "${{ steps.changed.outputs.files }}"
+          echo "✓ all new migrations applied to prod"
