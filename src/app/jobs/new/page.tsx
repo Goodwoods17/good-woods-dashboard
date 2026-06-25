@@ -24,6 +24,9 @@ import {
   HEALTH_LABELS,
 } from "@shared/lib/types";
 import { newActivity } from "@features/jobs/lib/activity";
+import { useFormTemplates } from "@features/forms/lib/formTemplatesStore";
+import { useFormInstances } from "@features/forms/lib/formInstancesStore";
+import { attachDefaultForms } from "@features/forms/lib/attachDefaultForms";
 import { cn } from "@shared/lib/utils";
 
 type IntakeMode = "quick" | "full";
@@ -105,6 +108,8 @@ export default function NewJobPage() {
   const { jobs, createJob, backend } = useJobs();
   const { contacts } = useContacts();
   const { createDocument } = useDocuments();
+  const { templates, fieldsForTemplate } = useFormTemplates();
+  const { attachTemplate } = useFormInstances();
   const router = useRouter();
 
   const [mode, setMode] = useState<IntakeMode>("quick");
@@ -271,6 +276,8 @@ export default function NewJobPage() {
 
     try {
       await createJob(job);
+      // Auto-attach default form templates (best-effort; never blocks job creation).
+      await attachDefaultForms(id, templates, fieldsForTemplate, attachTemplate);
       // Save any pending documents now that the project_id exists.
       for (const pd of pendingDocs) {
         try {

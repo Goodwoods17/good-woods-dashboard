@@ -180,10 +180,17 @@ describe("fieldRegistry", () => {
     }
   });
 
-  it("wires section + checkbox in this slice; others are scaffold", () => {
+  it("wires section, checkbox, and the 6 non-media types; photo + signature remain scaffold", () => {
     expect(FIELD_REGISTRY.section.implemented).toBe(true);
     expect(FIELD_REGISTRY.checkbox.implemented).toBe(true);
-    expect(FIELD_REGISTRY.short_text.implemented).toBe(false);
+    expect(FIELD_REGISTRY.short_text.implemented).toBe(true);
+    expect(FIELD_REGISTRY.long_text.implemented).toBe(true);
+    expect(FIELD_REGISTRY.number.implemented).toBe(true);
+    expect(FIELD_REGISTRY.yes_no.implemented).toBe(true);
+    expect(FIELD_REGISTRY.dropdown.implemented).toBe(true);
+    expect(FIELD_REGISTRY.date.implemented).toBe(true);
+    // slice 3 types remain scaffold
+    expect(FIELD_REGISTRY.photo.implemented).toBe(false);
     expect(FIELD_REGISTRY.signature.implemented).toBe(false);
   });
 
@@ -192,5 +199,81 @@ describe("fieldRegistry", () => {
     expect(FIELD_REGISTRY.checkbox.isComplete({ ...base, checked: true })).toBe(true);
     expect(FIELD_REGISTRY.checkbox.isComplete({ ...base, checked: null })).toBe(false);
     expect(FIELD_REGISTRY.section.isComplete({ ...base, type: "section" })).toBe(true);
+  });
+
+  it("text/number/date: complete when has a value; also complete when empty + not required", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    for (const t of ["short_text", "long_text", "number", "date"] as const) {
+      // Answered → complete regardless of required flag.
+      expect(FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: "hello" })).toBe(true);
+      // Required + empty → incomplete.
+      expect(
+        FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: "", config: { required: true } })
+      ).toBe(false);
+      expect(
+        FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: null, config: { required: true } })
+      ).toBe(false);
+      // Not required + empty → complete (field is optional).
+      expect(
+        FIELD_REGISTRY[t].isComplete({ ...base, type: t, value: null, config: {} })
+      ).toBe(true);
+    }
+  });
+
+  it("yes_no: complete on 'yes' or 'no'; incomplete when null + required", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    expect(FIELD_REGISTRY.yes_no.isComplete({ ...base, type: "yes_no", value: "yes" })).toBe(true);
+    expect(FIELD_REGISTRY.yes_no.isComplete({ ...base, type: "yes_no", value: "no" })).toBe(true);
+    expect(
+      FIELD_REGISTRY.yes_no.isComplete({
+        ...base,
+        type: "yes_no",
+        value: null,
+        config: { required: true },
+      })
+    ).toBe(false);
+    // Not required + unanswered → complete.
+    expect(
+      FIELD_REGISTRY.yes_no.isComplete({ ...base, type: "yes_no", value: null, config: {} })
+    ).toBe(true);
+  });
+
+  it("dropdown: complete when a value is selected; incomplete when null + required", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    expect(
+      FIELD_REGISTRY.dropdown.isComplete({ ...base, type: "dropdown", value: "Option A" })
+    ).toBe(true);
+    expect(
+      FIELD_REGISTRY.dropdown.isComplete({
+        ...base,
+        type: "dropdown",
+        value: null,
+        config: { required: true },
+      })
+    ).toBe(false);
+    // Not required + unanswered → complete.
+    expect(
+      FIELD_REGISTRY.dropdown.isComplete({ ...base, type: "dropdown", value: null, config: {} })
+    ).toBe(true);
+  });
+
+  it("a non-required field with no value is considered complete", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    // When config.required is false/absent, unAnswered fields pass the gate.
+    expect(
+      FIELD_REGISTRY.short_text.isComplete({ ...base, type: "short_text", value: null, config: {} })
+    ).toBe(true);
+  });
+
+  it("a required field with no value is NOT complete", () => {
+    const base = rowToFormInstanceField(instanceFieldRow);
+    expect(
+      FIELD_REGISTRY.short_text.isComplete({
+        ...base,
+        type: "short_text",
+        value: null,
+        config: { required: true },
+      })
+    ).toBe(false);
   });
 });
