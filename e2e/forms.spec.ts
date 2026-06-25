@@ -93,9 +93,10 @@ test.describe("forms slice 2 — full registry + builder + defaults/standalone",
     // Add a short_text field.
     await page.getByRole("button", { name: /add field/i }).click();
     // The FieldConfigPanel has a Label input and a Type selector.
-    // Set label first (currently says "New field" — clear + type).
-    const labelInput = page.locator('input[value="New field"]');
-    await labelInput.clear();
+    // The label defaults to "New field". Use getByDisplayValue (reads the live
+    // controlled-input value) — an [value="..."] attribute selector never matches
+    // a React controlled input. fill() clears + types in one step.
+    const labelInput = page.getByDisplayValue("New field");
     await labelInput.fill("Client name");
     // Type selector should default to short_text (already set).
 
