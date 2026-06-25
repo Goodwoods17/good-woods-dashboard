@@ -76,9 +76,13 @@ bucket stood up now (photos land in slice 3).
 
 - Template CRUD / dnd-kit reorder / mark default+active (slice 2).
 - `attachDefaultForms` auto-attach on `/jobs/new` + standalone forms (slice 2).
-- Lock + PDF signoff (slice 4). The signature field already records the signer's
-  typed name + an exact `signedAt` timestamp in the field's `config` (the
-  dispute-proof audit pair) — slice 4 renders that on the PDF.
+- ~~Lock + PDF signoff (slice 4)~~ — **shipped (#35).** `completeInstance`
+  gates on the registry `isComplete` per field, locks the fill surface read-only
+  (`status === "complete"`), and `FormSignoffDocument` (react-pdf) renders every
+  field type incl. embedded photo + signature `<Image>` plus the
+  completed-by/signer/timestamp audit block. Owner can `reopenInstance` (voids
+  the prior `signoff_path` PDF). See `lib/completion.ts` / `lib/signoff.ts` /
+  `components/FormCompletionBar.tsx`.
 - The client token-link fill portal (Phase 2 — touches the auth boundary).
 
 ## What this feature does NOT own

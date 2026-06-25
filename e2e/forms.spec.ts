@@ -243,3 +243,58 @@ test.describe("forms slice 3 — photo + signature fields", () => {
     await expect(page.getByText(new RegExp(`Signed by ${signer}`)).first()).toBeVisible();
   });
 });
+
+test.describe("forms slice 4 — lock + PDF signoff", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Complete a fully-filled form → it locks (read-only) and the download-signoff
+  // control appears; the owner can reopen to unlock. The Pre-Install template is
+  // all checkboxes (each gated on checked === true), so ticking every checkbox
+  // in the attached instance satisfies the completion gate.
+  test("complete a filled form locks it + exposes the signoff download; reopen unlocks", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    // Attach a fresh Pre-Install instance.
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    // Scope to the last attached instance (idempotent for re-runs on a CI DB).
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Tick every checkbox in this instance to satisfy the gate.
+    const boxes = instance.getByRole("checkbox");
+    const count = await boxes.count();
+    for (let i = 0; i < count; i++) {
+      await boxes.nth(i).check();
+    }
+
+    // The Complete button enables once all required fields pass.
+    const completeBtn = instance.getByTestId("complete-form");
+    await expect(completeBtn).toBeEnabled({ timeout: 10_000 });
+    await completeBtn.click();
+
+    // Locked: a completed banner appears and the download control is present.
+    await expect(instance.getByTestId("form-completed-bar")).toBeVisible({ timeout: 15_000 });
+    await expect(instance.getByTestId("download-signoff")).toBeVisible();
+    // Read-only: the "Add field to this copy" affordance is gone when locked.
+    await expect(instance.getByRole("button", { name: /add field to this copy/i })).toHaveCount(0);
+
+    // The lock survives a reload (status persisted).
+    await page.reload();
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    const reloaded = page.getByTestId("form-instance").last();
+    await expect(reloaded.getByTestId("form-completed-bar")).toBeVisible({ timeout: 15_000 });
+
+    // Reopen unlocks (auto-accept the confirm dialog), reverting to editable.
+    page.on("dialog", (d) => d.accept());
+    await reloaded.getByRole("button", { name: /reopen/i }).click();
+    await expect(reloaded.getByTestId("complete-form")).toBeVisible({ timeout: 15_000 });
+  });
+});

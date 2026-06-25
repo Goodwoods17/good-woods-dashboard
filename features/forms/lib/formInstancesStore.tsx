@@ -32,6 +32,8 @@ import {
   type FormInstanceRow,
 } from "./formInstancesRowMap";
 import { snapshotTemplate } from "./snapshot";
+import { isInstanceComplete } from "./completion";
+import { removeFormPhoto } from "./storage";
 
 const INSTANCES_KEY = "gw_form_instances_v1";
 const FIELDS_KEY = "gw_form_instance_fields_v1";
@@ -69,6 +71,21 @@ type FormInstancesContextValue = {
   deleteInstanceField: (id: string) => Promise<void>;
   /** Update instance metadata (title, phase, status, sortOrder). */
   updateInstance: (id: string, patch: Partial<FormInstance>) => Promise<void>;
+  /**
+   * Lock a fully-filled instance: status → complete, stamp completed_at +
+   * completed_by. Throws if any required field still fails its registry gate
+   * (the lock is gated, never silently skipped). The fill surface goes
+   * read-only on `status === "complete"`.
+   */
+  completeInstance: (id: string, completedBy: string) => Promise<void>;
+  /**
+   * Owner-only reopen: status → in_progress, clear completed_at/completed_by,
+   * and void the prior signoff PDF (signoff_path → null). Best-effort removes
+   * the stored PDF object.
+   */
+  reopenInstance: (id: string) => Promise<void>;
+  /** Record the signoff PDF storage path on a completed instance. */
+  setSignoffPath: (id: string, signoffPath: string) => Promise<void>;
   /** Delete an instance and all its fields. */
   deleteInstance: (id: string) => Promise<void>;
 };
@@ -392,6 +409,105 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
+  const completeInstance = useCallback(
+    async (id: string, completedBy: string) => {
+      const prevInstances = instancesRef.current;
+      const target = prevInstances.find((i) => i.id === id);
+      if (!target) return;
+      const instanceFields = fieldsRef.current.filter((f) => f.instanceId === id);
+      if (!isInstanceComplete(instanceFields)) {
+        throw new Error("Form has unfilled required fields — fill them before completing.");
+      }
+      const completedAt = new Date().toISOString();
+      setInstances((prev) =>
+        prev.map((i) => (i.id === id ? { ...i, status: "complete", completedAt, completedBy } : i))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_INSTANCES_TABLE)
+          .update({ status: "complete", completed_at: completedAt, completed_by: completedBy })
+          .eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setInstances(prevInstances);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const reopenInstance = useCallback(
+    async (id: string) => {
+      const prevInstances = instancesRef.current;
+      const target = prevInstances.find((i) => i.id === id);
+      if (!target) return;
+      const priorSignoff = target.signoffPath;
+      setInstances((prev) =>
+        prev.map((i) =>
+          i.id === id
+            ? {
+                ...i,
+                status: "in_progress",
+                completedAt: null,
+                completedBy: null,
+                signoffPath: null,
+              }
+            : i
+        )
+      );
+      // Best-effort: void the prior PDF object (no-op offline / inline paths).
+      if (priorSignoff) {
+        void removeFormPhoto(priorSignoff).catch(() => {});
+      }
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_INSTANCES_TABLE)
+          .update({
+            status: "in_progress",
+            completed_at: null,
+            completed_by: null,
+            signoff_path: null,
+          })
+          .eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setInstances(prevInstances);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const setSignoffPath = useCallback(
+    async (id: string, signoffPath: string) => {
+      const prevInstances = instancesRef.current;
+      setInstances((prev) => prev.map((i) => (i.id === id ? { ...i, signoffPath } : i)));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_INSTANCES_TABLE)
+          .update({ signoff_path: signoffPath })
+          .eq("id", id);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setInstances(prevInstances);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
   const deleteInstance = useCallback(
     async (id: string) => {
       const prevInstances = instancesRef.current;
@@ -453,6 +569,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       editInstanceField,
       deleteInstanceField,
       updateInstance,
+      completeInstance,
+      reopenInstance,
+      setSignoffPath,
       deleteInstance,
     }),
     [
@@ -471,6 +590,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       editInstanceField,
       deleteInstanceField,
       updateInstance,
+      completeInstance,
+      reopenInstance,
+      setSignoffPath,
       deleteInstance,
     ]
   );

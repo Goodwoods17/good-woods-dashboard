@@ -5,8 +5,10 @@ import { Plus, Trash2 } from "lucide-react";
 import type { FormPhase } from "@shared/lib/types";
 import { useFormTemplates } from "../lib/formTemplatesStore";
 import { useFormInstances } from "../lib/formInstancesStore";
+import { useJob } from "@features/jobs/lib/jobsStore";
 import { formPhaseLabel } from "../lib/phase";
 import { FormFillSurface } from "./FormFillSurface";
+import { FormCompletionBar } from "./FormCompletionBar";
 
 const PHASE_ORDER: (FormPhase | null)[] = [
   "design",
@@ -33,19 +35,18 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
   } = useFormInstances();
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const job = useJob(jobId);
+  const jobContext = job ? { code: job.code, name: job.name } : null;
 
   const instances = instancesForJob(jobId);
   const activeTemplates = templates.filter((t) => t.active);
 
   // Group instances by phase (preserving phase order).
-  const byPhase = PHASE_ORDER.reduce<Array<[FormPhase | null, typeof instances]>>(
-    (acc, phase) => {
-      const group = instances.filter((i) => i.phase === phase);
-      if (group.length > 0) acc.push([phase, group]);
-      return acc;
-    },
-    []
-  );
+  const byPhase = PHASE_ORDER.reduce<Array<[FormPhase | null, typeof instances]>>((acc, phase) => {
+    const group = instances.filter((i) => i.phase === phase);
+    if (group.length > 0) acc.push([phase, group]);
+    return acc;
+  }, []);
 
   async function onAttach(templateId: string) {
     const template = templates.find((t) => t.id === templateId);
@@ -143,16 +144,19 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
                           </span>
                         )}
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => onDelete(instance.id)}
-                        className="shrink-0 rounded p-1 text-text-tertiary hover:text-status-blocked transition-colors"
-                        aria-label="Remove form"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
-                      </button>
+                      {instance.status !== "complete" && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(instance.id)}
+                          className="shrink-0 rounded p-1 text-text-tertiary hover:text-status-blocked transition-colors"
+                          aria-label="Remove form"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={1.75} />
+                        </button>
+                      )}
                     </div>
                     <FormFillSurface instance={instance} />
+                    <FormCompletionBar instance={instance} jobContext={jobContext} />
                   </section>
                 ))}
               </div>
