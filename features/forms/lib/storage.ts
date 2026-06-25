@@ -90,6 +90,30 @@ export async function uploadSignaturePng(
 }
 
 /**
+ * Upload a completed-form signoff PDF for an instance. With Supabase, stores
+ * the Blob under `<instanceId>/signoff.pdf` (in the same private bucket) and
+ * returns that path; without it, returns an inline `data:` URL so the offline
+ * backend keeps a renderable handle. The path is recorded as the instance's
+ * `signoff_path` by the caller.
+ */
+export async function uploadSignoffPdf(
+  instanceId: string,
+  pdf: Blob
+): Promise<{ storagePath: string }> {
+  if (!hasSupabase()) {
+    return { storagePath: await readDataUrl(pdf) };
+  }
+  const sb = getSupabase();
+  const path = `${instanceId}/signoff.pdf`;
+  const { error } = await sb.storage.from(FORM_PHOTOS_BUCKET).upload(path, pdf, {
+    contentType: "application/pdf",
+    upsert: true,
+  });
+  if (error) throw error;
+  return { storagePath: path };
+}
+
+/**
  * Resolve a storagePath to a renderable URL. Inline `data:`/`http` paths
  * (offline fallback) pass through; bucket paths get a fresh signed URL.
  */

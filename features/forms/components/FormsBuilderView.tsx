@@ -1,13 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { ClipboardList, Plus, Pencil, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { ClipboardList, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Lock } from "lucide-react";
 import type { FormPhase, FormTemplate } from "@shared/lib/types";
 import { useFormTemplates } from "../lib/formTemplatesStore";
 import { useFormInstances } from "../lib/formInstancesStore";
 import { formPhaseLabel } from "../lib/phase";
 import { TemplateEditor } from "./TemplateEditor";
 import { FormFillSurface } from "./FormFillSurface";
+import { FormCompletionBar } from "./FormCompletionBar";
 
 /**
  * /forms — template library + template CRUD (slice 2) + standalone form
@@ -109,7 +110,9 @@ export function FormsBuilderView() {
         >
           ← Back to forms
         </button>
-        <h1 className="font-serif text-xl text-text-primary mb-4">Edit template: {template.name}</h1>
+        <h1 className="font-serif text-xl text-text-primary mb-4">
+          Edit template: {template.name}
+        </h1>
         <TemplateEditor template={template} onDone={() => setEditingId(null)} />
       </div>
     );
@@ -265,23 +268,36 @@ export function FormsBuilderView() {
                   }
                   className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
                 >
-                  <div>
+                  <div className="flex items-center gap-2">
                     <span className="font-medium text-text-primary">{inst.title}</span>
                     {inst.phase && (
-                      <span className="ml-2 text-xs text-text-tertiary">
+                      <span className="text-xs text-text-tertiary">
                         {formPhaseLabel(inst.phase)}
+                      </span>
+                    )}
+                    {inst.status === "complete" && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft/60 px-2 py-0.5 text-xs text-accent">
+                        <Lock className="h-3 w-3" strokeWidth={2} />
+                        Locked
                       </span>
                     )}
                   </div>
                   {expandedInstanceId === inst.id ? (
-                    <ChevronDown className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
+                    <ChevronDown
+                      className="h-4 w-4 text-text-tertiary shrink-0"
+                      strokeWidth={1.75}
+                    />
                   ) : (
-                    <ChevronRight className="h-4 w-4 text-text-tertiary shrink-0" strokeWidth={1.75} />
+                    <ChevronRight
+                      className="h-4 w-4 text-text-tertiary shrink-0"
+                      strokeWidth={1.75}
+                    />
                   )}
                 </button>
                 {expandedInstanceId === inst.id && (
                   <div className="border-t border-border px-4 pb-4 pt-3">
                     <FormFillSurface instance={inst} />
+                    <FormCompletionBar instance={inst} />
                   </div>
                 )}
               </li>

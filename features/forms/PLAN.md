@@ -27,11 +27,18 @@ instances.
 `lib/storage.ts` (`form-photos`, `data:` fallback) + `PhotoField` + `SignaturePad`
 (perfect-freehand) registered.
 
-## Slice 4 — Lock + PDF signoff
+## Slice 4 — Lock + PDF signoff ✅ SHIPPED (#35)
 
-`completeInstance` (gate on registry `isComplete`, lock read-only when complete) +
-`FormSignoffDocument` (react-pdf) + `formPdf.ts` (resolve images → blob → upload
-`signoff_path` → download) + download CTA.
+`lib/completion.ts` (pure gate: `isInstanceComplete` / `incompleteRequiredFields`
+over the registry `isComplete`, + `signoffFileName`) · `completeInstance` /
+`reopenInstance` / `setSignoffPath` on the instances store (complete stamps
+`completed_at`/`completed_by` + locks read-only; reopen voids the prior
+`signoff_path` PDF) · `FormSignoffDocument` (react-pdf, every field type +
+embedded photo/signature `<Image>` + completed-by/signer/timestamp audit block)
+· `lib/signoff.ts` (`generateSignoffPdf` — pre-resolve image URLs → `pdf().toBlob()`
+→ download → upload → record path) · `FormCompletionBar` on the job Forms tab +
+`/forms` standalone instances. Owner-only reopen; standalone-only (no job-gate
+side effects). No schema migration needed — columns + bucket shipped in slice 1.
 
 ## Phase 2 (later) — Client fill portal
 
