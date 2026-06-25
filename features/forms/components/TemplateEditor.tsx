@@ -23,7 +23,15 @@ import { useFormTemplates } from "../lib/formTemplatesStore";
 import { FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
 import { formPhaseLabel } from "../lib/phase";
 
-const PHASES: (FormPhase | null)[] = ["design", "cnc_cut", "assembly", "finishing", "delivery", "install", null];
+const PHASES: (FormPhase | null)[] = [
+  "design",
+  "cnc_cut",
+  "assembly",
+  "finishing",
+  "delivery",
+  "install",
+  null,
+];
 
 // ─── FieldConfigPanel — edit the label / type / config of one template field ──
 function FieldConfigPanel({
@@ -37,10 +45,14 @@ function FieldConfigPanel({
 }) {
   const [label, setLabel] = useState(field.label);
   const [type, setType] = useState<FieldType>(field.type);
-  const [config, setConfig] = useState<Record<string, unknown>>(field.config as Record<string, unknown>);
+  const [config, setConfig] = useState<Record<string, unknown>>(
+    field.config as Record<string, unknown>
+  );
 
   // Dropdown options helpers.
-  const dropdownOptions: string[] = Array.isArray(config.options) ? (config.options as string[]) : [];
+  const dropdownOptions: string[] = Array.isArray(config.options)
+    ? (config.options as string[])
+    : [];
   const [optionDraft, setOptionDraft] = useState("");
 
   function addOption() {
@@ -64,6 +76,7 @@ function FieldConfigPanel({
           Label
         </label>
         <input
+          aria-label="Field label"
           className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
           value={label}
           onChange={(e) => setLabel(e.target.value)}
@@ -145,7 +158,10 @@ function FieldConfigPanel({
               value={optionDraft}
               onChange={(e) => setOptionDraft(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") { e.preventDefault(); addOption(); }
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addOption();
+                }
               }}
             />
             <button
@@ -232,9 +248,7 @@ function SortableFieldRow({
       <div className="flex-1 min-w-0">
         <span className="text-sm text-text-primary truncate">{field.label}</span>
         <span className="ml-2 text-xs text-text-tertiary">{entry?.label ?? field.type}</span>
-        {cfg?.required === true && (
-          <span className="ml-1 text-xs text-accent">*</span>
-        )}
+        {cfg?.required === true && <span className="ml-1 text-xs text-accent">*</span>}
       </div>
       <button
         type="button"
@@ -285,10 +299,7 @@ export function TemplateEditor({
 
   const templateFields = fieldsForTemplate(template.id);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor)
-  );
+  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor));
 
   async function saveMeta() {
     setSavingMeta(true);

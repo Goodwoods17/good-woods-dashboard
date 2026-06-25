@@ -92,11 +92,11 @@ test.describe("forms slice 2 — full registry + builder + defaults/standalone",
 
     // Add a short_text field.
     await page.getByRole("button", { name: /add field/i }).click();
-    // The FieldConfigPanel has a Label input and a Type selector.
-    // The label defaults to "New field". Use getByDisplayValue (reads the live
-    // controlled-input value) — an [value="..."] attribute selector never matches
-    // a React controlled input. fill() clears + types in one step.
-    const labelInput = page.getByDisplayValue("New field");
+    // The FieldConfigPanel's label input carries aria-label="Field label" (a
+    // stable hook). Don't select by [value="..."] (React controlled inputs don't
+    // reflect value in the attribute), and Playwright has no getByDisplayValue.
+    // fill() clears + types in one step.
+    const labelInput = page.getByLabel("Field label");
     await labelInput.fill("Client name");
     // Type selector should default to short_text (already set).
 
