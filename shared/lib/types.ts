@@ -37,13 +37,7 @@ export type FieldType =
 // null = unphased); the instance snapshots the tag so the job Forms tab can
 // group/sort by phase. Distinct from MilestoneStage ("cnc_cut" vs "cnc") because
 // this is a form-domain tag (issue #32 locked decision), not the milestone key.
-export type FormPhase =
-  | "design"
-  | "cnc_cut"
-  | "assembly"
-  | "finishing"
-  | "delivery"
-  | "install";
+export type FormPhase = "design" | "cnc_cut" | "assembly" | "finishing" | "delivery" | "install";
 
 export type FormStatus = "draft" | "in_progress" | "complete";
 
@@ -104,6 +98,29 @@ export type FormInstanceField = {
   sortOrder: number;
   createdAt: string;
   updatedAt: string;
+};
+
+// The recipient a share link is issued to. Validated in TS (not a DB enum) so
+// the vocabulary can evolve without a migration — mirrors FieldType / FormPhase.
+export type RecipientType = "designer" | "customer" | "other";
+
+// A no-login token link to one form instance, scoped to a single recipient.
+// No expiry: reusable until manually revoked (revokedAt). The token is the only
+// key. lockedFieldIds are read-only for this recipient (enforced server-side in
+// the /f/<token> route, not just hidden). Many links per instance = multi-recipient.
+export type FormShareLink = {
+  id: string;
+  instanceId: string;
+  token: string;
+  recipientName: string | null;
+  recipientType: RecipientType;
+  lockedFieldIds: string[];
+  sentAt: string | null;
+  viewedAt: string | null;
+  submittedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  createdBy: string | null;
 };
 
 export const MILESTONE_STAGES: { key: MilestoneStage; label: string }[] = [

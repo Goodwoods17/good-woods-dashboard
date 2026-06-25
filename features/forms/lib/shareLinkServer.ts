@@ -1,0 +1,162 @@
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { FormInstance, FormInstanceField, FormShareLink } from "@shared/lib/types";
+import {
+  FORM_INSTANCES_TABLE,
+  FORM_INSTANCE_FIELDS_TABLE,
+  FORM_SHARE_LINKS_TABLE,
+} from "@shared/lib/supabase";
+import {
+  rowToFormInstance,
+  rowToFormInstanceField,
+  type FormInstanceFieldRow,
+  type FormInstanceRow,
+} from "./formInstancesRowMap";
+import { rowToFormShareLink, type FormShareLinkRow } from "./formShareLinksRowMap";
+import { filterLockedAnswers, isShareLinkActive, type ShareAnswers } from "./shareLink";
+
+/**
+ * Server-only data access for the no-login /f/<token> portal. Uses the SERVICE
+ * ROLE key, but every read/write is scoped to the ONE instance behind the token
+ * — the token is the capability. The public client (anon) is never used here;
+ * anon RLS denies form_share_links entirely. This module reads
+ * SUPABASE_SERVICE_ROLE_KEY (a server-only env var, never NEXT_PUBLIC_*), so it
+ * is only ever imported by server components / route handlers under src/app/f.
+ */
+
+let serviceClient: SupabaseClient | null = null;
+
+function getServiceClient(): SupabaseClient | null {
+  if (serviceClient) return serviceClient;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) return null;
+  serviceClient = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+  return serviceClient;
+}
+
+export type ShareLinkBundle = {
+  link: FormShareLink;
+  instance: FormInstance;
+  fields: FormInstanceField[];
+};
+
+/** The reason a token cannot be opened, for a clean public-facing state. */
+export type ShareLinkLoadResult =
+  | { ok: true; bundle: ShareLinkBundle }
+  | { ok: false; reason: "not_found" | "revoked" | "unconfigured" };
+
+/**
+ * Load the one form instance behind a token. Rejects a revoked link with a
+ * distinct reason so the page can show "link no longer active" (never data).
+ * Side effect: stamps viewed_at on first open (resume-friendly; idempotent-ish).
+ */
+export async function loadShareLink(token: string): Promise<ShareLinkLoadResult> {
+  const sb = getServiceClient();
+  if (!sb) return { ok: false, reason: "unconfigured" };
+
+  const { data: linkRow, error: linkErr } = await sb
+    .from(FORM_SHARE_LINKS_TABLE)
+    .select("*")
+    .eq("token", token)
+    .maybeSingle();
+  if (linkErr) throw linkErr;
+  if (!linkRow) return { ok: false, reason: "not_found" };
+
+  const link = rowToFormShareLink(linkRow as FormShareLinkRow);
+  if (!isShareLinkActive(link)) return { ok: false, reason: "revoked" };
+
+  const { data: instRow, error: instErr } = await sb
+    .from(FORM_INSTANCES_TABLE)
+    .select("*")
+    .eq("id", link.instanceId)
+    .maybeSingle();
+  if (instErr) throw instErr;
+  if (!instRow) return { ok: false, reason: "not_found" };
+
+  const { data: fieldRows, error: fieldErr } = await sb
+    .from(FORM_INSTANCE_FIELDS_TABLE)
+    .select("*")
+    .eq("instance_id", link.instanceId)
+    .order("sort_order", { ascending: true });
+  if (fieldErr) throw fieldErr;
+
+  // First view stamps viewed_at (best-effort; don't fail the load on a write error).
+  if (link.viewedAt === null) {
+    await sb
+      .from(FORM_SHARE_LINKS_TABLE)
+      .update({ viewed_at: new Date().toISOString() })
+      .eq("id", link.id);
+  }
+
+  return {
+    ok: true,
+    bundle: {
+      link,
+      instance: rowToFormInstance(instRow as FormInstanceRow),
+      fields: (fieldRows as FormInstanceFieldRow[] | null)?.map(rowToFormInstanceField) ?? [],
+    },
+  };
+}
+
+export type SubmitResult =
+  | { ok: true; rejectedLocked: string[] }
+  | { ok: false; reason: "not_found" | "revoked" | "unconfigured" };
+
+/**
+ * Persist a public submission. Server-side it IGNORES any value aimed at a
+ * locked field id (via filterLockedAnswers) — the token holder cannot edit a
+ * locked field even by crafting the payload. Stamps viewed_at/submitted_at.
+ */
+export async function submitShareLink(token: string, answers: ShareAnswers): Promise<SubmitResult> {
+  const sb = getServiceClient();
+  if (!sb) return { ok: false, reason: "unconfigured" };
+
+  const { data: linkRow, error: linkErr } = await sb
+    .from(FORM_SHARE_LINKS_TABLE)
+    .select("*")
+    .eq("token", token)
+    .maybeSingle();
+  if (linkErr) throw linkErr;
+  if (!linkRow) return { ok: false, reason: "not_found" };
+
+  const link = rowToFormShareLink(linkRow as FormShareLinkRow);
+  if (!isShareLinkActive(link)) return { ok: false, reason: "revoked" };
+
+  const { data: fieldRows, error: fieldErr } = await sb
+    .from(FORM_INSTANCE_FIELDS_TABLE)
+    .select("*")
+    .eq("instance_id", link.instanceId);
+  if (fieldErr) throw fieldErr;
+  const fields = (fieldRows as FormInstanceFieldRow[] | null)?.map(rowToFormInstanceField) ?? [];
+
+  // THE security gate: drop locked + unknown field ids before any write.
+  const safe = filterLockedAnswers(answers, link, fields);
+  const rejectedLocked = Object.keys(answers).filter(
+    (id) => !(id in safe) && link.lockedFieldIds.includes(id)
+  );
+
+  // Persist each surviving answer. Sequential keeps it simple + ordered; the
+  // payload is a handful of fields per form.
+  for (const [fieldId, patch] of Object.entries(safe)) {
+    const update: Record<string, unknown> = {};
+    if ("checked" in patch) update.checked = patch.checked ?? null;
+    if ("value" in patch) update.value = patch.value ?? null;
+    if ("note" in patch) update.note = patch.note ?? null;
+    if (Object.keys(update).length === 0) continue;
+    const { error: upErr } = await sb
+      .from(FORM_INSTANCE_FIELDS_TABLE)
+      .update(update)
+      .eq("id", fieldId)
+      .eq("instance_id", link.instanceId); // belt-and-suspenders scope
+    if (upErr) throw upErr;
+  }
+
+  const now = new Date().toISOString();
+  const stamp: Record<string, unknown> = { submitted_at: now };
+  if (link.viewedAt === null) stamp.viewed_at = now;
+  await sb.from(FORM_SHARE_LINKS_TABLE).update(stamp).eq("id", link.id);
+
+  return { ok: true, rejectedLocked };
+}

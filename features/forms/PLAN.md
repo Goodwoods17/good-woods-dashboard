@@ -40,7 +40,20 @@ embedded photo/signature `<Image>` + completed-by/signer/timestamp audit block)
 `/forms` standalone instances. Owner-only reopen; standalone-only (no job-gate
 side effects). No schema migration needed — columns + bucket shipped in slice 1.
 
-## Phase 2 (later) — Client fill portal
+## Phase 2 — Client fill portal
 
-No-login tokenized `/f/<token>` link served by a service-role route scoped to one
-instance. Touches the auth boundary — stop-and-ping before prod.
+### Slice 1 — Token model + public route + bare fill page (issue #40)
+
+`form_share_links` (token, recipient, `locked_field_ids`, no expiry, revoke-only)
++ canonical RLS. `lib/shareLink.ts` (pure: `generateShareToken`,
+`isShareLinkActive`, `filterLockedAnswers` — the server-side lock gate) +
+`shareLinkServer.ts` (service-role, scoped-by-token load + submit). Public route
+`src/app/f/[token]/` — `page.tsx` (server load → `PublicFillView`) + `submit/route.ts`
+(POST; strips locked + unknown ids before writing). `/f` added to middleware
+`PUBLIC_ROUTES` + AppShell `BARE_PATHS`. Owner mints a link via
+`createShareLink` on the instances store + `ShareFormButton` on the job Forms tab.
+Vitest covers the token + locked-field filter + row-map; Playwright covers
+owner-mints-link → no-login open → submit → resume. Touches the auth boundary +
+adds a schema migration — stop-and-ping before the prod migration.
+
+### Slice 2 (next) — Owner share UI + per-field lock controls + QR + branding.
