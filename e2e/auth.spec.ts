@@ -8,6 +8,9 @@ import { test, expect } from "@playwright/test";
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
 
+// Sentinel job name seeded by scripts/seed-e2e.mjs (E2E_JOB) — keep in sync.
+const E2E_JOB_NAME = "E2E Smoke Render Check Job";
+
 test.describe("authenticated smoke", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
@@ -27,5 +30,25 @@ test.describe("authenticated smoke", () => {
       timeout: 15_000,
     });
     await expect(page).not.toHaveURL(/\/login/);
+  });
+
+  test("renders seeded job data from the database", async ({ page }) => {
+    await page.goto("/login");
+    await page.locator('input[type="email"]').fill(email!);
+    await page.locator('input[type="password"]').fill(password!);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    // Wait for the authed shell before touching the dashboard controls.
+    await expect(page.getByRole("link", { name: "Estimator" })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // The landing view ("hitlist") is a derived top-N ranking; switch to the
+    // "List" view, which renders every job deterministically, then assert the
+    // seeded row is present. This proves the full read path: authed session →
+    // RLS-gated SELECT → store → render — not just an empty authed shell.
+    // exact: true — "Hitlist" also contains "List" and would match otherwise.
+    await page.getByRole("button", { name: "List", exact: true }).click();
+    await expect(page.getByText(E2E_JOB_NAME)).toBeVisible({ timeout: 15_000 });
   });
 });
