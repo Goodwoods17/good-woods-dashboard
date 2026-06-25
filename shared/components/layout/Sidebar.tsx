@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
+import { versionBadgeLabel } from "@shared/lib/versionBadge";
 
 type NavItem = {
   href: string;
@@ -164,7 +165,7 @@ export function Sidebar() {
           </kbd>
           jump anywhere
         </div>
-        <div className="text-xs text-text-tertiary">v0.7.0</div>
+        <div className="text-xs text-text-tertiary">{versionBadgeLabel()}</div>
       </div>
     </aside>
   );
