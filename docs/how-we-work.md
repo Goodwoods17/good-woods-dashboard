@@ -172,6 +172,7 @@ were we?"* work too — but `/resume` is the reliable one-word trigger.) No re-e
 
 | You type | I do |
 |---|---|
+| **`gwcode`** *(in a terminal)* | **open or re-attach your phone-mirrored session — this is how you get back in after a VS Code crash.** Same word whether it survived or not. Add `/resume` after if it was a full reboot. |
 | `go` / `next` / `continue` | the next step I teed up |
 | `/save` *(+ optional note)* | bank our place for next time |
 | `/resume` *(or "where were we?")* | pick up exactly where we left off last session |
