@@ -13,15 +13,20 @@ import {
 import type {
   FormInstance,
   FormInstanceField,
+  FormShareLink,
   FormTemplate,
   FormTemplateField,
+  RecipientType,
 } from "@shared/lib/types";
 import {
   FORM_INSTANCES_TABLE,
   FORM_INSTANCE_FIELDS_TABLE,
+  FORM_SHARE_LINKS_TABLE,
   getSupabase,
   hasSupabase,
 } from "@shared/lib/supabase";
+import { formShareLinkToRow } from "./formShareLinksRowMap";
+import { generateShareToken } from "./shareLink";
 import { formatError } from "@shared/lib/formatError";
 import {
   formInstanceFieldToRow,
@@ -88,6 +93,19 @@ type FormInstancesContextValue = {
   setSignoffPath: (id: string, signoffPath: string) => Promise<void>;
   /** Delete an instance and all its fields. */
   deleteInstance: (id: string) => Promise<void>;
+  /**
+   * Mint a no-login share link for an instance (Forms P2). Owner-only path —
+   * the authenticated write is RLS-gated; the public /f/<token> portal reads it
+   * via the service role. lockedFieldIds are read-only for the recipient
+   * (enforced server-side). Returns the new link (its token forms the URL).
+   */
+  createShareLink: (args: {
+    instanceId: string;
+    recipientName?: string | null;
+    recipientType?: RecipientType;
+    lockedFieldIds?: string[];
+    createdBy?: string | null;
+  }) => Promise<FormShareLink>;
 };
 
 const FormInstancesContext = createContext<FormInstancesContextValue | null>(null);
@@ -535,6 +553,41 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
+  const createShareLink = useCallback(
+    async (args: {
+      instanceId: string;
+      recipientName?: string | null;
+      recipientType?: RecipientType;
+      lockedFieldIds?: string[];
+      createdBy?: string | null;
+    }): Promise<FormShareLink> => {
+      const link: FormShareLink = {
+        id: crypto.randomUUID(),
+        instanceId: args.instanceId,
+        token: generateShareToken(),
+        recipientName: args.recipientName ?? null,
+        recipientType: args.recipientType ?? "other",
+        lockedFieldIds: args.lockedFieldIds ?? [],
+        sentAt: null,
+        viewedAt: null,
+        submittedAt: null,
+        revokedAt: null,
+        createdAt: new Date().toISOString(),
+        createdBy: args.createdBy ?? null,
+      };
+      if (backend !== "supabase") return link;
+      const sb = getSupabase();
+      const { error: err } = await sb.from(FORM_SHARE_LINKS_TABLE).insert(formShareLinkToRow(link));
+      if (err) {
+        setError(formatError(err));
+        throw err;
+      }
+      setError(null);
+      return link;
+    },
+    [backend]
+  );
+
   const instancesForJob = useCallback(
     (jobId: string) =>
       instances.filter((i) => i.jobId === jobId).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -573,6 +626,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       reopenInstance,
       setSignoffPath,
       deleteInstance,
+      createShareLink,
     }),
     [
       instances,
@@ -594,6 +648,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       reopenInstance,
       setSignoffPath,
       deleteInstance,
+      createShareLink,
     ]
   );
 

@@ -16,8 +16,13 @@ import { useFormInstances } from "../lib/formInstancesStore";
  * on this copy without touching the master).
  */
 export function FormFillSurface({ instance }: { instance: FormInstance }) {
-  const { fieldsForInstance, updateInstanceField, addInstanceField, editInstanceField, deleteInstanceField } =
-    useFormInstances();
+  const {
+    fieldsForInstance,
+    updateInstanceField,
+    addInstanceField,
+    editInstanceField,
+    deleteInstanceField,
+  } = useFormInstances();
   const fields = fieldsForInstance(instance.id);
   const readOnly = instance.status === "complete";
 
@@ -64,10 +69,14 @@ export function FormFillSurface({ instance }: { instance: FormInstance }) {
               field={field}
               readOnly={readOnly}
               onChange={(patch) => updateInstanceField(field.id, patch)}
-              onEditDef={readOnly ? undefined : () => {
-                setAddingField(false);
-                setEditingDefId(field.id);
-              }}
+              onEditDef={
+                readOnly
+                  ? undefined
+                  : () => {
+                      setAddingField(false);
+                      setEditingDefId(field.id);
+                    }
+              }
             />
           )}
         </div>
@@ -273,7 +282,12 @@ function AddFieldPanel({
         autoFocus
         placeholder="Field label"
         onChange={(e) => setLabel(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            add();
+          }
+        }}
       />
       <select
         className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"

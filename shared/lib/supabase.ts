@@ -32,3 +32,4 @@ export const FORM_TEMPLATES_TABLE = "form_templates";
 export const FORM_TEMPLATE_FIELDS_TABLE = "form_template_fields";
 export const FORM_INSTANCES_TABLE = "form_instances";
 export const FORM_INSTANCE_FIELDS_TABLE = "form_instance_fields";
+export const FORM_SHARE_LINKS_TABLE = "form_share_links";

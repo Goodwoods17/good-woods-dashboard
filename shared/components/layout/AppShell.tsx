@@ -4,7 +4,8 @@ import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { CommandPalette } from "./CommandPalette";
 
-const BARE_PATHS = ["/login"];
+// /f/<token> is the public no-login form-fill portal — no app chrome.
+const BARE_PATHS = ["/login", "/f/"];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();

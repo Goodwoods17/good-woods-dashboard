@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect, type Browser, type Page } from "@playwright/test";
 
 // Forms slice 1 (issue #32) authed smoke: prove the tracer cuts end-to-end —
 // the seeded templates render at /forms, and on a job's Forms tab a template can
@@ -296,5 +296,85 @@ test.describe("forms slice 4 — lock + PDF signoff", () => {
     page.on("dialog", (d) => d.accept());
     await reloaded.getByRole("button", { name: /reopen/i }).click();
     await expect(reloaded.getByTestId("complete-form")).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe("forms P2 slice 1 — token link + public /f/<token> fill page", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner (authed) attaches a Pre-Install form to the sentinel job and mints a
+  // share link; then a NO-LOGIN browser context opens /f/<token>, ticks a
+  // checkbox, submits, and the answer survives a reload (the resume path). The
+  // fresh context proves the route is truly public (no auth cookie carried over).
+  test("owner mints a link; no-login /f/<token> renders, submit persists, resumes", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    // Attach a fresh Pre-Install instance and mint a link from it.
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+    await instance.getByTestId("create-share-link").click();
+
+    const urlInput = instance.getByTestId("share-link-url");
+    await expect(urlInput).toBeVisible({ timeout: 10_000 });
+    const shareUrl = await urlInput.inputValue();
+    expect(shareUrl).toMatch(/\/f\/[A-Za-z0-9_-]{32,}$/);
+    // Keep only the path so the no-login context hits the same dev server baseURL.
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // Fresh, cookie-less context = a real no-login visitor.
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+
+      // The bare fill page renders the instance's fields (no app chrome, no login).
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+      const checkbox = guestPage.getByRole("checkbox", { name: FIRST_CHECKBOX }).first();
+      await expect(checkbox).toBeVisible();
+      await checkbox.check();
+
+      // Submit persists to the one instance behind the token.
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+
+      // Reopen the SAME link in another fresh context → the saved answer resumes.
+      const guest2 = await browser.newContext();
+      try {
+        const resumePage = await guest2.newPage();
+        await resumePage.goto(tokenPath);
+        await expect(resumePage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+        await expect(
+          resumePage.getByRole("checkbox", { name: FIRST_CHECKBOX }).first()
+        ).toBeChecked({ timeout: 15_000 });
+      } finally {
+        await guest2.close();
+      }
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("an unknown token shows a clean inactive state, not data", async ({ browser }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto("/f/this-token-does-not-exist-000000000000000000");
+      await expect(guestPage.getByTestId("share-link-inactive")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await guest.close();
+    }
   });
 });
