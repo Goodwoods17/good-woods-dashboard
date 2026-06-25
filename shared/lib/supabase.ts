@@ -28,3 +28,7 @@ export const CONTACTS_TABLE = "contacts";
 export const DOCUMENTS_TABLE = "documents";
 export const JOB_PIECES_TABLE = "job_pieces";
 export const DOCUMENT_ANNOTATIONS_TABLE = "document_annotations";
+export const FORM_TEMPLATES_TABLE = "form_templates";
+export const FORM_TEMPLATE_FIELDS_TABLE = "form_template_fields";
+export const FORM_INSTANCES_TABLE = "form_instances";
+export const FORM_INSTANCE_FIELDS_TABLE = "form_instance_fields";
