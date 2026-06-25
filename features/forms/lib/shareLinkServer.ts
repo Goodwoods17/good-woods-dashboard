@@ -32,6 +32,15 @@ function getServiceClient(): SupabaseClient | null {
   if (!url || !serviceKey) return null;
   serviceClient = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      // Next.js patches global fetch with its Data Cache; GET requests default to
+      // `force-cache`. supabase-js issues its reads through fetch, so without this
+      // the first load of a token (e.g. before the client submits) gets cached and
+      // a later resume read serves the STALE answer — the saved checkbox comes back
+      // unchecked. These reads are inherently live (form state behind a token), so
+      // opt every request out of the cache.
+      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
+    },
   });
   return serviceClient;
 }
