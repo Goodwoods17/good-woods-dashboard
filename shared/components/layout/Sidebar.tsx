@@ -21,6 +21,7 @@ import {
   FolderOpen,
   ScanLine,
   Timer,
+  ClipboardList,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
@@ -60,6 +61,7 @@ const NAV: NavSection[] = [
       { href: "/shop", label: "Shop floor", icon: Hammer },
       { href: "/reface", label: "Reface Studio", icon: ScanLine },
       { href: "/labour", label: "Labour", icon: Timer },
+      { href: "/forms", label: "Forms", icon: ClipboardList },
       { href: "/sops", label: "SOPs", icon: BookOpen },
       { href: "/installer", label: "Installer", icon: Truck },
     ],

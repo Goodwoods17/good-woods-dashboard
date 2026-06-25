@@ -11,6 +11,101 @@ export type HealthStatus = "on_track" | "at_risk" | "blocked" | "complete" | "pa
 
 export type MilestoneStage = "design" | "cnc" | "assembly" | "finishing" | "delivery" | "install";
 
+// ─── Forms (form builder) ─────────────────────────────────────────────────
+// Vocabulary (features/forms/CONTEXT.md): master = "Form template", filled copy
+// = "Form instance". The field-registry model — every field is a row with a
+// `type` + JSON `config`, so new field types never need a migration. Instances
+// SNAPSHOT their template's field defs (frozen at attach time, never auto-update
+// from the master). `type` is validated in TS (this union), not by a DB enum.
+
+// v1 ships section + checkbox; the rest land in slice 2 (already typed so the
+// registry's exhaustiveness check guides the build, but unknown DB types render
+// via a safe read-only fallback so the app never crashes on a future type).
+export type FieldType =
+  | "section"
+  | "checkbox"
+  | "short_text"
+  | "long_text"
+  | "number"
+  | "yes_no"
+  | "dropdown"
+  | "date"
+  | "photo"
+  | "signature";
+
+// The 6-phase spine (ADR 0008). A form template may be tagged to a phase (or
+// null = unphased); the instance snapshots the tag so the job Forms tab can
+// group/sort by phase. Distinct from MilestoneStage ("cnc_cut" vs "cnc") because
+// this is a form-domain tag (issue #32 locked decision), not the milestone key.
+export type FormPhase =
+  | "design"
+  | "cnc_cut"
+  | "assembly"
+  | "finishing"
+  | "delivery"
+  | "install";
+
+export type FormStatus = "draft" | "in_progress" | "complete";
+
+// Per-type knobs live here as loosely-typed JSON so adding a field type never
+// touches the schema. Slice 1 only reads section/checkbox (neither needs config).
+export type FieldConfig = Record<string, unknown>;
+
+export type FormTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  phase: FormPhase | null;
+  isDefault: boolean;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FormTemplateField = {
+  id: string;
+  templateId: string;
+  label: string;
+  type: FieldType;
+  config: FieldConfig;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type FormInstance = {
+  id: string;
+  templateId: string | null;
+  jobId: string | null; // nullable = standalone (slice 2)
+  title: string;
+  phase: FormPhase | null; // snapshot of the template's phase at attach time
+  status: FormStatus;
+  signoffPath: string | null;
+  completedAt: string | null;
+  completedBy: string | null; // authenticated user (id/email)
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+// A snapshot of a template field def (label/type/config) PLUS the filler's
+// answer. Frozen at attach time — never auto-updated from the master.
+export type FormInstanceField = {
+  id: string;
+  instanceId: string;
+  label: string;
+  type: FieldType;
+  config: FieldConfig;
+  value: unknown | null; // typed per field type at the renderer boundary
+  checked: boolean | null; // checkbox answer
+  note: string | null;
+  photoUrl: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const MILESTONE_STAGES: { key: MilestoneStage; label: string }[] = [
   { key: "design", label: "Design" },
   { key: "cnc", label: "CNC / Cut" },

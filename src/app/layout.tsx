@@ -19,6 +19,8 @@ import { TradesProvider } from "@features/partners/lib/tradesStore";
 import { SubtradesProvider } from "@features/partners/lib/subtradesStore";
 import { JobTradesProvider } from "@features/partners/lib/jobTradesStore";
 import { PartnerPeopleProvider } from "@features/partners/lib/partnerPeopleStore";
+import { FormTemplatesProvider } from "@features/forms/lib/formTemplatesStore";
+import { FormInstancesProvider } from "@features/forms/lib/formInstancesStore";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -64,7 +66,11 @@ export default function RootLayout({
                                   <PartnerPeopleProvider>
                                     <PiecesProvider>
                                       <AnnotationsProvider>
-                                        <AppShell>{children}</AppShell>
+                                        <FormTemplatesProvider>
+                                          <FormInstancesProvider>
+                                            <AppShell>{children}</AppShell>
+                                          </FormInstancesProvider>
+                                        </FormTemplatesProvider>
                                       </AnnotationsProvider>
                                     </PiecesProvider>
                                   </PartnerPeopleProvider>
