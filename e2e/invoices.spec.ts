@@ -194,6 +194,98 @@ test.describe("invoices slice 3 — review & edit", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Slice 4 — supplier auto-detect + job match/split
+// ---------------------------------------------------------------------------
+
+test.describe("invoices slice 4 — supplier + job matching", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("match view renders for a reviewed invoice; supplier picker and line job pickers are present; saving assignments persists them", async ({
+    page,
+  }) => {
+    // 1. Seed a reviewed invoice + one line via service role.
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-MATCH-001");
+
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-slice4/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-match-test.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-MATCH-001",
+        po_ref: null,
+        pre_tax_total: 500,
+        gst: 25,
+        pst: 35,
+        total: 560,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert({
+      invoice_id: inv.id,
+      line_no: 1,
+      qty: 2,
+      sku: "MAP-34",
+      description: "Hard maple sheet",
+      unit: "sheet",
+      unit_price: 250,
+      amount: 500,
+      tax_flag: true,
+      confidence: 0.95,
+    });
+
+    // 2. Login and navigate to the match page.
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+
+    // 3. The match view must render.
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 4. Supplier section is present.
+    await expect(page.locator('[data-testid="supplier-section"]')).toBeVisible();
+
+    // 5. Supplier picker is rendered and selectable.
+    const supplierPicker = page.locator('[data-testid="supplier-picker"]');
+    await expect(supplierPicker).toBeVisible();
+
+    // 6. Line assignments section is present with at least one line row.
+    await expect(page.locator('[data-testid="line-assignments-section"]')).toBeVisible();
+    await expect(page.locator('[data-testid="line-assignment-row"]').first()).toBeVisible();
+
+    // 7. Line job picker is rendered.
+    const lineJobPicker = page.locator('[data-testid="line-job-picker-0"]');
+    await expect(lineJobPicker).toBeVisible();
+
+    // 8. "Save assignments" button is present and enabled.
+    const saveBtn = page.locator('[data-testid="save-match-btn"]');
+    await expect(saveBtn).toBeVisible();
+    await expect(saveBtn).not.toBeDisabled();
+
+    // 9. Click save — verify the request completes (no error banner).
+    await saveBtn.click();
+    await expect(saveBtn).toHaveText(/save assignments/i, { timeout: 10_000 });
+    // No error banner after save.
+    await expect(page.locator('[role="alert"]')).not.toBeVisible();
+
+    // 10. Clean up.
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
+
 test.describe("invoices slice 2 — processor status + manual trigger", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 

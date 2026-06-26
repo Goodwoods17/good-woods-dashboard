@@ -11,6 +11,7 @@ import { formatError } from "@shared/lib/formatError";
 import { getInvoiceWithLines } from "../lib/invoicesData";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
 import { InvoiceReviewView } from "./InvoiceReviewView";
+import { InvoiceMatchView } from "./InvoiceMatchView";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
 /**
@@ -57,6 +58,12 @@ export function InvoiceDetailView({ id }: { id: string }) {
   // Slice 3: delegate to the interactive review form for needs_review invoices.
   if (invoice.status === "needs_review") {
     return <InvoiceReviewView invoice={invoice} lines={lines} onSaved={refresh} />;
+  }
+
+  // Slice 4: show the match panel for reviewed invoices so the owner can assign
+  // a catalog supplier and map each line to a job (or shop stock) before posting.
+  if (invoice.status === "reviewed") {
+    return <InvoiceMatchView invoice={invoice} lines={lines} onSaved={refresh} />;
   }
   const money = (n: number | null) => (n === null ? "—" : formatCAD(n));
 
