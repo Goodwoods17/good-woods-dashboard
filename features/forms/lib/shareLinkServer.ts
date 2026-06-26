@@ -1,9 +1,11 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { FormInstance, FormInstanceField, FormShareLink } from "@shared/lib/types";
 import {
+  DOCUMENTS_TABLE,
   FORM_INSTANCES_TABLE,
   FORM_INSTANCE_FIELDS_TABLE,
   FORM_SHARE_LINKS_TABLE,
+  JOBS_TABLE,
 } from "@shared/lib/supabase";
 import {
   rowToFormInstance,
@@ -12,6 +14,9 @@ import {
   type FormInstanceRow,
 } from "./formInstancesRowMap";
 import { rowToFormShareLink, type FormShareLinkRow } from "./formShareLinksRowMap";
+import { buildSignoffDocumentRow, type SignoffJobContext } from "./fileSignoff";
+import { documentToRow } from "@features/documents/lib/documentsRowMap";
+import { generateSignoffPdfServer } from "./signoffServer";
 import {
   computeProgress,
   filterLockedAnswers,
@@ -199,5 +204,96 @@ export async function submitShareLink(
   if (audit?.userAgent) stamp.submit_user_agent = audit.userAgent;
   await sb.from(FORM_SHARE_LINKS_TABLE).update(stamp).eq("id", link.id);
 
+  // Auto-file the signoff PDF on the job when the instance is job-attached.
+  // Fetch the instance row now (we need job_id). Best-effort: a PDF generation
+  // failure must not fail the submit response — the answers are persisted above.
+  const { data: instanceRowForFile } = await sb
+    .from(FORM_INSTANCES_TABLE)
+    .select("*")
+    .eq("id", link.instanceId)
+    .maybeSingle();
+
+  if (instanceRowForFile && (instanceRowForFile as FormInstanceRow).job_id) {
+    const instance = rowToFormInstance(instanceRowForFile as FormInstanceRow);
+    const submitAudit = audit ? { ip: audit.ip ?? null, userAgent: audit.userAgent ?? null } : null;
+    void fileSignoffToJob(sb, instance, Array.from(byId.values()), submitAudit).catch((e) => {
+      console.error("[f/submit] fileSignoffToJob failed:", e instanceof Error ? e.message : e);
+    });
+  }
+
   return { ok: true, rejectedLocked };
+}
+
+/**
+ * Generate the signoff PDF server-side and file it as a `documents` row on
+ * the job. Called automatically after a public /f/<token> submit when the
+ * instance has a `job_id`. Idempotent: the PDF path key is
+ * `<instanceId>/signoff.pdf` — re-submitting overwrites the same bucket
+ * object (upsert) and updates the existing document row in-place, so there
+ * is never a pile-up of duplicate PDF rows on the job.
+ */
+async function fileSignoffToJob(
+  sb: SupabaseClient,
+  instance: FormInstance,
+  fields: FormInstanceField[],
+  signatureAudit: { ip: string | null; userAgent: string | null } | null
+): Promise<void> {
+  const jobId = instance.jobId;
+  if (!jobId) return; // standalone — nothing to file
+
+  // Fetch just enough job context (code + name) for the PDF audit block.
+  const { data: jobRow } = await sb
+    .from(JOBS_TABLE)
+    .select("code, name")
+    .eq("id", jobId)
+    .maybeSingle();
+
+  const jobCtx: SignoffJobContext = {
+    jobId,
+    code: (jobRow as { code: string; name: string } | null)?.code ?? jobId,
+    name: (jobRow as { code: string; name: string } | null)?.name ?? "",
+  };
+
+  // Mark the instance as complete (completedBy = recipient name from the
+  // link, completedAt = now) so the signoff PDF shows the right audit block.
+  // The submission itself is not an owner-complete action — keep status as-is.
+  const completedInstance: FormInstance = {
+    ...instance,
+    completedAt: instance.completedAt ?? new Date().toISOString(),
+    completedBy: instance.completedBy ?? "client",
+  };
+
+  const { storagePath } = await generateSignoffPdfServer(
+    completedInstance,
+    fields,
+    jobCtx,
+    signatureAudit
+  );
+
+  // Record the signoff path on the instance (idempotent upsert via the
+  // bucket's upsert:true flag in uploadSignoffPdf).
+  await sb.from(FORM_INSTANCES_TABLE).update({ signoff_path: storagePath }).eq("id", instance.id);
+
+  // File (or overwrite) the document row on the job. We upsert by
+  // (project_id, storage_path) to guarantee at-most-one row per signoff —
+  // re-submits supersede the prior row instead of piling up.
+  const docRow = documentToRow(buildSignoffDocumentRow(completedInstance, storagePath, jobCtx));
+
+  // Attempt to find an existing signoff document for this instance by path.
+  const { data: existing } = await sb
+    .from(DOCUMENTS_TABLE)
+    .select("id")
+    .eq("project_id", jobId)
+    .eq("storage_path", storagePath)
+    .maybeSingle();
+
+  if (existing) {
+    // Overwrite the existing row (label + notes may have changed on reopen).
+    await sb
+      .from(DOCUMENTS_TABLE)
+      .update({ label: docRow.label, notes: docRow.notes, uploaded_by: docRow.uploaded_by })
+      .eq("id", (existing as { id: string }).id);
+  } else {
+    await sb.from(DOCUMENTS_TABLE).insert(docRow);
+  }
 }
