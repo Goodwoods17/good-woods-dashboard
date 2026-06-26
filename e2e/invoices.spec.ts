@@ -1,6 +1,14 @@
 import { test, expect, type Page } from "@playwright/test";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
+
+// The CI runner is Node 20, which ships no global WebSocket. @supabase/realtime-js
+// resolves a WebSocket constructor when a client is built (websocket-factory throws
+// otherwise), so the service-role seed client below cannot be constructed without
+// one. ws is always installed (a dependency of @supabase/realtime-js). Polyfill it
+// for the whole spec so every createClient seed in this file works under Node 20.
+(globalThis as { WebSocket?: unknown }).WebSocket ??= ws;
 
 // Invoices slice 1 (issue #46) authed smoke: prove the capture tracer cuts
 // end-to-end — upload a file at /invoices and it lands as a `pending` row in the
