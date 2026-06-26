@@ -43,6 +43,41 @@ export type JobItem = {
   createdAt: string;
 };
 
+// ─── Event timeline types ─────────────────────────────────────────────────────
+
+// The kind of event recorded on the timeline. Status changes are separate events
+// from notes and photos — intentional: an upload failure must not suppress the
+// status-change record (and vice versa).
+export type JobItemEventType = "status_change" | "note" | "photo";
+export const JOB_ITEM_EVENT_TYPES: readonly JobItemEventType[] = [
+  "status_change",
+  "note",
+  "photo",
+] as const;
+
+// Which home table an event's `item_id` points at ('piece' added in slice 4).
+export type ItemKind = "job_item" | "piece";
+export const ITEM_KINDS: readonly ItemKind[] = ["job_item", "piece"] as const;
+
+// An append-only event row (status change / note / photo). Produced by the
+// adapter at read time; the DB row shape lives in eventRowMap.ts.
+export type JobItemEvent = {
+  id: string;
+  jobId: string;
+  itemKind: ItemKind;
+  itemId: string;
+  eventType: JobItemEventType;
+  /** Non-null only for status_change events. */
+  toStatus: JobItemStatus | null;
+  /** Non-null for note and photo events that include a text note. */
+  note: string | null;
+  /** Non-null for photo events; a Storage path under the `job-progress` bucket. */
+  photoPath: string | null;
+  visibility: Visibility;
+  workerId: string | null;
+  createdAt: string;
+};
+
 // ─── Unified read-layer model ─────────────────────────────────────────────────
 
 // Which home table a TrackableItem came from. 'piece' is added in slice 4
