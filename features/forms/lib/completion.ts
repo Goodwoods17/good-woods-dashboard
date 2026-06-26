@@ -1,5 +1,6 @@
 import type { FormInstanceField } from "@shared/lib/types";
 import { getFieldEntry } from "./fieldRegistry";
+import { isFieldVisible } from "./conditionals";
 
 /**
  * Completion logic for the lock + signoff slice (issue #35).
@@ -15,6 +16,8 @@ import { getFieldEntry } from "./fieldRegistry";
 /** The fields still blocking a lock — every field whose registry gate fails. */
 export function incompleteRequiredFields(fields: FormInstanceField[]): FormInstanceField[] {
   return fields.filter((f) => {
+    // A hidden field auto-passes (conditionally invisible = not applicable).
+    if (!isFieldVisible(f, fields)) return false;
     const entry = getFieldEntry(f.type);
     // Unknown/future types have no gate — treat them as satisfied (forward-compat).
     if (!entry) return false;

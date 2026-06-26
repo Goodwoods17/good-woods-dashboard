@@ -6,6 +6,7 @@ import type { FieldType, FormInstance, FormInstanceField } from "@shared/lib/typ
 import { getFieldEntry, FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import { useFormInstances } from "../lib/formInstancesStore";
+import { isFieldVisible } from "../lib/conditionals";
 
 /**
  * Renders one form instance's fields for filling. Each field routes through the
@@ -49,38 +50,41 @@ export function FormFillSurface({ instance }: { instance: FormInstance }) {
 
   return (
     <div className="flex flex-col gap-1">
-      {fields.map((field) => (
-        <div key={field.id}>
-          {editingDefId === field.id ? (
-            <FieldDefEditor
-              field={field}
-              onSave={async (patch) => {
-                await editInstanceField(field.id, patch);
-                setEditingDefId(null);
-              }}
-              onCancel={() => setEditingDefId(null)}
-              onDelete={async () => {
-                await deleteInstanceField(field.id);
-                setEditingDefId(null);
-              }}
-            />
-          ) : (
-            <FieldRow
-              field={field}
-              readOnly={readOnly}
-              onChange={(patch) => updateInstanceField(field.id, patch)}
-              onEditDef={
-                readOnly
-                  ? undefined
-                  : () => {
-                      setAddingField(false);
-                      setEditingDefId(field.id);
-                    }
-              }
-            />
-          )}
-        </div>
-      ))}
+      {fields.map((field) => {
+        if (!isFieldVisible(field, fields)) return null;
+        return (
+          <div key={field.id}>
+            {editingDefId === field.id ? (
+              <FieldDefEditor
+                field={field}
+                onSave={async (patch) => {
+                  await editInstanceField(field.id, patch);
+                  setEditingDefId(null);
+                }}
+                onCancel={() => setEditingDefId(null)}
+                onDelete={async () => {
+                  await deleteInstanceField(field.id);
+                  setEditingDefId(null);
+                }}
+              />
+            ) : (
+              <FieldRow
+                field={field}
+                readOnly={readOnly}
+                onChange={(patch) => updateInstanceField(field.id, patch)}
+                onEditDef={
+                  readOnly
+                    ? undefined
+                    : () => {
+                        setAddingField(false);
+                        setEditingDefId(field.id);
+                      }
+                }
+              />
+            )}
+          </div>
+        );
+      })}
 
       {!readOnly && (
         <>

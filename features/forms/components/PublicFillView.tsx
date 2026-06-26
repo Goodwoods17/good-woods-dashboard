@@ -6,6 +6,7 @@ import type { FormInstance, FormInstanceField } from "@shared/lib/types";
 import { getFieldEntry } from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import type { ShareAnswerPatch, ShareAnswers } from "../lib/shareLink";
+import { isFieldVisible } from "../lib/conditionals";
 
 /**
  * The bare, no-login fill page rendered behind a /f/<token> link. Lists the
@@ -117,6 +118,7 @@ export function PublicFillView({
         >
           <div className="flex flex-col gap-1">
             {working.map((field) => {
+              if (!isFieldVisible(field, working)) return null;
               const isLocked = locked.has(field.id);
               const entry = getFieldEntry(field.type);
               const Control = getFillControl(field.type);
@@ -193,9 +195,7 @@ export function PublicFillView({
           Sent by{" "}
           <span className="font-medium text-text-secondary">Good Woods · Spacecraft Joinery</span>
         </p>
-        <p className="mt-1 text-xs text-text-disabled">
-          Questions? Contact your project team.
-        </p>
+        <p className="mt-1 text-xs text-text-disabled">Questions? Contact your project team.</p>
       </footer>
     </main>
   );
