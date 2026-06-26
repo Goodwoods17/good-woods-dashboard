@@ -6,6 +6,8 @@ import type { FieldType, FormInstance, FormInstanceField } from "@shared/lib/typ
 import { getFieldEntry, FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import { useFormInstances } from "../lib/formInstancesStore";
+import { isFieldVisible } from "../lib/conditionals";
+import { CompletionMeter } from "./CompletionMeter";
 
 /**
  * Renders one form instance's fields for filling. Each field routes through the
@@ -49,38 +51,47 @@ export function FormFillSurface({ instance }: { instance: FormInstance }) {
 
   return (
     <div className="flex flex-col gap-1">
-      {fields.map((field) => (
-        <div key={field.id}>
-          {editingDefId === field.id ? (
-            <FieldDefEditor
-              field={field}
-              onSave={async (patch) => {
-                await editInstanceField(field.id, patch);
-                setEditingDefId(null);
-              }}
-              onCancel={() => setEditingDefId(null)}
-              onDelete={async () => {
-                await deleteInstanceField(field.id);
-                setEditingDefId(null);
-              }}
-            />
-          ) : (
-            <FieldRow
-              field={field}
-              readOnly={readOnly}
-              onChange={(patch) => updateInstanceField(field.id, patch)}
-              onEditDef={
-                readOnly
-                  ? undefined
-                  : () => {
-                      setAddingField(false);
-                      setEditingDefId(field.id);
-                    }
-              }
-            />
-          )}
+      {fields.map((field) => {
+        if (!isFieldVisible(field, fields)) return null;
+        return (
+          <div key={field.id}>
+            {editingDefId === field.id ? (
+              <FieldDefEditor
+                field={field}
+                onSave={async (patch) => {
+                  await editInstanceField(field.id, patch);
+                  setEditingDefId(null);
+                }}
+                onCancel={() => setEditingDefId(null)}
+                onDelete={async () => {
+                  await deleteInstanceField(field.id);
+                  setEditingDefId(null);
+                }}
+              />
+            ) : (
+              <FieldRow
+                field={field}
+                readOnly={readOnly}
+                onChange={(patch) => updateInstanceField(field.id, patch)}
+                onEditDef={
+                  readOnly
+                    ? undefined
+                    : () => {
+                        setAddingField(false);
+                        setEditingDefId(field.id);
+                      }
+                }
+              />
+            )}
+          </div>
+        );
+      })}
+
+      {!readOnly && fields.length > 0 && (
+        <div className="pt-2">
+          <CompletionMeter fields={fields} />
         </div>
-      ))}
+      )}
 
       {!readOnly && (
         <>
@@ -127,12 +138,24 @@ function FieldRow({
 }) {
   const entry = getFieldEntry(field.type);
   const Control = getFillControl(field.type);
+  const isRequired = (field.config as Record<string, unknown>)?.required === true;
 
   return (
     <div className="group flex items-start gap-1">
       <div className="flex-1 min-w-0">
         {entry?.implemented && Control ? (
-          <Control field={field} onChange={onChange} disabled={readOnly} />
+          <div className="relative">
+            <Control field={field} onChange={onChange} disabled={readOnly} />
+            {isRequired && !entry.isLayout && (
+              <span
+                className="ml-0.5 text-accent"
+                aria-label="required"
+                title="Required"
+              >
+                *
+              </span>
+            )}
+          </div>
         ) : (
           // Safe read-only fallback for an unimplemented (later-slice) or unknown
           // (future) field type. Never crashes.

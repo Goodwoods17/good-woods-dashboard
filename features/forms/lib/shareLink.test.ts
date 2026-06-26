@@ -6,6 +6,7 @@ import {
   generateShareToken,
   isShareLinkActive,
   lockedAnswerKeys,
+  missingVisibleRequiredFields,
 } from "./shareLink";
 import { rowToFormShareLink, formShareLinkToRow } from "./formShareLinksRowMap";
 
@@ -143,6 +144,80 @@ describe("computeProgress — owner-visible completion %", () => {
   it("is 0 (not NaN) when there are no answerable fields", () => {
     const fields = [field("s", { type: "section" })];
     expect(computeProgress(fields)).toBe(0);
+  });
+});
+
+describe("missingVisibleRequiredFields — public submit soft-warn helper", () => {
+  it("returns an empty array when there are no required fields", () => {
+    const fields = [
+      field("a", { type: "checkbox", checked: null }),
+      field("b", { type: "short_text", value: null, config: {} }),
+    ];
+    expect(missingVisibleRequiredFields(fields)).toEqual([]);
+  });
+
+  it("returns required fields that are blank", () => {
+    const fields = [
+      field("a", { type: "short_text", value: null, config: { required: true } }),
+      field("b", { type: "short_text", value: "filled", config: { required: true } }),
+    ];
+    const missing = missingVisibleRequiredFields(fields);
+    expect(missing.length).toBe(1);
+    expect(missing[0].id).toBe("a");
+  });
+
+  it("ignores required fields that are filled", () => {
+    const fields = [
+      field("a", { type: "short_text", value: "hello", config: { required: true } }),
+    ];
+    expect(missingVisibleRequiredFields(fields)).toEqual([]);
+  });
+
+  it("excludes layout (section) fields from the result", () => {
+    const fields = [
+      field("s", { type: "section", config: { required: true } }),
+      field("a", { type: "short_text", value: null, config: { required: true } }),
+    ];
+    const missing = missingVisibleRequiredFields(fields);
+    expect(missing.length).toBe(1);
+    expect(missing[0].id).toBe("a");
+  });
+
+  it("excludes hidden (showWhen) fields even if required and blank", () => {
+    const trigger = field("t", { type: "checkbox", checked: null });
+    const dependent = field("d", {
+      type: "short_text",
+      value: null,
+      config: {
+        required: true,
+        showWhen: { fieldId: "t", operator: "is_checked" },
+      },
+    });
+    // trigger is not checked → dependent is hidden → should NOT appear in missing
+    expect(missingVisibleRequiredFields([trigger, dependent])).toEqual([]);
+  });
+
+  it("includes a hidden field's required peer when the trigger IS checked", () => {
+    const trigger = field("t", { type: "checkbox", checked: true });
+    const dependent = field("d", {
+      type: "short_text",
+      value: null,
+      config: {
+        required: true,
+        showWhen: { fieldId: "t", operator: "is_checked" },
+      },
+    });
+    const missing = missingVisibleRequiredFields([trigger, dependent]);
+    expect(missing.length).toBe(1);
+    expect(missing[0].id).toBe("d");
+  });
+
+  it("returns empty array when all required visible fields are filled", () => {
+    const fields = [
+      field("a", { type: "short_text", value: "hi", config: { required: true } }),
+      field("b", { type: "yes_no", value: "yes", config: { required: true } }),
+    ];
+    expect(missingVisibleRequiredFields(fields)).toEqual([]);
   });
 });
 

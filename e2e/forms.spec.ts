@@ -103,8 +103,13 @@ test.describe("forms slice 2 — full registry + builder + defaults/standalone",
     // Click Save field.
     await page.getByRole("button", { name: /save field/i }).click();
 
-    // The new field appears in the list.
-    await expect(page.getByText("Client name")).toBeVisible({ timeout: 5_000 });
+    // The new field appears in the list. Scope to the fields list + exact: the
+    // conditional-visibility trigger dropdown (added in P3) also renders prior
+    // field labels as <option> text, so a bare getByText("Client name") matches
+    // 2 nodes (strict-mode violation). See cook-recurring-pitfalls.
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Client name", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   test("fill controls render for all 6 non-media types", async ({ page }) => {
@@ -861,5 +866,220 @@ test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () =
     await expect(
       page.getByText(/Pre-Install Check.*Signoff|Signoff.*Pre-Install Check/i).first()
     ).toBeVisible({ timeout: 15_000 });
+  });
+});
+
+test.describe("forms P3 slice 3 — prefill from job data", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner creates a template with a short_text field mapped to "address" and a
+  // date field mapped to "installDate". Attaches it to the sentinel job. The
+  // snapshot should carry the job's address and installDate. A standalone attach
+  // (via /forms) must leave the fields blank (no crash).
+  test("attached form prefills address + installDate from the seeded job; standalone leaves blank", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // 1. Create a fresh template with two prefill-mapped fields.
+    await page.goto("/forms");
+    await page.getByRole("button", { name: /new template/i }).click();
+    await page.getByPlaceholder(/pre-install/i).fill("Prefill Test Template");
+    await page.getByRole("button", { name: /create & edit fields/i }).click();
+
+    await expect(page.getByText("Edit template: Prefill Test Template")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Add a short_text field mapped to address.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Site address");
+    // Type stays short_text (default).
+    await page.getByTestId("field-prefill-source").selectOption({ value: "address" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Site address", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Add a date field mapped to installDate.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Install date");
+    await page.getByLabel("Field type").selectOption({ label: "Date" });
+    await page.getByTestId("field-prefill-source").selectOption({ value: "installDate" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Install date", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 2. Attach to the sentinel job — prefill must fire.
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page
+      .getByRole("button", { name: new RegExp("Prefill Test Template") })
+      .first()
+      .click();
+
+    const instance = page.getByTestId("form-instance").last();
+
+    // The address field should be pre-filled with the seeded job's address.
+    // The seeded job (e2e-smoke-job) has some address; we simply verify the field
+    // is not blank — the exact value matches whatever seeds/seed-e2e.mjs sets.
+    const addressInput = instance.getByLabel("Site address");
+    await expect(addressInput).toBeVisible({ timeout: 15_000 });
+    const addressValue = await addressInput.inputValue();
+    expect(addressValue.length).toBeGreaterThan(0);
+
+    // The installDate field should also be pre-filled (non-empty).
+    const dateInput = instance.getByLabel("Install date");
+    await expect(dateInput).toBeVisible();
+    const dateValue = await dateInput.inputValue();
+    expect(dateValue.length).toBeGreaterThan(0);
+
+    // 3. Standalone attach (via /forms) must leave the fields blank (no crash).
+    await page.goto("/forms");
+    const card = page
+      .locator('[data-testid="form-template-card"]')
+      .filter({ hasText: "Prefill Test Template" })
+      .first();
+    await card.getByRole("button", { name: /fill standalone/i }).click();
+
+    // A standalone instance appears.
+    const standaloneSection = page.locator('[data-testid="standalone-instance"]').last();
+    await expect(standaloneSection).toBeVisible({ timeout: 10_000 });
+
+    // Standalone instances render COLLAPSED — the fill fields (FormFillSurface)
+    // only mount once expanded. Click the section header (carries the title) open.
+    await standaloneSection.getByRole("button", { name: /Prefill Test Template/ }).click();
+
+    // The address field in the standalone instance must be blank.
+    const standaloneAddressInput = standaloneSection.getByLabel("Site address");
+    await expect(standaloneAddressInput).toBeVisible();
+    const standaloneValue = await standaloneAddressInput.inputValue();
+    expect(standaloneValue).toBe("");
+  });
+});
+
+test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner attaches a Pre-Install form, opens the share panel to mint a link,
+  // then edits one field in the TemplateEditor to add a showWhen condition on a
+  // yes_no trigger. The public /f/<token> page must hide the dependent field
+  // until the trigger is answered, then show it — without requiring a page reload.
+  //
+  // This test also verifies that the hidden field does not block the progress
+  // meter (submission is allowed while the dependent field is hidden and empty).
+  test("conditional showWhen: field B hidden until field A (yes_no) is answered yes; public /f/<token> shows/hides live", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+
+    // 1. Create a fresh template with two fields: a yes_no trigger (A) and a
+    //    short_text dependent (B, showWhen A is_checked). We use the TemplateEditor
+    //    which the owner accesses from /forms.
+    await page.goto("/forms");
+    await page.getByRole("button", { name: /new template/i }).click();
+    await page.getByPlaceholder(/pre-install/i).fill("Conditional Test Template");
+    await page.getByRole("button", { name: /create & edit fields/i }).click();
+
+    // Should be in the TemplateEditor now.
+    await expect(page.getByText("Edit template: Conditional Test Template")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Add field A: yes_no trigger.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Has additional notes?");
+    await page.getByLabel("Field type").selectOption({ label: "Yes / No" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Has additional notes?", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Add field B: short_text, conditional on A.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Additional notes");
+    // Type stays short_text (default). Now set up the visibility condition.
+    // Switch visibility mode to "Show only when…".
+    await page.getByTestId("field-visibility-mode").selectOption("conditional");
+    // The trigger dropdown should list field A.
+    await expect(page.getByTestId("field-visibility-trigger")).toBeVisible({ timeout: 3_000 });
+    await page
+      .getByTestId("field-visibility-trigger")
+      .selectOption({ label: "Has additional notes?" });
+    // Operator defaults to is_checked — leave it.
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Additional notes", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 2. Navigate to the sentinel job, attach this template, open the share panel,
+    //    and mint a link.
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    // .first(): a Playwright retry re-runs this spec and would leave a second
+    // template of the same name behind on the (per-run) seeded DB.
+    await page
+      .getByRole("button", { name: new RegExp("Conditional Test Template") })
+      .first()
+      .click();
+
+    const instance = page.getByTestId("form-instance").last();
+    // Field A should be visible.
+    await expect(instance.getByText("Has additional notes?")).toBeVisible({ timeout: 15_000 });
+    // Field B should be hidden (trigger not yet answered). Exact match so we
+    // don't collide with field A's label "Has additional notes?".
+    await expect(instance.getByText("Additional notes", { exact: true })).toHaveCount(0);
+
+    // 3. Mint a share link.
+    await instance.getByTestId("open-share-panel").click();
+    await expect(instance.getByTestId("share-panel")).toBeVisible({ timeout: 5_000 });
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Conditional Test Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+    const urlInput = linkRow.locator('input[aria-label="Share URL"]');
+    const shareUrl = await urlInput.inputValue();
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // 4. Open the link as a no-login guest. Verify B is hidden initially, appears
+    //    after A is answered Yes, and submission works (B hidden → not blocking).
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+
+      // Field A (yes_no) is visible.
+      await expect(guestPage.getByText("Has additional notes?")).toBeVisible();
+      // Field B is hidden (trigger unanswered). Exact match so we don't collide
+      // with field A's label "Has additional notes?" (substring "additional notes").
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toHaveCount(0);
+
+      // Answer A = Yes. The yes_no control (fieldControls.tsx YesNoFill) renders
+      // two <button> toggles labelled "Yes" / "No" — not radio inputs.
+      const yesOption = guestPage.getByRole("button", { name: "Yes", exact: true });
+      await expect(yesOption).toBeVisible({ timeout: 5_000 });
+      await yesOption.click();
+
+      // Field B should now be visible (conditional revealed).
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Submission works even if B is still empty — hidden required fields don't block.
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await guest.close();
+    }
   });
 });

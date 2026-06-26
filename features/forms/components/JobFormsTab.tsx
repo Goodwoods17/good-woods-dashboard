@@ -6,6 +6,7 @@ import type { FormPhase } from "@shared/lib/types";
 import { useFormTemplates } from "../lib/formTemplatesStore";
 import { useFormInstances } from "../lib/formInstancesStore";
 import { useJob } from "@features/jobs/lib/jobsStore";
+import { useProjectPieces } from "@features/drawings/lib/piecesStore";
 import { formPhaseLabel } from "../lib/phase";
 import { FormFillSurface } from "./FormFillSurface";
 import { FormCompletionBar } from "./FormCompletionBar";
@@ -37,6 +38,8 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const job = useJob(jobId);
+  // Job id === projectId for pieces (drawings feature uses job.id as projectId).
+  const pieces = useProjectPieces(jobId);
   const jobContext = job ? { code: job.code, name: job.name } : null;
 
   const instances = instancesForJob(jobId);
@@ -54,7 +57,9 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
     if (!template) return;
     setBusy(templateId);
     try {
-      await attachTemplate(template, fieldsForTemplate(templateId), jobId);
+      // Pass the job + pieces so that fields with config.prefillFrom are
+      // pre-filled at snapshot time (Forms P3 Slice 3, issue #68).
+      await attachTemplate(template, fieldsForTemplate(templateId), jobId, job ?? undefined, pieces);
       setPicking(false);
     } catch {
       /* error surfaces via the store */

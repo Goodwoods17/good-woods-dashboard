@@ -22,6 +22,12 @@ import type { FieldType, FormPhase, FormTemplate, FormTemplateField } from "@sha
 import { useFormTemplates } from "../lib/formTemplatesStore";
 import { FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
 import { formPhaseLabel } from "../lib/phase";
+import type { ShowWhenCondition } from "../lib/conditionals";
+import {
+  PREFILL_SOURCE_GROUPS,
+  PREFILL_SOURCE_LABELS,
+  type PrefillSourceKey,
+} from "../lib/prefill";
 
 const PHASES: (FormPhase | null)[] = [
   "design",
@@ -36,10 +42,14 @@ const PHASES: (FormPhase | null)[] = [
 // ─── FieldConfigPanel — edit the label / type / config of one template field ──
 function FieldConfigPanel({
   field,
+  fieldsAbove = [],
   onSave,
   onCancel,
 }: {
   field: FormTemplateField;
+  /** Answerable (non-section) fields that appear above this one — used for the
+   *  trigger dropdown in the Visibility control. */
+  fieldsAbove?: FormTemplateField[];
   onSave: (patch: Partial<FormTemplateField>) => void;
   onCancel: () => void;
 }) {
@@ -54,6 +64,27 @@ function FieldConfigPanel({
     ? (config.options as string[])
     : [];
   const [optionDraft, setOptionDraft] = useState("");
+
+  // Visibility condition helpers.
+  const existingCondition = config.showWhen as ShowWhenCondition | undefined;
+  const [visMode, setVisMode] = useState<"always" | "conditional">(
+    existingCondition ? "conditional" : "always"
+  );
+  const [showWhenFieldId, setShowWhenFieldId] = useState<string>(existingCondition?.fieldId ?? "");
+  const [showWhenOperator, setShowWhenOperator] = useState<ShowWhenCondition["operator"]>(
+    existingCondition?.operator ?? "is_checked"
+  );
+  const [showWhenValue, setShowWhenValue] = useState<string>(
+    existingCondition?.value != null ? String(existingCondition.value) : ""
+  );
+
+  const existingPrefill = (config.prefillFrom as PrefillSourceKey | undefined) ?? "";
+  const [prefillFrom, setPrefillFrom] = useState<string>(existingPrefill);
+
+  // Answerable fields above this one (exclude sections — they can't hold a value).
+  const triggerCandidates = fieldsAbove.filter(
+    (f) => FIELD_REGISTRY[f.type] && !FIELD_REGISTRY[f.type].isLayout
+  );
 
   function addOption() {
     const trimmed = optionDraft.trim();
@@ -88,6 +119,7 @@ function FieldConfigPanel({
           Type
         </label>
         <select
+          aria-label="Field type"
           className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
           value={type}
           onChange={(e) => setType(e.target.value as FieldType)}
@@ -180,12 +212,128 @@ function FieldConfigPanel({
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
+            data-testid="field-required"
             className="h-4 w-4 rounded border-border accent-accent"
             checked={(config.required as boolean) === true}
             onChange={(e) => setConfig((c) => ({ ...c, required: e.target.checked }))}
           />
           <span className="text-sm text-text-secondary">Required</span>
         </label>
+      )}
+
+      {/* Prefill from job — for text, long_text, number, date fields */}
+      {(type === "short_text" || type === "long_text" || type === "number" || type === "date") && (
+        <div>
+          <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1">
+            Prefill from job
+          </label>
+          <select
+            data-testid="field-prefill-source"
+            className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            value={prefillFrom}
+            onChange={(e) => setPrefillFrom(e.target.value)}
+          >
+            <option value="">— none —</option>
+            {PREFILL_SOURCE_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.keys.map((key) => (
+                  <option key={key} value={key}>
+                    {PREFILL_SOURCE_LABELS[key]}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {prefillFrom && (
+            <p className="mt-1 text-xs text-text-tertiary">
+              Pre-filled when this form is attached to a job. Standalone forms
+              leave the field blank. The value is frozen at attach time.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Visibility — only applicable to non-section fields; sections are always shown */}
+      {type !== "section" && (
+        <div className="space-y-2">
+          <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary">
+            Visibility
+          </label>
+          <select
+            data-testid="field-visibility-mode"
+            className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            value={visMode}
+            onChange={(e) => {
+              const m = e.target.value as "always" | "conditional";
+              setVisMode(m);
+              if (m === "always") {
+                setShowWhenFieldId("");
+              }
+            }}
+          >
+            <option value="always">Always show</option>
+            <option value="conditional">Show only when…</option>
+          </select>
+
+          {visMode === "conditional" && (
+            <div className="space-y-2 pl-2 border-l-2 border-accent/30">
+              {triggerCandidates.length === 0 ? (
+                <p className="text-xs text-text-tertiary">
+                  No answerable fields above this one yet. Add fields above to use this control.
+                </p>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-xs text-text-tertiary mb-1">Trigger field</label>
+                    <select
+                      data-testid="field-visibility-trigger"
+                      className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+                      value={showWhenFieldId}
+                      onChange={(e) => setShowWhenFieldId(e.target.value)}
+                    >
+                      <option value="">Select a field…</option>
+                      {triggerCandidates.map((f) => (
+                        <option key={f.id} value={f.id}>
+                          {f.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs text-text-tertiary mb-1">Condition</label>
+                    <select
+                      data-testid="field-visibility-operator"
+                      className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+                      value={showWhenOperator}
+                      onChange={(e) =>
+                        setShowWhenOperator(e.target.value as ShowWhenCondition["operator"])
+                      }
+                    >
+                      <option value="is_checked">Is checked / Yes</option>
+                      <option value="is_not_checked">Is not checked / No</option>
+                      <option value="equals">Equals</option>
+                      <option value="not_equals">Does not equal</option>
+                    </select>
+                  </div>
+
+                  {(showWhenOperator === "equals" || showWhenOperator === "not_equals") && (
+                    <div>
+                      <label className="block text-xs text-text-tertiary mb-1">Value</label>
+                      <input
+                        data-testid="field-visibility-value"
+                        className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+                        value={showWhenValue}
+                        onChange={(e) => setShowWhenValue(e.target.value)}
+                        placeholder="e.g. yes"
+                      />
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       <div className="flex justify-end gap-2 pt-1">
@@ -198,7 +346,36 @@ function FieldConfigPanel({
         </button>
         <button
           type="button"
-          onClick={() => onSave({ label: label.trim() || field.label, type, config })}
+          onClick={() => {
+            // Build the showWhen condition into config, or clear it.
+            let updatedConfig = { ...config };
+            if (
+              visMode === "conditional" &&
+              showWhenFieldId &&
+              triggerCandidates.some((f) => f.id === showWhenFieldId)
+            ) {
+              const condition: ShowWhenCondition = {
+                fieldId: showWhenFieldId,
+                operator: showWhenOperator,
+              };
+              if (showWhenOperator === "equals" || showWhenOperator === "not_equals") {
+                condition.value = showWhenValue;
+              }
+              updatedConfig = { ...updatedConfig, showWhen: condition };
+            } else {
+              // Always show — remove any prior condition.
+              const { showWhen: _removed, ...rest } = updatedConfig;
+              updatedConfig = rest;
+            }
+            // Persist the prefill source, or clear it when reset to "— none —".
+            if (prefillFrom) {
+              updatedConfig = { ...updatedConfig, prefillFrom };
+            } else {
+              const { prefillFrom: _pf, ...rest } = updatedConfig;
+              updatedConfig = rest;
+            }
+            onSave({ label: label.trim() || field.label, type, config: updatedConfig });
+          }}
           className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill px-3 py-1 text-xs font-medium text-white"
         >
           <Check className="h-3 w-3" strokeWidth={2.5} />
@@ -454,12 +631,13 @@ export function TemplateEditor({
             items={templateFields.map((f) => f.id)}
             strategy={verticalListSortingStrategy}
           >
-            <ul className="space-y-2">
-              {templateFields.map((field) => (
+            <ul data-testid="template-fields-list" className="space-y-2">
+              {templateFields.map((field, idx) => (
                 <div key={field.id}>
                   {editingFieldId === field.id ? (
                     <FieldConfigPanel
                       field={field}
+                      fieldsAbove={templateFields.slice(0, idx)}
                       onSave={(patch) => handleEditField(field.id, patch)}
                       onCancel={() => setEditingFieldId(null)}
                     />
@@ -489,6 +667,7 @@ export function TemplateEditor({
               id: "__new__",
               ...newBlankField(),
             }}
+            fieldsAbove={templateFields}
             onSave={(patch) => handleAddField(patch)}
             onCancel={() => setAddingField(false)}
           />
