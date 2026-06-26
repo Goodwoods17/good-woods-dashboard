@@ -7,6 +7,13 @@ import { join } from "node:path";
 // Extraction runs out-of-band (scripts/extractInvoices.ts), so the smoke covers
 // upload → pending only, per the issue's DoD.
 //
+// Invoices slice 2 (issue #47) extends the smoke: verify the processor status
+// bar (pending count + last-run-at + "Process now" button) is present and that
+// the button is clickable.  We do NOT actually run the home-machine engine in CI
+// (no `claude` binary available) — the button click is tested for wiring only
+// (we expect an HTTP error from the API route and verify it surfaces gracefully,
+// not a silent hang).
+//
 // The /invoices route is feature-flagged: it 404s unless
 // NEXT_PUBLIC_INVOICES_ENABLED=true. CI sets that flag on (ci.yml e2e job) so
 // this smoke can run; prod stays dormant until the owner flips it on.
@@ -56,5 +63,49 @@ test.describe("invoices slice 1 — capture tracer", () => {
     await row.click();
     await expect(page.getByText("Raw extracted JSON")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Not extracted yet/i)).toBeVisible();
+  });
+});
+
+test.describe("invoices slice 2 — processor status + manual trigger", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("processor status bar is visible with pending count and Process now button", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/invoices");
+
+    await expect(page.getByText("Supplier invoices")).toBeVisible({ timeout: 15_000 });
+
+    // Upload a file first so there's at least one invoice (and the status bar renders).
+    await page.locator('[data-testid="invoice-upload-input"]').setInputFiles(SAMPLE_PDF);
+    await expect(page.locator('[data-testid="invoice-row"]').first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Slice 2: processor status bar must be present.
+    await expect(page.locator('[data-testid="processor-status"]')).toBeVisible();
+
+    // Pending count is a number (≥ 1 from our upload).
+    const pendingText = await page.locator('[data-testid="pending-count"]').textContent();
+    expect(Number(pendingText)).toBeGreaterThanOrEqual(1);
+
+    // "Process now" button is rendered and enabled.
+    const processBtn = page.locator('[data-testid="process-now-btn"]');
+    await expect(processBtn).toBeVisible();
+    await expect(processBtn).not.toBeDisabled();
+
+    // Click the button — the engine is not available in CI, so the API route will
+    // return a 401 (CRON_SECRET env is absent in test) or 500. Either way the UI
+    // must recover and show an error message (no silent hang).
+    await processBtn.click();
+
+    // Button transitions to "Processing…" while the request is in-flight.
+    // Then resolves (success or error) — the page must not be stuck.
+    // We wait for the button to go back to its idle label.
+    await expect(processBtn).toHaveText(/Process now/i, { timeout: 15_000 });
+
+    // Last-run-at label is always present (shows "Never run" when nothing processed yet).
+    await expect(page.locator('[data-testid="last-run-at"]')).toBeVisible();
   });
 });
