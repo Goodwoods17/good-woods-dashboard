@@ -12,7 +12,12 @@ import {
   type FormInstanceRow,
 } from "./formInstancesRowMap";
 import { rowToFormShareLink, type FormShareLinkRow } from "./formShareLinksRowMap";
-import { filterLockedAnswers, isShareLinkActive, type ShareAnswers } from "./shareLink";
+import {
+  computeProgress,
+  filterLockedAnswers,
+  isShareLinkActive,
+  type ShareAnswers,
+} from "./shareLink";
 
 /**
  * Server-only data access for the no-login /f/<token> portal. Uses the SERVICE
@@ -114,11 +119,26 @@ export type SubmitResult =
   | { ok: false; reason: "not_found" | "revoked" | "unconfigured" };
 
 /**
+ * The signature audit context, captured server-side from the request (never
+ * client-supplied). Quietly logged so a client signature is dispute-resistant.
+ */
+export type SubmitAudit = {
+  ip: string | null;
+  userAgent: string | null;
+};
+
+/**
  * Persist a public submission. Server-side it IGNORES any value aimed at a
  * locked field id (via filterLockedAnswers) — the token holder cannot edit a
- * locked field even by crafting the payload. Stamps viewed_at/submitted_at.
+ * locked field even by crafting the payload. Stamps started_at (first save),
+ * submitted_at, viewed_at, and the owner-visible progress %, and quietly logs
+ * the recipient's IP + user-agent (the signature audit trail).
  */
-export async function submitShareLink(token: string, answers: ShareAnswers): Promise<SubmitResult> {
+export async function submitShareLink(
+  token: string,
+  answers: ShareAnswers,
+  audit?: SubmitAudit
+): Promise<SubmitResult> {
   const sb = getServiceClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
@@ -147,7 +167,9 @@ export async function submitShareLink(token: string, answers: ShareAnswers): Pro
   );
 
   // Persist each surviving answer. Sequential keeps it simple + ordered; the
-  // payload is a handful of fields per form.
+  // payload is a handful of fields per form. Mirror each write into the
+  // in-memory field so the progress % reflects this submission without a re-read.
+  const byId = new Map(fields.map((f) => [f.id, f]));
   for (const [fieldId, patch] of Object.entries(safe)) {
     const update: Record<string, unknown> = {};
     if ("checked" in patch) update.checked = patch.checked ?? null;
@@ -160,11 +182,21 @@ export async function submitShareLink(token: string, answers: ShareAnswers): Pro
       .eq("id", fieldId)
       .eq("instance_id", link.instanceId); // belt-and-suspenders scope
     if (upErr) throw upErr;
+    const existing = byId.get(fieldId);
+    if (existing) byId.set(fieldId, { ...existing, ...update } as typeof existing);
   }
 
   const now = new Date().toISOString();
-  const stamp: Record<string, unknown> = { submitted_at: now };
+  const stamp: Record<string, unknown> = {
+    submitted_at: now,
+    progress: computeProgress(Array.from(byId.values())),
+  };
   if (link.viewedAt === null) stamp.viewed_at = now;
+  // First save flips the link into "Started" (kept once set — never overwritten).
+  if (link.startedAt === null) stamp.started_at = now;
+  // Quietly log the audit pair (IP + UA) — only ever set, never cleared.
+  if (audit?.ip) stamp.submit_ip = audit.ip;
+  if (audit?.userAgent) stamp.submit_user_agent = audit.userAgent;
   await sb.from(FORM_SHARE_LINKS_TABLE).update(stamp).eq("id", link.id);
 
   return { ok: true, rejectedLocked };

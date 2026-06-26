@@ -220,6 +220,13 @@ function signedAt(field: FormInstanceField): string | null {
   return typeof at === "string" && at.trim() ? at : null;
 }
 
+function signerAffirmed(field: FormInstanceField): boolean {
+  return (field.config as Record<string, unknown>)?.affirmed === true;
+}
+
+/** The signature audit pair logged server-side at submit (owner-private). */
+export type SignatureAudit = { ip: string | null; userAgent: string | null };
+
 export type FormSignoffDocumentProps = {
   instance: FormInstance;
   fields: FormInstanceField[];
@@ -227,6 +234,8 @@ export type FormSignoffDocumentProps = {
   resolvedImages: Record<string, string>;
   /** Optional job context (code · name) for the banner. */
   jobContext?: { code: string; name: string } | null;
+  /** Optional server-logged IP/UA for the client signature (owner audit). */
+  signatureAudit?: SignatureAudit | null;
 };
 
 export function FormSignoffDocument({
@@ -234,6 +243,7 @@ export function FormSignoffDocument({
   fields,
   resolvedImages,
   jobContext,
+  signatureAudit,
 }: FormSignoffDocumentProps) {
   const company = getCompany();
   // Pick the last completed signature field for the headline signer line, if any.
@@ -312,6 +322,11 @@ export function FormSignoffDocument({
                       {at ? ` · ${fmtDateTime(at)}` : ""}
                     </Text>
                   ) : null}
+                  {signerAffirmed(field) ? (
+                    <Text style={styles.signerMeta}>
+                      Confirmed: signer affirmed the signature is theirs.
+                    </Text>
+                  ) : null}
                 </View>
               );
             }
@@ -348,6 +363,18 @@ export function FormSignoffDocument({
               </Text>
             </View>
           )}
+          {signatureAudit?.ip ? (
+            <View style={styles.auditRow}>
+              <Text style={styles.auditKey}>Signed from IP</Text>
+              <Text style={styles.auditValue}>{signatureAudit.ip}</Text>
+            </View>
+          ) : null}
+          {signatureAudit?.userAgent ? (
+            <View style={styles.auditRow}>
+              <Text style={styles.auditKey}>Device</Text>
+              <Text style={styles.auditValue}>{signatureAudit.userAgent}</Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.footer}>

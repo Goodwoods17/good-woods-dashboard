@@ -14,16 +14,38 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import type { FormInstance, FormInstanceField, FormShareLink, RecipientType } from "@shared/lib/types";
+import type {
+  FormInstance,
+  FormInstanceField,
+  FormShareLink,
+  RecipientType,
+} from "@shared/lib/types";
 import { useFormInstances } from "../lib/formInstancesStore";
 import { shareLinkStatus, shareLinkStatusLabel } from "../lib/shareLinkStatus";
+import { shareLinkTracking } from "../lib/shareLinkTracking";
+
+// Owner-only date formatter for the recipient-tracking lines (sent / opened).
+// Short + with the time, so "Jun 23, 2026, 9:41 AM" reads at a glance.
+function fmtStamp(iso: string): string {
+  return new Date(iso).toLocaleString("en-CA", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
 
 // Inline QR code generation — uses the qrcode package to render a data-URL PNG
 // rather than shipping SVG ourselves. Lazy-loaded so it never hits the server
 // bundle (this component is already "use client").
 async function buildQrDataUrl(text: string): Promise<string> {
   const QRCode = (await import("qrcode")).default;
-  return QRCode.toDataURL(text, { width: 200, margin: 1, color: { dark: "#1a1a1a", light: "#ffffff" } });
+  return QRCode.toDataURL(text, {
+    width: 200,
+    margin: 1,
+    color: { dark: "#1a1a1a", light: "#ffffff" },
+  });
 }
 
 const RECIPIENT_TYPE_LABELS: Record<RecipientType, string> = {
@@ -36,6 +58,7 @@ const STATUS_COLORS: Record<string, string> = {
   draft: "text-text-tertiary",
   sent: "text-accent",
   opened: "text-status-on-track",
+  started: "text-status-at-risk",
   submitted: "text-status-complete",
   revoked: "text-status-blocked",
 };
@@ -61,6 +84,7 @@ function ShareLinkRow({
   const [revoking, setRevoking] = useState(false);
 
   const status = shareLinkStatus(link);
+  const tracking = shareLinkTracking(link);
   const isRevoked = status === "revoked";
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const shareUrl = `${origin}/f/${link.token}`;
@@ -158,9 +182,44 @@ function ShareLinkRow({
               {RECIPIENT_TYPE_LABELS[link.recipientType]}
             </span>
           </div>
-          <div className={`mt-0.5 text-xs ${STATUS_COLORS[status] ?? "text-text-tertiary"}`}>
-            {shareLinkStatusLabel(status)}
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <span
+              className={`text-xs font-medium ${STATUS_COLORS[status] ?? "text-text-tertiary"}`}
+              data-testid="share-link-status"
+            >
+              {shareLinkStatusLabel(status)}
+            </span>
+            {tracking.progress !== null && status !== "submitted" && (
+              <span className="text-[10px] text-text-tertiary">· {tracking.progress}%</span>
+            )}
           </div>
+
+          {/* Owner-only recipient tracking: sent date + "N days ago" + opened date
+              (Andrew's explicit ask). Never rendered on the public /f page. */}
+          {(tracking.sentAt || tracking.viewedAt) && (
+            <dl
+              className="mt-1.5 space-y-0.5 text-[11px] text-text-tertiary"
+              data-testid="share-link-tracking"
+            >
+              {tracking.sentAt && (
+                <div className="flex items-baseline gap-1">
+                  <dt className="text-text-disabled">Sent</dt>
+                  <dd data-testid="tracking-sent">
+                    {fmtStamp(tracking.sentAt)}
+                    {tracking.daysSinceSent && (
+                      <span className="text-text-disabled"> · {tracking.daysSinceSent}</span>
+                    )}
+                  </dd>
+                </div>
+              )}
+              {tracking.viewedAt && (
+                <div className="flex items-baseline gap-1">
+                  <dt className="text-text-disabled">Opened</dt>
+                  <dd data-testid="tracking-opened">{fmtStamp(tracking.viewedAt)}</dd>
+                </div>
+              )}
+            </dl>
+          )}
         </div>
 
         {!isRevoked && (
@@ -261,9 +320,7 @@ function ShareLinkRow({
                 <button
                   key={field.id}
                   type="button"
-                  onClick={() =>
-                    isSection ? toggleSectionLock(field.id) : toggleLock(field.id)
-                  }
+                  onClick={() => (isSection ? toggleSectionLock(field.id) : toggleLock(field.id))}
                   aria-label={`${locked ? "Unlock" : "Lock"} ${field.label}`}
                   data-testid={`lock-toggle-${field.id}`}
                   className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-surface ${isSection ? "font-medium text-text-secondary" : "pl-4 text-text-primary"}`}
@@ -457,7 +514,9 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
       {open && (
         <div className="mt-2 space-y-2" data-testid="share-panel">
           {links.length === 0 && !adding && (
-            <p className="text-xs text-text-tertiary">No links yet — add a recipient to get started.</p>
+            <p className="text-xs text-text-tertiary">
+              No links yet — add a recipient to get started.
+            </p>
           )}
 
           {links.map((link) => (
@@ -472,10 +531,7 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
           ))}
 
           {adding ? (
-            <AddRecipientForm
-              onAdd={handleAdd}
-              onCancel={() => setAdding(false)}
-            />
+            <AddRecipientForm onAdd={handleAdd} onCancel={() => setAdding(false)} />
           ) : (
             <button
               type="button"

@@ -198,10 +198,7 @@ function localLoadShareLinks(): FormShareLink[] {
 function localSaveShareLinks(links: FormShareLink[]) {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(
-      SHARE_LINKS_KEY,
-      JSON.stringify({ schema: SCHEMA_VERSION, links })
-    );
+    window.localStorage.setItem(SHARE_LINKS_KEY, JSON.stringify({ schema: SCHEMA_VERSION, links }));
   } catch {
     /* quota / denied */
   }
@@ -636,8 +633,12 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
         lockedFieldIds: args.lockedFieldIds ?? [],
         sentAt: null,
         viewedAt: null,
+        startedAt: null,
         submittedAt: null,
+        progress: null,
         revokedAt: null,
+        submitIp: null,
+        submitUserAgent: null,
         createdAt: new Date().toISOString(),
         createdBy: args.createdBy ?? null,
       };
@@ -661,9 +662,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     async (linkId: string) => {
       const prev = shareLinksRef.current;
       const revokedAt = new Date().toISOString();
-      setShareLinks((links) =>
-        links.map((l) => (l.id === linkId ? { ...l, revokedAt } : l))
-      );
+      setShareLinks((links) => links.map((l) => (l.id === linkId ? { ...l, revokedAt } : l)));
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();
@@ -710,9 +709,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   const updateShareLinkLocks = useCallback(
     async (linkId: string, lockedFieldIds: string[]) => {
       const prev = shareLinksRef.current;
-      setShareLinks((links) =>
-        links.map((l) => (l.id === linkId ? { ...l, lockedFieldIds } : l))
-      );
+      setShareLinks((links) => links.map((l) => (l.id === linkId ? { ...l, lockedFieldIds } : l)));
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();

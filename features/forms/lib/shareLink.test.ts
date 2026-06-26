@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { FormInstanceField, FormShareLink } from "@shared/lib/types";
 import {
+  computeProgress,
   filterLockedAnswers,
   generateShareToken,
   isShareLinkActive,
@@ -38,8 +39,12 @@ function link(over: Partial<FormShareLink> = {}): FormShareLink {
     lockedFieldIds: [],
     sentAt: null,
     viewedAt: null,
+    startedAt: null,
     submittedAt: null,
+    progress: null,
     revokedAt: null,
+    submitIp: null,
+    submitUserAgent: null,
     createdAt: now,
     createdBy: null,
     ...over,
@@ -107,6 +112,37 @@ describe("lockedAnswerKeys — what was rejected (for an audit/diagnostic)", () 
   it("is empty when nothing locked was touched", () => {
     const incoming = { a: { checked: true } };
     expect(lockedAnswerKeys(incoming, link({ lockedFieldIds: ["b"] }), fields)).toEqual([]);
+  });
+});
+
+describe("computeProgress — owner-visible completion %", () => {
+  it("is 0 when nothing is answered", () => {
+    const fields = [field("a"), field("b")];
+    expect(computeProgress(fields)).toBe(0);
+  });
+
+  it("is 50 when half the answerable fields are complete", () => {
+    const fields = [field("a", { checked: true }), field("b", { checked: null })];
+    expect(computeProgress(fields)).toBe(50);
+  });
+
+  it("is 100 when every answerable field is complete", () => {
+    const fields = [field("a", { checked: true }), field("b", { checked: true })];
+    expect(computeProgress(fields)).toBe(100);
+  });
+
+  it("ignores layout (section) fields in the denominator", () => {
+    const fields = [
+      field("s", { type: "section" }),
+      field("a", { checked: true }),
+      field("b", { checked: true }),
+    ];
+    expect(computeProgress(fields)).toBe(100);
+  });
+
+  it("is 0 (not NaN) when there are no answerable fields", () => {
+    const fields = [field("s", { type: "section" })];
+    expect(computeProgress(fields)).toBe(0);
   });
 });
 
