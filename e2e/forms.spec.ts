@@ -686,3 +686,80 @@ test.describe("forms P2 slice 3 — owner tracking (sent/opened + days-since) + 
     }
   });
 });
+
+test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Client submits a job-attached form via /f/<token> → signoff PDF is
+  // auto-generated server-side and filed as a document on the job.
+  // The owner checks the Documents tab on the job to confirm it appears.
+  test("client submit → signoff PDF appears on the job Documents tab", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    // Attach a fresh Pre-Install instance.
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Mint a share link.
+    await instance.getByTestId("open-share-panel").click();
+    await expect(instance.getByTestId("share-panel")).toBeVisible({ timeout: 5_000 });
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Auto-File Test Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+    const urlInput = linkRow.locator('input[aria-label="Share URL"]');
+    const shareUrl = await urlInput.inputValue();
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // Client opens the link, ticks the first checkbox, and submits.
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+
+      const checkbox = guestPage.getByRole("checkbox", { name: FIRST_CHECKBOX }).first();
+      await expect(checkbox).toBeVisible();
+      await checkbox.check();
+
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await guest.close();
+    }
+
+    // Give the server a moment to process the async PDF filing (it is
+    // best-effort / fire-and-forget, so a short wait is appropriate).
+    await page.waitForTimeout(3_000);
+
+    // Owner navigates to the Documents tab on the job to see the filed PDF.
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    // The Documents tab is either a dedicated tab button or a card — check both.
+    const docsTab = page.getByRole("button", { name: /documents?/i });
+    const docsTabCount = await docsTab.count();
+    if (docsTabCount > 0) {
+      await docsTab.first().click();
+    }
+
+    // The signoff document label must appear somewhere on the page.
+    // It is filed as "<Form title> — Signoff" (e.g. "Pre-Install Check — Signoff").
+    await expect(
+      page.getByText(/Pre-Install Check.*Signoff|Signoff.*Pre-Install Check/i).first()
+    ).toBeVisible({ timeout: 15_000 });
+  });
+});
