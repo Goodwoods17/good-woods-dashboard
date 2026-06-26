@@ -103,8 +103,13 @@ test.describe("forms slice 2 — full registry + builder + defaults/standalone",
     // Click Save field.
     await page.getByRole("button", { name: /save field/i }).click();
 
-    // The new field appears in the list.
-    await expect(page.getByText("Client name")).toBeVisible({ timeout: 5_000 });
+    // The new field appears in the list. Scope to the fields list + exact: the
+    // conditional-visibility trigger dropdown (added in P3) also renders prior
+    // field labels as <option> text, so a bare getByText("Client name") matches
+    // 2 nodes (strict-mode violation). See cook-recurring-pitfalls.
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Client name", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   test("fill controls render for all 6 non-media types", async ({ page }) => {
@@ -942,6 +947,10 @@ test.describe("forms P3 slice 3 — prefill from job data", () => {
     // A standalone instance appears.
     const standaloneSection = page.locator('[data-testid="standalone-instance"]').last();
     await expect(standaloneSection).toBeVisible({ timeout: 10_000 });
+
+    // Standalone instances render COLLAPSED — the fill fields (FormFillSurface)
+    // only mount once expanded. Click the section header (carries the title) open.
+    await standaloneSection.getByRole("button", { name: /Prefill Test Template/ }).click();
 
     // The address field in the standalone instance must be blank.
     const standaloneAddressInput = standaloneSection.getByLabel("Site address");

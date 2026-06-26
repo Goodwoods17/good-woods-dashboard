@@ -62,8 +62,11 @@ function CheckboxFill({ field, onChange, disabled }: FillControlProps) {
 function ShortTextFill({ field, onChange, disabled }: FillControlProps) {
   return (
     <div className="py-1">
-      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <label htmlFor={`fill-${field.id}`} className="block text-sm text-text-primary mb-1">
+        {field.label}
+      </label>
       <input
+        id={`fill-${field.id}`}
         type="text"
         className={inputCls}
         value={typeof field.value === "string" ? field.value : ""}
@@ -79,8 +82,11 @@ function ShortTextFill({ field, onChange, disabled }: FillControlProps) {
 function LongTextFill({ field, onChange, disabled }: FillControlProps) {
   return (
     <div className="py-1">
-      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <label htmlFor={`fill-${field.id}`} className="block text-sm text-text-primary mb-1">
+        {field.label}
+      </label>
       <textarea
+        id={`fill-${field.id}`}
         className={inputCls + " resize-none"}
         rows={3}
         value={typeof field.value === "string" ? field.value : ""}
@@ -97,8 +103,11 @@ function NumberFill({ field, onChange, disabled }: FillControlProps) {
   const cfg = field.config as Record<string, unknown>;
   return (
     <div className="py-1">
-      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <label htmlFor={`fill-${field.id}`} className="block text-sm text-text-primary mb-1">
+        {field.label}
+      </label>
       <input
+        id={`fill-${field.id}`}
         type="number"
         className={inputCls}
         value={typeof field.value === "string" ? field.value : ""}
@@ -148,8 +157,11 @@ function DropdownFill({ field, onChange, disabled }: FillControlProps) {
   const current = typeof field.value === "string" ? field.value : "";
   return (
     <div className="py-1">
-      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <label htmlFor={`fill-${field.id}`} className="block text-sm text-text-primary mb-1">
+        {field.label}
+      </label>
       <select
+        id={`fill-${field.id}`}
         className={inputCls}
         value={current}
         disabled={disabled}
@@ -170,8 +182,11 @@ function DropdownFill({ field, onChange, disabled }: FillControlProps) {
 function DateFill({ field, onChange, disabled }: FillControlProps) {
   return (
     <div className="py-1">
-      <label className="block text-sm text-text-primary mb-1">{field.label}</label>
+      <label htmlFor={`fill-${field.id}`} className="block text-sm text-text-primary mb-1">
+        {field.label}
+      </label>
       <input
+        id={`fill-${field.id}`}
         type="date"
         className={inputCls}
         value={typeof field.value === "string" ? field.value : ""}
