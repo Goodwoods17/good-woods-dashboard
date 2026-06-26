@@ -899,7 +899,7 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
     // Add field A: yes_no trigger.
     await page.getByRole("button", { name: /add field/i }).click();
     await page.getByLabel("Field label").fill("Has additional notes?");
-    await page.locator("select").filter({ hasText: /type/i }).selectOption({ label: "Yes / No" });
+    await page.getByLabel("Field type").selectOption({ label: "Yes / No" });
     await page.getByRole("button", { name: /save field/i }).click();
     await expect(page.getByText("Has additional notes?")).toBeVisible({ timeout: 5_000 });
 

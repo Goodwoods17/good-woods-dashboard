@@ -111,6 +111,7 @@ function FieldConfigPanel({
           Type
         </label>
         <select
+          aria-label="Field type"
           className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
           value={type}
           onChange={(e) => setType(e.target.value as FieldType)}
