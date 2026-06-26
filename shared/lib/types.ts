@@ -117,8 +117,17 @@ export type FormShareLink = {
   lockedFieldIds: string[];
   sentAt: string | null;
   viewedAt: string | null;
+  // Stamped server-side the first time the recipient saves any answer (the
+  // intermediate "Started" state of the owner-only status pill).
+  startedAt: string | null;
   submittedAt: string | null;
+  // Owner-visible completion %, 0..100, recomputed server-side on each save.
+  progress: number | null;
   revokedAt: string | null;
+  // Quietly logged server-side at submit time — never client-supplied, never
+  // shown on the public page. The signature audit trail (issue #42).
+  submitIp: string | null;
+  submitUserAgent: string | null;
   createdAt: string;
   createdBy: string | null;
 };

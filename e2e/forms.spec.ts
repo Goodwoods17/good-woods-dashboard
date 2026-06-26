@@ -214,6 +214,10 @@ test.describe("forms slice 3 — photo + signature fields", () => {
     // [value=...] — React controlled inputs don't reflect value to the attribute).
     await page.getByLabel(`${label} — signer name`).fill(signer);
 
+    // Tick the "I confirm" affirmation (S3 gates the pad on it). Scope to the
+    // field we just added — there may be other signature fields on the page.
+    await page.getByTestId("signature-affirm").last().check();
+
     // Draw a stroke on the canvas.
     const canvas = page.getByTestId("form-signature-canvas").last();
     await expect(canvas).toBeVisible();
@@ -226,7 +230,9 @@ test.describe("forms slice 3 — photo + signature fields", () => {
     await page.mouse.move(box.x + 320, box.y + 50);
     await page.mouse.up();
 
-    await page.getByRole("button", { name: /save signature/i }).click();
+    // Scope to the field's own Save button (the form may carry other signature
+    // fields, each with its own "Save signature" — match the one we just drew on).
+    await page.getByTestId("signature-save").last().click();
 
     // The saved signature renders as an <img>, with the signer name shown.
     await expect(page.getByTestId("form-signature-preview").last()).toBeVisible({
@@ -491,8 +497,12 @@ test.describe("forms P2 slice 2 — share panel: multi-recipient + lock toggles 
     // Copy the link (stamps sent_at).
     await linkRow.getByTestId("copy-share-link").click();
 
-    // The status should change to "Sent" after copy.
-    await expect(linkRow.getByText("Sent")).toBeVisible({ timeout: 5_000 });
+    // The status should change to "Sent" after copy. Assert on the status PILL
+    // specifically — S3's owner-tracking detail also renders a "Sent" <dt> label,
+    // so a bare getByText("Sent") now matches two elements (strict-mode violation).
+    await expect(linkRow.getByTestId("share-link-status")).toHaveText("Sent", {
+      timeout: 5_000,
+    });
 
     // Get the share URL.
     const urlInput = linkRow.locator('input[aria-label="Share URL"]');
@@ -582,6 +592,95 @@ test.describe("forms P2 slice 2 — share panel: multi-recipient + lock toggles 
       // Verify no raw JS crash (page should render something).
       const bodyText = await guestPage.textContent("body");
       expect(bodyText).toBeTruthy();
+    } finally {
+      await guest.close();
+    }
+  });
+});
+
+test.describe("forms P2 slice 3 — owner tracking (sent/opened + days-since) + audit", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // The status pill must walk Sent → Opened → Submitted, and the owner-only
+  // tracking surface must show the sent date + "N days ago" + the opened date.
+  // Per the issue's e2e ordering note: mint link → owner SHARES (sent_at → Sent)
+  // BEFORE asserting the pill (an unshared link is "Draft", not "Sent"); then a
+  // no-login open stamps viewed_at (→ Opened); then submit (→ Submitted).
+  test("status pill walks Sent → Opened → Submitted; owner sees sent date + days-since + opened", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    // Attach a fresh Pre-Install instance and mint a link.
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await instance.getByTestId("open-share-panel").click();
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Tracking Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+
+    const shareUrl = await linkRow.locator('input[aria-label="Share URL"]').inputValue();
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // 1) Owner SHARES — copy stamps sent_at → the pill reads "Sent" and the
+    //    owner-only sent date + "N days ago" line appears (Today on a fresh DB).
+    await linkRow.getByTestId("copy-share-link").click();
+    await expect(linkRow.getByTestId("share-link-status")).toHaveText("Sent", { timeout: 10_000 });
+    await expect(linkRow.getByTestId("tracking-sent")).toContainText(/ago|Today/, {
+      timeout: 10_000,
+    });
+
+    // 2) No-login open stamps viewed_at on the server. A fresh, cookie-less
+    //    context is a real public visitor.
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+
+      const checkbox = guestPage.getByRole("checkbox", { name: FIRST_CHECKBOX }).first();
+      await expect(checkbox).toBeVisible();
+      await checkbox.check();
+
+      // The owner view, reloaded, now reflects "Opened" (viewed_at stamped) with
+      // the opened date surfaced — the open→viewed_at proof + a status transition.
+      await page.reload();
+      await page.getByRole("button", { name: "Forms", exact: true }).click();
+      const reloadedInstance = page.getByTestId("form-instance").last();
+      await reloadedInstance.getByTestId("open-share-panel").click();
+      const reloadedRow = reloadedInstance.getByTestId("share-link-row").first();
+      await expect(reloadedRow.getByTestId("share-link-status")).toHaveText(/Opened|Started/, {
+        timeout: 15_000,
+      });
+      await expect(reloadedRow.getByTestId("tracking-opened")).toBeVisible({ timeout: 10_000 });
+
+      // 3) Guest submits → submitted_at stamped → pill reads "Submitted".
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+
+      await page.reload();
+      await page.getByRole("button", { name: "Forms", exact: true }).click();
+      const finalInstance = page.getByTestId("form-instance").last();
+      await finalInstance.getByTestId("open-share-panel").click();
+      const finalRow = finalInstance.getByTestId("share-link-row").first();
+      await expect(finalRow.getByTestId("share-link-status")).toHaveText("Submitted", {
+        timeout: 15_000,
+      });
     } finally {
       await guest.close();
     }

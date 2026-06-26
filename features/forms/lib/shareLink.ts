@@ -1,4 +1,5 @@
 import type { FormInstanceField, FormShareLink } from "@shared/lib/types";
+import { getFieldEntry } from "./fieldRegistry";
 
 /**
  * Share-link token model + the server-side lock enforcement. Pure (no React, no
@@ -55,6 +56,26 @@ export function filterLockedAnswers(
     out[id] = patch;
   }
   return out;
+}
+
+/**
+ * Owner-visible completion percentage (0..100) for an instance's fields, used
+ * for the share-link `progress` column. Counts only ANSWERABLE fields (layout
+ * fields like section headings are excluded) and reuses the registry's per-type
+ * `isComplete` so "filled" means the same thing here as on the completion gate.
+ * Returns 0 when there are no answerable fields (avoids NaN).
+ */
+export function computeProgress(fields: FormInstanceField[]): number {
+  const answerable = fields.filter((f) => {
+    const entry = getFieldEntry(f.type);
+    return entry ? !entry.isLayout : false;
+  });
+  if (answerable.length === 0) return 0;
+  const done = answerable.filter((f) => {
+    const entry = getFieldEntry(f.type);
+    return entry ? entry.isComplete(f) : false;
+  }).length;
+  return Math.round((done / answerable.length) * 100);
 }
 
 /** Which locked ids an incoming payload tried (and was forbidden) to set — for diagnostics/audit. */

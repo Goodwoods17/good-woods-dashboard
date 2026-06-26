@@ -46,7 +46,8 @@ export type SignoffResult = { blob: Blob; storagePath: string };
 export async function generateSignoffPdf(
   instance: FormInstance,
   fields: FormInstanceField[],
-  jobContext?: { code: string; name: string } | null
+  jobContext?: { code: string; name: string } | null,
+  signatureAudit?: { ip: string | null; userAgent: string | null } | null
 ): Promise<SignoffResult> {
   const { pdf } = await import("@react-pdf/renderer");
   const { FormSignoffDocument } = await import("@features/forms/components/FormSignoffDocument");
@@ -54,7 +55,7 @@ export async function generateSignoffPdf(
   const resolvedImages = await resolveImages(fields);
 
   const blob = await pdf(
-    FormSignoffDocument({ instance, fields, resolvedImages, jobContext })
+    FormSignoffDocument({ instance, fields, resolvedImages, jobContext, signatureAudit })
   ).toBlob();
 
   // Trigger the download.

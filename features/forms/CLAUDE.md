@@ -85,6 +85,22 @@ bucket stood up now (photos land in slice 3).
   `components/FormCompletionBar.tsx`.
 - The client token-link fill portal (Phase 2 — touches the auth boundary).
 
+## Phase 2 (client portal) — owner tracking + audit (slice 3, #42)
+
+`form_share_links` carries the per-recipient lifecycle stamps. The owner-only
+status pill walks **Draft → Sent → Opened → Started → Submitted** (revoked wins),
+derived purely from the `*_at` columns by `lib/shareLinkStatus.ts::shareLinkStatus`
+and surfaced with dates by `lib/shareLinkTracking.ts` (sent date + a "N days ago"
+counter + opened date — owner-private, never on the public `/f` page). Open
+tracking is **server-side**: `loadShareLink` stamps `viewed_at` on first fetch;
+`submitShareLink` stamps `started_at` (first save) + `submitted_at`, recomputes
+`progress` (`lib/shareLink.ts::computeProgress`), and quietly logs the
+recipient's **IP + user-agent** from the request (never client-supplied) as the
+signature audit trail. The signature control adds an **"I confirm" affirmation**
+(`config.affirmed`); the signoff PDF renders typed name + `signed_at` +
+affirmation + the IP/UA audit block. Migration: `20260625140000_form_share_tracking.sql`
+(additive `started_at` / `progress` / `submit_ip` / `submit_user_agent`).
+
 ## What this feature does NOT own
 
 - Cross-feature UI primitives (`Modal`, `Button`) → `shared/components/`.

@@ -282,6 +282,10 @@ function SignatureFill({ field, onChange, disabled }: FillControlProps) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  // The "I confirm" affirmation: must be ticked before a signature can be saved.
+  // Persisted as config.affirmed so the audit trail records that the signer
+  // explicitly affirmed (renders on the signoff PDF).
+  const [affirmed, setAffirmed] = useState(cfg?.affirmed === true);
   const signedAt = typeof cfg?.signedAt === "string" ? (cfg.signedAt as string) : null;
 
   useEffect(() => {
@@ -307,6 +311,10 @@ function SignatureFill({ field, onChange, disabled }: FillControlProps) {
       setError("Type the signer's name first.");
       return;
     }
+    if (!affirmed) {
+      setError("Tick the confirmation box before signing.");
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
@@ -317,6 +325,7 @@ function SignatureFill({ field, onChange, disabled }: FillControlProps) {
           ...cfg,
           signerName: signerName.trim(),
           signedAt: new Date().toISOString(),
+          affirmed: true,
         },
       });
     } catch (e) {
@@ -364,7 +373,21 @@ function SignatureFill({ field, onChange, disabled }: FillControlProps) {
           )}
         </div>
       ) : (
-        <SignaturePad disabled={disabled || busy} busy={busy} onSave={handleSave} />
+        <>
+          <label className="mb-2 flex items-start gap-2 text-xs text-text-secondary">
+            <input
+              type="checkbox"
+              checked={affirmed}
+              disabled={disabled}
+              aria-label={`${field.label} — I confirm`}
+              data-testid="signature-affirm"
+              onChange={(e) => setAffirmed(e.target.checked)}
+              className="mt-0.5 h-3.5 w-3.5 rounded border-border accent-ink-pill"
+            />
+            <span>I confirm this is my signature and the information above is correct.</span>
+          </label>
+          <SignaturePad disabled={disabled || busy || !affirmed} busy={busy} onSave={handleSave} />
+        </>
       )}
       {error && <p className="mt-1 text-xs text-status-blocked">{error}</p>}
     </div>
@@ -472,6 +495,7 @@ function SignaturePad({
         </button>
         <button
           type="button"
+          data-testid="signature-save"
           disabled={disabled || busy || !hasInk}
           onClick={() => {
             const canvas = canvasRef.current;

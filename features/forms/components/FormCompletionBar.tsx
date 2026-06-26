@@ -24,8 +24,13 @@ export function FormCompletionBar({
   instance: FormInstance;
   jobContext?: { code: string; name: string } | null;
 }) {
-  const { fieldsForInstance, completeInstance, reopenInstance, setSignoffPath } =
-    useFormInstances();
+  const {
+    fieldsForInstance,
+    completeInstance,
+    reopenInstance,
+    setSignoffPath,
+    shareLinksForInstance,
+  } = useFormInstances();
   const { user } = useAuth();
   const fields = fieldsForInstance(instance.id);
   const [busy, setBusy] = useState(false);
@@ -51,10 +56,19 @@ export function FormCompletionBar({
   }
 
   async function downloadAndStore(forInstance: FormInstance) {
+    // The signature audit pair (IP/UA) is logged server-side when a client
+    // submits via /f/<token>; surface the most recent one on the signoff PDF.
+    const audited = shareLinksForInstance(forInstance.id)
+      .filter((l) => l.submitIp || l.submitUserAgent)
+      .sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? ""))[0];
+    const signatureAudit = audited
+      ? { ip: audited.submitIp, userAgent: audited.submitUserAgent }
+      : null;
     const { storagePath } = await generateSignoffPdf(
       forInstance,
       fieldsForInstance(forInstance.id),
-      jobContext
+      jobContext,
+      signatureAudit
     );
     await setSignoffPath(forInstance.id, storagePath);
   }
