@@ -1,5 +1,6 @@
 import { test, expect, type Page } from "@playwright/test";
 import { join } from "node:path";
+import { createClient } from "@supabase/supabase-js";
 
 // Invoices slice 1 (issue #46) authed smoke: prove the capture tracer cuts
 // end-to-end — upload a file at /invoices and it lands as a `pending` row in the
@@ -63,6 +64,117 @@ test.describe("invoices slice 1 — capture tracer", () => {
     await row.click();
     await expect(page.getByText("Raw extracted JSON")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/Not extracted yet/i)).toBeVisible();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Slice 3 — review & edit
+// ---------------------------------------------------------------------------
+
+// Needs a service-role key to seed a needs_review invoice (the extractor
+// can't run in CI — no `claude` binary). SUPABASE_SERVICE_ROLE_KEY is
+// exported by the CI `supabase status` step. The test is skipped locally
+// when either credential set is absent.
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+test.describe("invoices slice 3 — review & edit", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("review form renders for a needs_review invoice; duplicate guard fires; Save marks reviewed", async ({
+    page,
+  }) => {
+    // 1. Seed a needs_review invoice directly via service role (bypasses RLS).
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "needs_review",
+        storage_path: "e2e-slice3/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-review-test.pdf",
+        supplier: "E2E Supplier Ltd",
+        invoice_number: "E2E-REVIEW-001",
+        pre_tax_total: 1000,
+        gst: 50,
+        pst: 70,
+        total: 1120,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert({
+      invoice_id: inv.id,
+      line_no: 1,
+      qty: 4,
+      sku: "MAPLE-34",
+      description: "Hard maple sheet",
+      unit: "sheet",
+      unit_price: 200,
+      amount: 800,
+      tax_flag: true,
+      confidence: 0.95,
+    });
+
+    // Seed a second invoice to trigger the duplicate guard.
+    await sb.from("invoices").insert({
+      status: "reviewed",
+      storage_path: "e2e-slice3/dup.pdf",
+      mime: "application/pdf",
+      original_filename: "e2e-dup.pdf",
+      supplier: "E2E Supplier Ltd",
+      invoice_number: "E2E-REVIEW-001",
+    });
+
+    // 2. Login and navigate to the review page.
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+
+    // 3. Review form must render.
+    await expect(page.locator('[data-testid="invoice-review-form"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 4. Header fields should be pre-filled with extracted values.
+    await expect(page.getByLabel("Supplier")).toHaveValue("E2E Supplier Ltd");
+    await expect(page.getByLabel("Invoice #")).toHaveValue("E2E-REVIEW-001");
+
+    // 5. Duplicate-invoice warning should fire (same supplier + invoice # seeded above).
+    await expect(page.locator('[data-testid="duplicate-warning"]')).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // 6. Math is correct for this invoice (1000 + 50 + 70 = 1120) — no math banner.
+    await expect(page.locator('[data-testid="math-validation-banner"]')).not.toBeVisible();
+
+    // 7. Save as Reviewed button is present and enabled.
+    const saveBtn = page.locator('[data-testid="save-reviewed-btn"]');
+    await expect(saveBtn).toBeVisible();
+    await expect(saveBtn).not.toBeDisabled();
+
+    // 8. Clicking Save marks the invoice as reviewed and transitions to the
+    //    read-only view (which has the "Raw extracted JSON" section).
+    await saveBtn.click();
+    await expect(page.getByText("Raw extracted JSON")).toBeVisible({ timeout: 15_000 });
+
+    // Verify the invoice is now at `reviewed` status.
+    const { data: afterSave } = await sb
+      .from("invoices")
+      .select("status")
+      .eq("id", inv.id)
+      .single();
+    expect(afterSave?.status).toBe("reviewed");
+
+    // 9. Clean up seeded rows so they don't pollute other tests.
+    await sb.from("invoices").delete().eq("id", inv.id);
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-REVIEW-001");
   });
 });
 

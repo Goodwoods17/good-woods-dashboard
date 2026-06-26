@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
@@ -10,18 +10,21 @@ import { hasSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import { getInvoiceWithLines } from "../lib/invoicesData";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
+import { InvoiceReviewView } from "./InvoiceReviewView";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
 /**
- * /invoices/<id> — slice 1 tracer: shows the captured invoice's status, its
- * extracted header + lines (once the out-of-band extractor has run), and the
- * RAW extracted JSON verbatim. The raw view is the tracer's proof that the
- * home-machine engine's output round-tripped into Supabase.
+ * /invoices/<id> — invoice detail. Routes to the editable review form when the
+ * invoice is at `needs_review` (slice 3); shows the read-only view otherwise.
  */
 export function InvoiceDetailView({ id }: { id: string }) {
   const [data, setData] = useState<{ invoice: Invoice; lines: InvoiceLine[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Allows the review form to trigger a reload after saving.
+  const refresh = useCallback(() => setRefreshKey((k) => k + 1), []);
 
   useEffect(() => {
     if (!hasSupabase()) {
@@ -29,6 +32,7 @@ export function InvoiceDetailView({ id }: { id: string }) {
       return;
     }
     let active = true;
+    setLoading(true);
     (async () => {
       try {
         const result = await getInvoiceWithLines(id);
@@ -42,13 +46,18 @@ export function InvoiceDetailView({ id }: { id: string }) {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [id, refreshKey]);
 
   if (loading) return <Shell title="Invoice">Loading…</Shell>;
   if (error) return <Shell title="Invoice">{error}</Shell>;
   if (!data) return <Shell title="Invoice">Invoice not found.</Shell>;
 
   const { invoice, lines } = data;
+
+  // Slice 3: delegate to the interactive review form for needs_review invoices.
+  if (invoice.status === "needs_review") {
+    return <InvoiceReviewView invoice={invoice} lines={lines} onSaved={refresh} />;
+  }
   const money = (n: number | null) => (n === null ? "—" : formatCAD(n));
 
   return (
