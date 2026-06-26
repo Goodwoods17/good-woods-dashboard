@@ -495,6 +495,7 @@ function SignaturePad({
         </button>
         <button
           type="button"
+          data-testid="signature-save"
           disabled={disabled || busy || !hasInk}
           onClick={() => {
             const canvas = canvasRef.current;

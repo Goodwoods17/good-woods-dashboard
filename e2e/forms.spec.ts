@@ -214,6 +214,10 @@ test.describe("forms slice 3 — photo + signature fields", () => {
     // [value=...] — React controlled inputs don't reflect value to the attribute).
     await page.getByLabel(`${label} — signer name`).fill(signer);
 
+    // Tick the "I confirm" affirmation (S3 gates the pad on it). Scope to the
+    // field we just added — there may be other signature fields on the page.
+    await page.getByTestId("signature-affirm").last().check();
+
     // Draw a stroke on the canvas.
     const canvas = page.getByTestId("form-signature-canvas").last();
     await expect(canvas).toBeVisible();
@@ -226,7 +230,9 @@ test.describe("forms slice 3 — photo + signature fields", () => {
     await page.mouse.move(box.x + 320, box.y + 50);
     await page.mouse.up();
 
-    await page.getByRole("button", { name: /save signature/i }).click();
+    // Scope to the field's own Save button (the form may carry other signature
+    // fields, each with its own "Save signature" — match the one we just drew on).
+    await page.getByTestId("signature-save").last().click();
 
     // The saved signature renders as an <img>, with the signer name shown.
     await expect(page.getByTestId("form-signature-preview").last()).toBeVisible({
@@ -491,8 +497,12 @@ test.describe("forms P2 slice 2 — share panel: multi-recipient + lock toggles 
     // Copy the link (stamps sent_at).
     await linkRow.getByTestId("copy-share-link").click();
 
-    // The status should change to "Sent" after copy.
-    await expect(linkRow.getByText("Sent")).toBeVisible({ timeout: 5_000 });
+    // The status should change to "Sent" after copy. Assert on the status PILL
+    // specifically — S3's owner-tracking detail also renders a "Sent" <dt> label,
+    // so a bare getByText("Sent") now matches two elements (strict-mode violation).
+    await expect(linkRow.getByTestId("share-link-status")).toHaveText("Sent", {
+      timeout: 5_000,
+    });
 
     // Get the share URL.
     const urlInput = linkRow.locator('input[aria-label="Share URL"]');
