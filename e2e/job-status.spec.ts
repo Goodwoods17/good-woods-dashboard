@@ -69,7 +69,10 @@ test.describe("job status slice 1 — live status cycle tracer", () => {
     //    template item that sorts ahead of assembly).
     await login(page);
     await page.goto("/status");
-    const item = page.getByRole("button", { name: /E2E tracer step/ });
+    // Scope to the status-item testid: slice 3's timeline adds an item-picker
+    // button ("Add note or photo to E2E tracer step") that a bare name-regex
+    // would also match (strict-mode violation).
+    const item = page.getByTestId("job-status-item").filter({ hasText: "E2E tracer step" });
     await expect(item).toBeVisible({ timeout: 15_000 });
     await expect(item).toHaveAttribute("data-status", "not_started");
 
@@ -83,7 +86,7 @@ test.describe("job status slice 1 — live status cycle tracer", () => {
 
     // 4. Reload — the 'done' status persisted to the DB, not just local state.
     await page.reload();
-    const reloaded = page.getByRole("button", { name: /E2E tracer step/ });
+    const reloaded = page.getByTestId("job-status-item").filter({ hasText: "E2E tracer step" });
     await expect(reloaded).toBeVisible({ timeout: 15_000 });
     await expect(reloaded).toHaveAttribute("data-status", "done");
 

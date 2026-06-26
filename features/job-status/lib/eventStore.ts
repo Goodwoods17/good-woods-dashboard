@@ -155,10 +155,22 @@ export function useJobEvents(jobId: string): UseJobEvents {
     };
   }, [jobId]);
 
+  // Prepend a freshly-inserted event to the local timeline immediately, so the
+  // author sees it without waiting for the Realtime round-trip (which can lag
+  // past a test/UX timeout). Idempotent: the Realtime INSERT echo dedupes by id.
+  const prependEvent = useCallback((evt: JobItemEvent) => {
+    setEvents((cur) => {
+      if (cur.some((e) => e.id === evt.id)) return cur;
+      const next = [evt, ...cur];
+      eventsRef.current = next;
+      return next;
+    });
+  }, []);
+
   const addNote = useCallback(
     async ({ itemId, itemKind, note, visibility = "owner" }: AddNoteParams) => {
       if (!hasSupabase()) return;
-      const { error } = await getSupabase()
+      const { data, error } = await getSupabase()
         .from(JOB_ITEM_EVENTS_TABLE)
         .insert(
           jobItemEventToInsertRow({
@@ -172,10 +184,13 @@ export function useJobEvents(jobId: string): UseJobEvents {
             visibility,
             workerId: null,
           })
-        );
-      if (error) throw error;
+        )
+        .select()
+        .single();
+      if (error || !data) throw error ?? new Error("Insert returned no row");
+      prependEvent(rowToJobItemEvent(data as JobItemEventRow));
     },
-    [jobId]
+    [jobId, prependEvent]
   );
 
   const addPhoto = useCallback(
@@ -188,7 +203,7 @@ export function useJobEvents(jobId: string): UseJobEvents {
       // Photo is in Storage; now record the event. If the insert fails we
       // surface it but the photo is already uploaded (acceptable: the row can
       // be re-inserted; the file doesn't duplicate).
-      const { error } = await getSupabase()
+      const { data, error } = await getSupabase()
         .from(JOB_ITEM_EVENTS_TABLE)
         .insert(
           jobItemEventToInsertRow({
@@ -202,10 +217,13 @@ export function useJobEvents(jobId: string): UseJobEvents {
             visibility,
             workerId: null,
           })
-        );
-      if (error) throw error;
+        )
+        .select()
+        .single();
+      if (error || !data) throw error ?? new Error("Insert returned no row");
+      prependEvent(rowToJobItemEvent(data as JobItemEventRow));
     },
-    [jobId]
+    [jobId, prependEvent]
   );
 
   return { events, loading, addNote, addPhoto };
