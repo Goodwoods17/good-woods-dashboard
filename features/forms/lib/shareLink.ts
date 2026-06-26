@@ -81,6 +81,24 @@ export function computeProgress(fields: FormInstanceField[]): number {
   return Math.round((done / answerable.length) * 100);
 }
 
+/**
+ * Returns the subset of VISIBLE, REQUIRED fields whose registry `isComplete`
+ * returns false. Used for the public submit soft-warn: "these fields are blank,
+ * but you can still submit." Excludes layout fields (sections) and hidden fields
+ * (Slice-1 showWhen). Excludes non-required fields (optional blank is fine).
+ */
+export function missingVisibleRequiredFields(fields: FormInstanceField[]): FormInstanceField[] {
+  return fields.filter((f) => {
+    if (!isFieldVisible(f, fields)) return false;
+    const entry = getFieldEntry(f.type);
+    if (!entry || entry.isLayout) return false;
+    // Only flag fields explicitly marked required AND currently incomplete.
+    const isRequired = (f.config as Record<string, unknown>)?.required === true;
+    if (!isRequired) return false;
+    return !entry.isComplete(f);
+  });
+}
+
 /** Which locked ids an incoming payload tried (and was forbidden) to set — for diagnostics/audit. */
 export function lockedAnswerKeys(
   incoming: ShareAnswers,
