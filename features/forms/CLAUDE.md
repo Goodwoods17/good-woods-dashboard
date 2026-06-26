@@ -101,6 +101,34 @@ signature audit trail. The signature control adds an **"I confirm" affirmation**
 affirmation + the IP/UA audit block. Migration: `20260625140000_form_share_tracking.sql`
 (additive `started_at` / `progress` / `submit_ip` / `submit_user_agent`).
 
+## Phase 2 (client portal) — manual email send + reminder (slice 5, #44)
+
+Every share email is an **explicit owner click** — there is **no cron / no auto
+path** anywhere in this feature. The owner types the recipient address in the
+`SharePanel` row and clicks **"Send to client"** (or **"Send reminder"** once the
+link has been sent and is still outstanding — `lib/sendShareLink.ts::canSendReminder`).
+
+- `lib/sendShareLink.ts` — pure: `buildShareEmail` (subject/HTML/text, reminder
+  wording, HTML-escaped recipient name + title) + `canSendReminder` +
+  `resolveFromAddress` + `isValidEmail`. Unit-tested under node vitest.
+- `lib/sendShareLinkServer.ts` — server-only: loads the link (service role),
+  composes the email, delivers via **Resend** (lazy-imported; never in the client
+  bundle), and stamps `sent_at` on the **first** successful send (idempotent — a
+  reminder keeps the original sent date the "N days ago" counter reads from). The
+  `deliver` arg is a test seam so vitest mocks the send (no real email in CI).
+- Route `src/app/api/forms/share-links/[id]/send/route.ts` — authed (gated by the
+  same middleware that protects every `/api` route), POST `{ recipientEmail, mode }`.
+- **Env (server-only, already set in Vercel prod):** `RESEND_API_KEY` (Sensitive)
+  + `RESEND_FROM` (defaults to `onboarding@resend.dev`). Read via `process.env`
+  server-side only; **never** `NEXT_PUBLIC_*`, never committed.
+- **Graceful fallback (REQUIRED):** with no `RESEND_API_KEY` the route returns
+  `503 { reason: "unconfigured" }` and the UI degrades to the Slice-2 mailto draft
+  — never a crash, never a block. Preview/dev/CI have no key, so that fallback is
+  the path they exercise. A test-mode caveat renders near the Send button
+  (`onboarding@resend.dev` only delivers to the account owner until a domain is
+  verified). Swap to a real sender is **env-only** (zero code change).
+- **No schema migration** — email is captured at click time, not stored.
+
 ## What this feature does NOT own
 
 - Cross-feature UI primitives (`Modal`, `Button`) → `shared/components/`.
