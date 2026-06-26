@@ -3,7 +3,10 @@ import type {
   FormInstanceField,
   FormTemplate,
   FormTemplateField,
+  Job,
+  JobPiece,
 } from "@shared/lib/types";
+import { applyPrefill } from "./prefill";
 
 /**
  * Snapshot invariant (issue #32): when a template is attached to a job, the
@@ -27,12 +30,19 @@ export type SnapshotResult = {
  * Build a new draft instance + its snapshot fields from a template and its
  * fields. `jobId` is the job we're attaching to (null = standalone). Answers
  * (checked/value/note/photoUrl) start empty; the def is copied verbatim.
+ *
+ * When `job` and `pieces` are provided, fields whose `config.prefillFrom` key
+ * resolves to a non-null value are pre-filled at snapshot time. The fill is
+ * part of the frozen snapshot — later job edits do NOT change the instance.
+ * Standalone attach (no job) leaves all fields blank.
  */
 export function snapshotTemplate(
   template: FormTemplate,
   templateFields: FormTemplateField[],
   jobId: string | null,
-  now: string = new Date().toISOString()
+  now: string = new Date().toISOString(),
+  job?: Job,
+  pieces?: JobPiece[]
 ): SnapshotResult {
   const instanceId = newId();
   const instance: FormInstance = {
@@ -84,5 +94,10 @@ export function snapshotTemplate(
     };
   });
 
-  return { instance, fields };
+  // Apply job-data prefill when a job context is provided (issue #68).
+  // Prefill only runs at snapshot time; the result is frozen along with the rest
+  // of the snapshot, so subsequent job edits cannot alter existing instances.
+  const prefilled = job ? applyPrefill(fields, job, pieces ?? []) : fields;
+
+  return { instance, fields: prefilled };
 }

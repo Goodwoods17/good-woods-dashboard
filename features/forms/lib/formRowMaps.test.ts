@@ -17,7 +17,7 @@ import {
 } from "./formTemplatesRowMap";
 import { snapshotTemplate } from "./snapshot";
 import { FIELD_REGISTRY } from "./fieldRegistry";
-import type { FieldType, FormTemplate, FormTemplateField } from "@shared/lib/types";
+import type { FieldType, FormTemplate, FormTemplateField, Job } from "@shared/lib/types";
 
 const templateRow: FormTemplateRow = {
   id: "t1",
@@ -156,6 +156,78 @@ describe("snapshotTemplate (snapshot invariant)", () => {
   it("supports standalone (null job) snapshots", () => {
     const { instance } = snapshotTemplate(template, [checkbox], null);
     expect(instance.jobId).toBeNull();
+  });
+
+  it("prefills a field whose config.prefillFrom matches a job source key", () => {
+    const stubJob: Job = {
+      id: "job-1",
+      code: "GW-001",
+      name: "Test Job",
+      client: "Test Client",
+      address: "99 Example Ave",
+      template: "full_project",
+      pipelineStatus: "in_production",
+      healthStatus: "on_track",
+      currentMilestone: "assembly",
+      installDate: "2026-09-01",
+      revenue: 10000,
+      costs: [],
+      invoice: { number: "INV-1", issuedDate: "", dueDate: "", lineItems: [] },
+    };
+    const addressField: FormTemplateField = rowToFormTemplateField({
+      ...templateFieldRow,
+      id: "tf-addr",
+      label: "Site address",
+      type: "short_text",
+      sort_order: 0,
+      config: { prefillFrom: "address" },
+    });
+    const { fields } = snapshotTemplate(template, [addressField], "job-1", undefined, stubJob, []);
+    expect(fields[0].value).toBe("99 Example Ave");
+  });
+
+  it("leaves prefill fields blank on standalone (null job)", () => {
+    const addressField: FormTemplateField = rowToFormTemplateField({
+      ...templateFieldRow,
+      id: "tf-addr",
+      label: "Site address",
+      type: "short_text",
+      sort_order: 0,
+      config: { prefillFrom: "address" },
+    });
+    const { fields } = snapshotTemplate(template, [addressField], null);
+    expect(fields[0].value).toBeNull();
+  });
+
+  it("editing the job after snapshot does NOT change the prefilled instance field (frozen)", () => {
+    const stubJob: Job = {
+      id: "job-1",
+      code: "GW-001",
+      name: "Test Job",
+      client: "Test Client",
+      address: "Original Address",
+      template: "full_project",
+      pipelineStatus: "in_production",
+      healthStatus: "on_track",
+      currentMilestone: "assembly",
+      installDate: "2026-09-01",
+      revenue: 10000,
+      costs: [],
+      invoice: { number: "INV-1", issuedDate: "", dueDate: "", lineItems: [] },
+    };
+    const addressField: FormTemplateField = rowToFormTemplateField({
+      ...templateFieldRow,
+      id: "tf-addr",
+      label: "Site address",
+      type: "short_text",
+      sort_order: 0,
+      config: { prefillFrom: "address" },
+    });
+    const { fields } = snapshotTemplate(template, [addressField], "job-1", undefined, stubJob, []);
+    expect(fields[0].value).toBe("Original Address");
+    // Mutating the job object after the fact has no effect (snapshot is frozen).
+    (stubJob as Record<string, unknown>).address = "Changed Address";
+    expect(fields[0].value).toBe("Original Address");
   });
 
   it("remaps a conditional field's showWhen.fieldId from template id to the new instance id", () => {

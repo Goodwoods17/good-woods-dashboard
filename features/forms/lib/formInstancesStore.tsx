@@ -16,6 +16,8 @@ import type {
   FormShareLink,
   FormTemplate,
   FormTemplateField,
+  Job,
+  JobPiece,
   RecipientType,
 } from "@shared/lib/types";
 import {
@@ -70,11 +72,17 @@ type FormInstancesContextValue = {
   fieldsForInstance: (instanceId: string) => FormInstanceField[];
   /** Share links for one instance, sorted by createdAt ascending. */
   shareLinksForInstance: (instanceId: string) => FormShareLink[];
-  /** Snapshot a template onto a job (or null = standalone). Returns the new instance. */
+  /**
+   * Snapshot a template onto a job (or null = standalone). Returns the new instance.
+   * When `job` + `pieces` are provided, fields with `config.prefillFrom` are
+   * pre-filled at snapshot time (issue #68 — Forms P3 Slice 3).
+   */
   attachTemplate: (
     template: FormTemplate,
     templateFields: FormTemplateField[],
-    jobId: string | null
+    jobId: string | null,
+    job?: Job,
+    pieces?: JobPiece[]
   ) => Promise<FormInstance>;
   /** Patch a single instance field's answer (checked/value/note/photoUrl). Bumps draft → in_progress. */
   updateInstanceField: (fieldId: string, patch: Partial<FormInstanceField>) => Promise<void>;
@@ -309,9 +317,18 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     async (
       template: FormTemplate,
       templateFields: FormTemplateField[],
-      jobId: string | null
+      jobId: string | null,
+      job?: Job,
+      pieces?: JobPiece[]
     ): Promise<FormInstance> => {
-      const { instance, fields: snapFields } = snapshotTemplate(template, templateFields, jobId);
+      const { instance, fields: snapFields } = snapshotTemplate(
+        template,
+        templateFields,
+        jobId,
+        undefined,
+        job,
+        pieces
+      );
       // Optimistic.
       setInstances((prev) => [...prev, instance]);
       setFields((prev) => [...prev, ...snapFields]);

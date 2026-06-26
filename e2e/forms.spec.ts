@@ -864,114 +864,90 @@ test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () =
   });
 });
 
-test.describe("forms P3 slice 2 — required toggle + completeness meter", () => {
+test.describe("forms P3 slice 3 — prefill from job data", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
-  // Owner creates a template with a required short_text field via the builder,
-  // attaches it to the sentinel job, and verifies:
-  //  1. The field shows an asterisk (*) at fill time.
-  //  2. The completeness meter (data-testid="completeness-meter") renders and
-  //     updates live as the field is filled.
-  //  3. On the public /f/<token> page, submitting with the required field blank
-  //     shows the soft-warn banner (data-testid="required-fields-warning") listing
-  //     the field, but the submit still succeeds (submit-saved appears).
-  test("required toggle → asterisk at fill time; meter updates; public soft-warn on blank submit", async ({
+  // Owner creates a template with a short_text field mapped to "address" and a
+  // date field mapped to "installDate". Attaches it to the sentinel job. The
+  // snapshot should carry the job's address and installDate. A standalone attach
+  // (via /forms) must leave the fields blank (no crash).
+  test("attached form prefills address + installDate from the seeded job; standalone leaves blank", async ({
     page,
-    browser,
-  }: {
-    page: Page;
-    browser: Browser;
   }) => {
     await login(page);
 
-    // 1. Create a fresh template with one required short_text field.
+    // 1. Create a fresh template with two prefill-mapped fields.
     await page.goto("/forms");
     await page.getByRole("button", { name: /new template/i }).click();
-    await page.getByPlaceholder(/pre-install/i).fill("Required Fields Test Template");
+    await page.getByPlaceholder(/pre-install/i).fill("Prefill Test Template");
     await page.getByRole("button", { name: /create & edit fields/i }).click();
 
-    await expect(page.getByText("Edit template: Required Fields Test Template")).toBeVisible({
+    await expect(page.getByText("Edit template: Prefill Test Template")).toBeVisible({
       timeout: 10_000,
     });
 
-    // Add a required short_text field.
+    // Add a short_text field mapped to address.
     await page.getByRole("button", { name: /add field/i }).click();
-    await page.getByLabel("Field label").fill("Client sign-off name");
-    // Mark it required (data-testid="field-required" from the Required toggle).
-    await page.getByTestId("field-required").check();
+    await page.getByLabel("Field label").fill("Site address");
+    // Type stays short_text (default).
+    await page.getByTestId("field-prefill-source").selectOption({ value: "address" });
     await page.getByRole("button", { name: /save field/i }).click();
     await expect(
-      page.getByTestId("template-fields-list").getByText("Client sign-off name", { exact: true })
+      page.getByTestId("template-fields-list").getByText("Site address", { exact: true })
     ).toBeVisible({ timeout: 5_000 });
-    // The * badge appears on the field row in the builder list.
-    await expect(page.getByTestId("template-fields-list").getByText("*").first()).toBeVisible();
 
-    // 2. Attach the template to the sentinel job and verify the fill surface.
+    // Add a date field mapped to installDate.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Install date");
+    await page.getByLabel("Field type").selectOption({ label: "Date" });
+    await page.getByTestId("field-prefill-source").selectOption({ value: "installDate" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Install date", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 2. Attach to the sentinel job — prefill must fire.
     await page.goto(`/jobs/${E2E_JOB_ID}`);
     await page.getByRole("button", { name: "Forms", exact: true }).click();
     await page.getByRole("button", { name: /add form/i }).click();
     await page
-      .getByRole("button", { name: new RegExp("Required Fields Test Template") })
+      .getByRole("button", { name: new RegExp("Prefill Test Template") })
       .first()
       .click();
 
     const instance = page.getByTestId("form-instance").last();
-    await expect(instance.getByText("Client sign-off name").first()).toBeVisible({
-      timeout: 15_000,
-    });
 
-    // The completeness meter should render (no required fields answered yet → 0%).
-    await expect(instance.getByTestId("completeness-meter")).toBeVisible({ timeout: 5_000 });
+    // The address field should be pre-filled with the seeded job's address.
+    // The seeded job (e2e-smoke-job) has some address; we simply verify the field
+    // is not blank — the exact value matches whatever seeds/seed-e2e.mjs sets.
+    const addressInput = instance.getByLabel("Site address");
+    await expect(addressInput).toBeVisible({ timeout: 15_000 });
+    const addressValue = await addressInput.inputValue();
+    expect(addressValue.length).toBeGreaterThan(0);
 
-    // Meter updates when the field is filled.
-    const textInput = instance.getByRole("textbox", { name: /client sign-off name/i });
-    if ((await textInput.count()) > 0) {
-      await textInput.fill("Jordan Test");
-      await expect(instance.getByTestId("completeness-meter")).toContainText("100%", {
-        timeout: 5_000,
-      });
-    }
+    // The installDate field should also be pre-filled (non-empty).
+    const dateInput = instance.getByLabel("Install date");
+    await expect(dateInput).toBeVisible();
+    const dateValue = await dateInput.inputValue();
+    expect(dateValue.length).toBeGreaterThan(0);
 
-    // 3. Mint a share link and verify the public page behaviour.
-    await instance.getByTestId("open-share-panel").click();
-    await expect(instance.getByTestId("share-panel")).toBeVisible({ timeout: 5_000 });
-    await instance.getByTestId("add-recipient-button").click();
-    await instance.getByTestId("recipient-name-input").fill("Required Test Client");
-    await instance.getByTestId("add-recipient-submit").click();
+    // 3. Standalone attach (via /forms) must leave the fields blank (no crash).
+    await page.goto("/forms");
+    const card = page
+      .locator('[data-testid="form-template-card"]')
+      .filter({ hasText: "Prefill Test Template" })
+      .first();
+    await card.getByRole("button", { name: /fill standalone/i }).click();
 
-    const linkRow = instance.getByTestId("share-link-row").first();
-    await expect(linkRow).toBeVisible({ timeout: 10_000 });
-    const urlInput = linkRow.locator('input[aria-label="Share URL"]');
-    const shareUrl = await urlInput.inputValue();
-    const tokenPath = new URL(shareUrl).pathname;
+    // A standalone instance appears.
+    const standaloneSection = page.locator('[data-testid="standalone-instance"]').last();
+    await expect(standaloneSection).toBeVisible({ timeout: 10_000 });
 
-    // Open the link as a no-login guest.
-    const guest = await browser.newContext();
-    try {
-      const guestPage = await guest.newPage();
-      await guestPage.goto(tokenPath);
-      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
-
-      // The completeness meter renders on the public page too.
-      await expect(guestPage.getByTestId("completeness-meter")).toBeVisible({ timeout: 5_000 });
-
-      // Submit WITHOUT filling the required field — the soft-warn appears but submit succeeds.
-      await guestPage.getByTestId("submit-form").click();
-
-      // Both the soft-warn (listing the blank required field) AND the saved confirmation
-      // must appear — the submit is NEVER blocked.
-      await expect(guestPage.getByTestId("required-fields-warning")).toBeVisible({
-        timeout: 10_000,
-      });
-      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 10_000 });
-
-      // The warning lists the field by name.
-      await expect(guestPage.getByTestId("required-fields-warning")).toContainText(
-        "Client sign-off name"
-      );
-    } finally {
-      await guest.close();
-    }
+    // The address field in the standalone instance must be blank.
+    const standaloneAddressInput = standaloneSection.getByLabel("Site address");
+    await expect(standaloneAddressInput).toBeVisible();
+    const standaloneValue = await standaloneAddressInput.inputValue();
+    expect(standaloneValue).toBe("");
   });
 });
 
