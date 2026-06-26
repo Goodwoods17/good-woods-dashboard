@@ -200,6 +200,9 @@ export async function checkDuplicateInvoice(
     .ilike("supplier", supplier)
     .ilike("invoice_number", invoiceNumber)
     .neq("id", excludeId)
+    // A duplicate guard must not break when more than one duplicate exists —
+    // that's precisely when it matters most. Flag the first match.
+    .limit(1)
     .maybeSingle<InvoiceRow>();
   if (error) throw error;
   if (!data) return null;

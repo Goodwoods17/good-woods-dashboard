@@ -100,6 +100,11 @@ test.describe("invoices slice 3 — review & edit", () => {
       auth: { persistSession: false },
     });
 
+    // Clear rows left by a prior failed attempt so retries start from a clean
+    // slate — the duplicate guard matches on supplier + invoice_number, and
+    // leftover dupes would otherwise skew the dup check.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-REVIEW-001");
+
     const { data: invRows, error: invErr } = await sb
       .from("invoices")
       .insert({
@@ -121,12 +126,14 @@ test.describe("invoices slice 3 — review & edit", () => {
     await sb.from("invoice_lines").insert({
       invoice_id: inv.id,
       line_no: 1,
-      qty: 4,
+      qty: 5,
       sku: "MAPLE-34",
       description: "Hard maple sheet",
       unit: "sheet",
       unit_price: 200,
-      amount: 800,
+      // Σ lines must equal pre_tax_total (1000) so the math banner stays hidden
+      // (validateMath check 1: Σ line amounts ≈ preTaxTotal).
+      amount: 1000,
       tax_flag: true,
       confidence: 0.95,
     });
@@ -159,7 +166,8 @@ test.describe("invoices slice 3 — review & edit", () => {
       timeout: 5_000,
     });
 
-    // 6. Math is correct for this invoice (1000 + 50 + 70 = 1120) — no math banner.
+    // 6. Both math checks hold (Σ lines 1000 = pre-tax 1000; 1000 + 50 + 70 =
+    //    1120 total) — so the math-validation banner must stay hidden.
     await expect(page.locator('[data-testid="math-validation-banner"]')).not.toBeVisible();
 
     // 7. Save as Reviewed button is present and enabled.
