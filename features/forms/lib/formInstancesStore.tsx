@@ -25,8 +25,13 @@ import {
   getSupabase,
   hasSupabase,
 } from "@shared/lib/supabase";
-import { formShareLinkToRow } from "./formShareLinksRowMap";
+import {
+  formShareLinkToRow,
+  rowToFormShareLink,
+  type FormShareLinkRow,
+} from "./formShareLinksRowMap";
 import { generateShareToken } from "./shareLink";
+import { stampSentAt } from "./shareLinkStatus";
 import { formatError } from "@shared/lib/formatError";
 import {
   formInstanceFieldToRow,
@@ -42,16 +47,19 @@ import { removeFormPhoto } from "./storage";
 
 const INSTANCES_KEY = "gw_form_instances_v1";
 const FIELDS_KEY = "gw_form_instance_fields_v1";
+const SHARE_LINKS_KEY = "gw_form_share_links_v1";
 const SCHEMA_VERSION = 1;
 
 type PersistedInstances = { schema: number; instances: FormInstance[] };
 type PersistedFields = { schema: number; fields: FormInstanceField[] };
+type PersistedShareLinks = { schema: number; links: FormShareLink[] };
 
 export type FormsBackend = "supabase" | "localStorage";
 
 type FormInstancesContextValue = {
   instances: FormInstance[];
   fields: FormInstanceField[];
+  shareLinks: FormShareLink[];
   loading: boolean;
   backend: FormsBackend;
   error: string | null;
@@ -60,6 +68,8 @@ type FormInstancesContextValue = {
   /** Standalone instances (jobId = null). */
   standaloneInstances: FormInstance[];
   fieldsForInstance: (instanceId: string) => FormInstanceField[];
+  /** Share links for one instance, sorted by createdAt ascending. */
+  shareLinksForInstance: (instanceId: string) => FormShareLink[];
   /** Snapshot a template onto a job (or null = standalone). Returns the new instance. */
   attachTemplate: (
     template: FormTemplate,
@@ -106,6 +116,22 @@ type FormInstancesContextValue = {
     lockedFieldIds?: string[];
     createdBy?: string | null;
   }) => Promise<FormShareLink>;
+  /**
+   * Revoke a share link (sets revoked_at). The /f/<token> portal will show
+   * the inactive state after this. Does NOT delete the row (audit trail).
+   */
+  revokeShareLink: (linkId: string) => Promise<void>;
+  /**
+   * Stamp sent_at on the first share action (copy link / open mail draft).
+   * Idempotent — never overwrites an existing sent_at. Updates both the in-
+   * memory state and Supabase (if configured).
+   */
+  stampShareLinkSent: (linkId: string) => Promise<void>;
+  /**
+   * Update the locked_field_ids on a draft link (before it has been sent).
+   * Once sent the lock list is frozen to preserve what the recipient was shown.
+   */
+  updateShareLinkLocks: (linkId: string, lockedFieldIds: string[]) => Promise<void>;
 };
 
 const FormInstancesContext = createContext<FormInstancesContextValue | null>(null);
@@ -157,20 +183,48 @@ function localSaveFields(fields: FormInstanceField[]) {
   }
 }
 
+function localLoadShareLinks(): FormShareLink[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(SHARE_LINKS_KEY);
+    if (!raw) return [];
+    const parsed: PersistedShareLinks = JSON.parse(raw);
+    return parsed.schema === SCHEMA_VERSION && Array.isArray(parsed.links) ? parsed.links : [];
+  } catch {
+    return [];
+  }
+}
+
+function localSaveShareLinks(links: FormShareLink[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      SHARE_LINKS_KEY,
+      JSON.stringify({ schema: SCHEMA_VERSION, links })
+    );
+  } catch {
+    /* quota / denied */
+  }
+}
+
 async function supabaseLoad(): Promise<{
   instances: FormInstance[];
   fields: FormInstanceField[];
+  shareLinks: FormShareLink[];
 }> {
   const sb = getSupabase();
-  const [insRes, fldRes] = await Promise.all([
+  const [insRes, fldRes, linksRes] = await Promise.all([
     sb.from(FORM_INSTANCES_TABLE).select("*").order("sort_order", { ascending: true }),
     sb.from(FORM_INSTANCE_FIELDS_TABLE).select("*").order("sort_order", { ascending: true }),
+    sb.from(FORM_SHARE_LINKS_TABLE).select("*").order("created_at", { ascending: true }),
   ]);
   if (insRes.error) throw insRes.error;
   if (fldRes.error) throw fldRes.error;
+  if (linksRes.error) throw linksRes.error;
   return {
     instances: (insRes.data as FormInstanceRow[] | null)?.map(rowToFormInstance) ?? [],
     fields: (fldRes.data as FormInstanceFieldRow[] | null)?.map(rowToFormInstanceField) ?? [],
+    shareLinks: (linksRes.data as FormShareLinkRow[] | null)?.map(rowToFormShareLink) ?? [],
   };
 }
 
@@ -178,10 +232,12 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   const backend: FormsBackend = hasSupabase() ? "supabase" : "localStorage";
   const [instances, setInstances] = useState<FormInstance[]>([]);
   const [fields, setFields] = useState<FormInstanceField[]>([]);
+  const [shareLinks, setShareLinks] = useState<FormShareLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const instancesRef = useRef<FormInstance[]>([]);
   const fieldsRef = useRef<FormInstanceField[]>([]);
+  const shareLinksRef = useRef<FormShareLink[]>([]);
 
   useEffect(() => {
     instancesRef.current = instances;
@@ -189,6 +245,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     fieldsRef.current = fields;
   }, [fields]);
+  useEffect(() => {
+    shareLinksRef.current = shareLinks;
+  }, [shareLinks]);
 
   useEffect(() => {
     let cancelled = false;
@@ -199,16 +258,19 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
           if (!cancelled) {
             setInstances(remote.instances);
             setFields(remote.fields);
+            setShareLinks(remote.shareLinks);
           }
         } else if (!cancelled) {
           setInstances(localLoadInstances());
           setFields(localLoadFields());
+          setShareLinks(localLoadShareLinks());
         }
       } catch (e) {
         if (!cancelled) {
           setError(formatError(e));
           setInstances(localLoadInstances());
           setFields(localLoadFields());
+          setShareLinks(localLoadShareLinks());
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -226,6 +288,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!loading && backend === "localStorage") localSaveFields(fields);
   }, [fields, loading, backend]);
+  useEffect(() => {
+    if (!loading && backend === "localStorage") localSaveShareLinks(shareLinks);
+  }, [shareLinks, loading, backend]);
 
   const refresh = useCallback(async () => {
     if (backend !== "supabase") return;
@@ -234,6 +299,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       const remote = await supabaseLoad();
       setInstances(remote.instances);
       setFields(remote.fields);
+      setShareLinks(remote.shareLinks);
       setError(null);
     } catch (e) {
       setError(formatError(e));
@@ -575,15 +641,92 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
         createdAt: new Date().toISOString(),
         createdBy: args.createdBy ?? null,
       };
+      // Optimistic.
+      setShareLinks((prev) => [...prev, link]);
       if (backend !== "supabase") return link;
       const sb = getSupabase();
       const { error: err } = await sb.from(FORM_SHARE_LINKS_TABLE).insert(formShareLinkToRow(link));
       if (err) {
         setError(formatError(err));
+        setShareLinks((prev) => prev.filter((l) => l.id !== link.id));
         throw err;
       }
       setError(null);
       return link;
+    },
+    [backend]
+  );
+
+  const revokeShareLink = useCallback(
+    async (linkId: string) => {
+      const prev = shareLinksRef.current;
+      const revokedAt = new Date().toISOString();
+      setShareLinks((links) =>
+        links.map((l) => (l.id === linkId ? { ...l, revokedAt } : l))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_SHARE_LINKS_TABLE)
+          .update({ revoked_at: revokedAt })
+          .eq("id", linkId);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setShareLinks(prev);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const stampShareLinkSent = useCallback(
+    async (linkId: string) => {
+      const target = shareLinksRef.current.find((l) => l.id === linkId);
+      if (!target || target.sentAt !== null) return; // idempotent
+      const stamped = stampSentAt(target);
+      const prev = shareLinksRef.current;
+      setShareLinks((links) => links.map((l) => (l.id === linkId ? stamped : l)));
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_SHARE_LINKS_TABLE)
+          .update({ sent_at: stamped.sentAt })
+          .eq("id", linkId);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setShareLinks(prev);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
+  const updateShareLinkLocks = useCallback(
+    async (linkId: string, lockedFieldIds: string[]) => {
+      const prev = shareLinksRef.current;
+      setShareLinks((links) =>
+        links.map((l) => (l.id === linkId ? { ...l, lockedFieldIds } : l))
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: err } = await sb
+          .from(FORM_SHARE_LINKS_TABLE)
+          .update({ locked_field_ids: lockedFieldIds })
+          .eq("id", linkId);
+        if (err) throw err;
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setShareLinks(prev);
+        throw e;
+      }
     },
     [backend]
   );
@@ -605,10 +748,19 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
     [fields]
   );
 
+  const shareLinksForInstance = useCallback(
+    (instanceId: string) =>
+      shareLinks
+        .filter((l) => l.instanceId === instanceId)
+        .sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+    [shareLinks]
+  );
+
   const value = useMemo<FormInstancesContextValue>(
     () => ({
       instances,
       fields,
+      shareLinks,
       loading,
       backend,
       error,
@@ -616,6 +768,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       instancesForJob,
       standaloneInstances,
       fieldsForInstance,
+      shareLinksForInstance,
       attachTemplate,
       updateInstanceField,
       addInstanceField,
@@ -627,10 +780,14 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       setSignoffPath,
       deleteInstance,
       createShareLink,
+      revokeShareLink,
+      stampShareLinkSent,
+      updateShareLinkLocks,
     }),
     [
       instances,
       fields,
+      shareLinks,
       loading,
       backend,
       error,
@@ -638,6 +795,7 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       instancesForJob,
       standaloneInstances,
       fieldsForInstance,
+      shareLinksForInstance,
       attachTemplate,
       updateInstanceField,
       addInstanceField,
@@ -649,6 +807,9 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       setSignoffPath,
       deleteInstance,
       createShareLink,
+      revokeShareLink,
+      stampShareLinkSent,
+      updateShareLinkLocks,
     ]
   );
 

@@ -87,12 +87,28 @@ export function PublicFillView({
   }
 
   return (
-    <main className="min-h-screen bg-background px-4 py-10 sm:py-14">
-      <div className="mx-auto w-full max-w-xl">
+    <main className="min-h-screen bg-background">
+      {/* Branded header — 44px min touch target on mobile, full-bleed tint bar */}
+      <div className="border-b border-border bg-canvas-top px-4 py-3 sm:px-6">
+        <div className="mx-auto flex max-w-xl items-center gap-3">
+          {/* Wordmark — serif logotype matching the dashboard identity */}
+          <span
+            className="font-serif text-lg font-semibold tracking-tight text-text-primary"
+            aria-label="Good Woods"
+          >
+            Good Woods
+          </span>
+          <span className="text-border-strong">·</span>
+          <span className="text-sm text-text-tertiary">Spacecraft Joinery</span>
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-xl px-4 py-8 sm:py-12">
         <header className="mb-6">
-          <p className="text-xs uppercase tracking-wide text-text-tertiary">Good Woods</p>
-          <h1 className="font-serif text-2xl text-text-primary mt-1">{instance.title}</h1>
-          {recipientName && <p className="text-sm text-text-secondary mt-1">For {recipientName}</p>}
+          <h1 className="font-serif text-2xl text-text-primary">{instance.title}</h1>
+          {recipientName && (
+            <p className="mt-1 text-sm text-text-secondary">Prepared for {recipientName}</p>
+          )}
         </header>
 
         <div
@@ -170,6 +186,17 @@ export function PublicFillView({
           Your answers are saved automatically — you can reopen this link anytime to continue.
         </p>
       </div>
+
+      {/* Branded footer */}
+      <footer className="mt-12 border-t border-border px-4 py-6 text-center">
+        <p className="text-xs text-text-tertiary">
+          Sent by{" "}
+          <span className="font-medium text-text-secondary">Good Woods · Spacecraft Joinery</span>
+        </p>
+        <p className="mt-1 text-xs text-text-disabled">
+          Questions? Contact your project team.
+        </p>
+      </footer>
     </main>
   );
 }
