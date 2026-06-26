@@ -10,6 +10,26 @@ Read `CONTEXT.md` (the glossary) before touching this feature — several words
 (invoice, actual, offer, post) already mean specific things elsewhere. The engine
 decision and its caveats are **ADR 0019**.
 
+## ⚠️ AUTONOMOUS OVERNIGHT BUILD — MANDATORY CONSTRAINTS (every slice)
+
+This milestone (#4) is being built unattended with the owner's explicit
+authorization. **Every slice MUST obey these — they are how the build stays safe
+without a human at the gate:**
+
+1. **Feature-flag everything OFF in production.** Gate the `/invoices` route, its
+   nav entry, and any invoice code path behind a single flag (`INVOICES_ENABLED`,
+   read from env; **absent/false = off**). Prod stays dormant until the owner flips
+   it on after review. **Enable the flag in dev/test/CI** so the Playwright smoke
+   can exercise the feature (a slice whose smoke can't run because the flag is off
+   won't pass CI — set it on in CI).
+2. **Additive-only migrations.** `CREATE TABLE`/`CREATE …`/`ADD COLUMN` (nullable)
+   only. **Never** `DROP`, destructive `ALTER`, or row/column mutation. The owner
+   reviews + applies migrations to prod *after* the run — **do NOT apply any
+   migration to production yourself.**
+3. **Never weaken existing RLS/auth.** New tables are `authenticated_all |
+   anon_none`; don't touch existing policies.
+4. CI green is non-negotiable before merge (the trust gate is unchanged).
+
 ## The shape (why this is mostly wiring, not new machinery)
 
 - **Estimated-vs-actual needs no rebuild.** It already reads `job_cost_actuals`
