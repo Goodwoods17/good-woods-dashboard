@@ -53,6 +53,21 @@ export function useJobProgress(jobId: string): UseJobProgress {
     itemsRef.current = items;
   }, [items]);
 
+  // Unique per hook instance. Two useJobProgress() on the SAME jobId (e.g. the
+  // board's note picker + the embedded field view) must NOT share a Realtime
+  // channel name: supabase-js returns the *existing* channel for a duplicate
+  // name, so the second hook's `.on()` runs on an already-subscribed channel and
+  // throws ("cannot add postgres_changes callbacks ... after subscribe()") — a
+  // client-side exception that blanks the whole page. A per-instance suffix keeps
+  // each subscriber independent (the channel still filters on job_id).
+  const channelKeyRef = useRef<string | null>(null);
+  if (channelKeyRef.current === null) {
+    channelKeyRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `r${Math.random().toString(36).slice(2)}`;
+  }
+
   // Initial load, scoped to this job.
   useEffect(() => {
     let cancelled = false;
@@ -91,7 +106,7 @@ export function useJobProgress(jobId: string): UseJobProgress {
     if (backend !== "supabase") return;
     const sb = getSupabase();
     const channel = sb
-      .channel(`job_items_changes_${jobId}`)
+      .channel(`job_items_changes_${jobId}_${channelKeyRef.current}`)
       .on(
         "postgres_changes",
         {

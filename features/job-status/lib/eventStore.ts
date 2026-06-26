@@ -89,6 +89,17 @@ export function useJobEvents(jobId: string): UseJobEvents {
     eventsRef.current = events;
   }, [events]);
 
+  // Per-instance channel suffix — see useJobProgress: two subscribers to the same
+  // job must not share a Realtime channel name or the second `.on()` throws after
+  // `subscribe()` and blanks the page.
+  const channelKeyRef = useRef<string | null>(null);
+  if (channelKeyRef.current === null) {
+    channelKeyRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `r${Math.random().toString(36).slice(2)}`;
+  }
+
   // Initial load.
   useEffect(() => {
     let cancelled = false;
@@ -117,7 +128,7 @@ export function useJobEvents(jobId: string): UseJobEvents {
     if (!hasSupabase()) return;
     const sb = getSupabase();
     const channel = sb
-      .channel(`job_item_events_${jobId}`)
+      .channel(`job_item_events_${jobId}_${channelKeyRef.current}`)
       .on(
         "postgres_changes",
         {
