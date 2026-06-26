@@ -29,6 +29,8 @@ const invoiceRow: InvoiceRow = {
   supplier_id: null,
   // Slice 7: multi-page camera paths — null for single-file uploads.
   pages: null,
+  // Slice 8: QBO vendor mapping — null until owner assigns it.
+  qbo_vendor_id: null,
   created_at: "2026-06-25T00:00:00Z",
   updated_at: "2026-06-25T01:00:00Z",
 };
@@ -47,6 +49,8 @@ const lineRow: InvoiceLineRow = {
   confidence: 0.98,
   // Slice 4: job assignment — null until match step fills it.
   job_id: null,
+  // Slice 8: QBO account — null until owner assigns it.
+  qbo_account: null,
   created_at: "2026-06-25T00:00:00Z",
 };
 
@@ -65,6 +69,16 @@ describe("rowToInvoice", () => {
     expect(inv.createdAt).toBe("2026-06-25T00:00:00Z");
     expect(inv.updatedAt).toBe("2026-06-25T01:00:00Z");
   });
+
+  it("maps qbo_vendor_id → qboVendorId (null when unset)", () => {
+    const inv = rowToInvoice(invoiceRow);
+    expect(inv.qboVendorId).toBeNull();
+  });
+
+  it("maps qbo_vendor_id → qboVendorId when set", () => {
+    const inv = rowToInvoice({ ...invoiceRow, qbo_vendor_id: "qbo-123" });
+    expect(inv.qboVendorId).toBe("qbo-123");
+  });
 });
 
 describe("rowToInvoiceLine", () => {
@@ -77,6 +91,16 @@ describe("rowToInvoiceLine", () => {
     expect(line.unitPrice).toBe(200);
     expect(line.taxFlag).toBe(true);
     expect(line.confidence).toBe(0.98);
+  });
+
+  it("maps qbo_account → qboAccount (null when unset)", () => {
+    const line = rowToInvoiceLine(lineRow);
+    expect(line.qboAccount).toBeNull();
+  });
+
+  it("maps qbo_account → qboAccount when set", () => {
+    const line = rowToInvoiceLine({ ...lineRow, qbo_account: "5000-Materials" });
+    expect(line.qboAccount).toBe("5000-Materials");
   });
 });
 

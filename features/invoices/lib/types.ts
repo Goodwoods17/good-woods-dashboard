@@ -48,6 +48,9 @@ export type Invoice = {
   // Slice 7: additional page paths for multi-page camera captures. Null for
   // single-file uploads. storage_path always points to page 1.
   pages: string[] | null;
+  // Slice 8: QBO vendor mapping (null until the owner sets it). Maps to
+  // QBO Bill VendorRef.value for the future QuickBooks sync phase.
+  qboVendorId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -69,6 +72,9 @@ export type InvoiceLine = {
   confidence: number | null;
   // Slice 4: job this line is assigned to (null = "no job / shop stock").
   jobId: string | null;
+  // Slice 8: QBO expense account code (null until owner assigns it). Maps to
+  // QBO Bill AccountBasedExpenseLineDetail.AccountRef.value.
+  qboAccount: string | null;
   createdAt: string;
 };
 
