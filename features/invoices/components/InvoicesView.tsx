@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Receipt, Upload, ChevronRight } from "lucide-react";
+import { Receipt, Upload, ChevronRight, Play, AlertCircle } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Pill } from "@shared/components/ui/Pill";
 import { formatDate } from "@shared/lib/format";
@@ -10,18 +10,21 @@ import { hasSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import { captureInvoice, isAcceptedInvoiceFile, listInvoices } from "../lib/invoicesData";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
+import { getProcessorStatus, type ProcessorStatus } from "../lib/processorStatus";
 import type { Invoice } from "../lib/types";
 
 /**
- * /invoices — slice 1 tracer. Upload a supplier bill (PDF / JPG / PNG / HEIC)
- * → it lands in private Storage + a `pending` row, then shows in the list.
- * Extraction runs out-of-band (scripts/extractInvoices.ts) for this slice;
- * the raw extracted JSON is visible on each invoice's detail page.
+ * /invoices — upload + list view. Slice 2 adds:
+ *   - Pending count + "last run at" status bar (derived from the invoices table).
+ *   - "Process now" button (POST /api/invoices/process, CRON_SECRET-protected).
+ *   - Per-invoice extraction error message surfaced inline.
  */
 export function InvoicesView() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [processorStatus, setProcessorStatus] = useState<ProcessorStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -31,7 +34,9 @@ export function InvoicesView() {
       return;
     }
     try {
-      setInvoices(await listInvoices());
+      const [invList, status] = await Promise.all([listInvoices(), getProcessorStatus()]);
+      setInvoices(invList);
+      setProcessorStatus(status);
       setError(null);
     } catch (e) {
       setError(formatError(e));
@@ -64,6 +69,31 @@ export function InvoicesView() {
     },
     [refresh]
   );
+
+  const onProcessNow = useCallback(async () => {
+    setProcessing(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/invoices/process", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? ""}`,
+        },
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+        throw new Error(
+          typeof body.error === "string" ? body.error : `HTTP ${res.status}`
+        );
+      }
+      await refresh();
+    } catch (e) {
+      setError(formatError(e));
+    } finally {
+      setProcessing(false);
+    }
+  }, [refresh]);
 
   return (
     <div className="min-h-screen">
@@ -108,6 +138,40 @@ export function InvoicesView() {
           </p>
         )}
 
+        {/* Slice 2: processor status bar — pending count + last run at + Process now. */}
+        {hasSupabase() && processorStatus !== null && (
+          <div
+            data-testid="processor-status"
+            className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-resting"
+          >
+            <span className="text-sm text-text-secondary">
+              <span
+                data-testid="pending-count"
+                className="font-semibold text-text-primary"
+              >
+                {processorStatus.pendingCount}
+              </span>{" "}
+              pending
+            </span>
+            <span className="text-text-tertiary">·</span>
+            <span className="text-sm text-text-secondary" data-testid="last-run-at">
+              {processorStatus.lastRunAt
+                ? `Last run ${formatDate(processorStatus.lastRunAt)}`
+                : "Never run"}
+            </span>
+            <button
+              type="button"
+              data-testid="process-now-btn"
+              disabled={processing || !hasSupabase()}
+              onClick={() => void onProcessNow()}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-3 py-1 text-sm font-medium text-text-primary transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
+            >
+              <Play className="h-3.5 w-3.5" />
+              {processing ? "Processing…" : "Process now"}
+            </button>
+          </div>
+        )}
+
         {loading ? (
           <p className="text-sm text-text-tertiary">Loading…</p>
         ) : invoices.length === 0 ? (
@@ -130,6 +194,16 @@ export function InvoicesView() {
                       {inv.invoiceNumber ? `#${inv.invoiceNumber} · ` : ""}
                       Captured {formatDate(inv.createdAt)}
                     </div>
+                    {/* Slice 2: surface per-invoice extraction error inline. */}
+                    {inv.status === "error" && inv.errorMessage && (
+                      <div
+                        data-testid="invoice-error-message"
+                        className="mt-0.5 flex items-start gap-1 text-xs text-red-600"
+                      >
+                        <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">{inv.errorMessage}</span>
+                      </div>
+                    )}
                   </div>
                   <Pill
                     tone={invoiceStatusTone(inv.status)}
