@@ -51,21 +51,38 @@ export function snapshotTemplate(
   };
 
   const ordered = [...templateFields].sort((a, b) => a.sortOrder - b.sortOrder);
-  const fields: FormInstanceField[] = ordered.map((tf, idx) => ({
-    id: newId(),
-    instanceId,
+
+  // Allocate the new instance-field id for each template field UP FRONT, so a
+  // conditional field's `config.showWhen.fieldId` — which points at a sibling
+  // TEMPLATE field id — can be remapped onto the new instance id. Without this
+  // the trigger is unfindable post-snapshot and `isFieldVisible` falls back to
+  // "visible", so conditional fields would never hide on a job. (issue #66)
+  const instanceIdByTemplateFieldId = new Map<string, string>();
+  for (const tf of ordered) instanceIdByTemplateFieldId.set(tf.id, newId());
+
+  const fields: FormInstanceField[] = ordered.map((tf, idx) => {
     // Frozen copy of the def — never a live reference to the master.
-    label: tf.label,
-    type: tf.type,
-    config: { ...tf.config },
-    value: null,
-    checked: null,
-    note: null,
-    photoUrl: null,
-    sortOrder: idx,
-    createdAt: now,
-    updatedAt: now,
-  }));
+    const config: Record<string, unknown> = { ...tf.config };
+    const showWhen = config.showWhen as { fieldId?: string } | undefined;
+    if (showWhen?.fieldId && instanceIdByTemplateFieldId.has(showWhen.fieldId)) {
+      // Deep-copy the condition (don't mutate the template) with the remapped id.
+      config.showWhen = { ...showWhen, fieldId: instanceIdByTemplateFieldId.get(showWhen.fieldId) };
+    }
+    return {
+      id: instanceIdByTemplateFieldId.get(tf.id)!,
+      instanceId,
+      label: tf.label,
+      type: tf.type,
+      config,
+      value: null,
+      checked: null,
+      note: null,
+      photoUrl: null,
+      sortOrder: idx,
+      createdAt: now,
+      updatedAt: now,
+    };
+  });
 
   return { instance, fields };
 }

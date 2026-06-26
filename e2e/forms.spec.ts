@@ -927,7 +927,12 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
     await page.goto(`/jobs/${E2E_JOB_ID}`);
     await page.getByRole("button", { name: "Forms", exact: true }).click();
     await page.getByRole("button", { name: /add form/i }).click();
-    await page.getByRole("button", { name: new RegExp("Conditional Test Template") }).click();
+    // .first(): a Playwright retry re-runs this spec and would leave a second
+    // template of the same name behind on the (per-run) seeded DB.
+    await page
+      .getByRole("button", { name: new RegExp("Conditional Test Template") })
+      .first()
+      .click();
 
     const instance = page.getByTestId("form-instance").last();
     // Field A should be visible.
