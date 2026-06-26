@@ -17,6 +17,9 @@ export type UseJobProgress = {
   cycleItem: (id: string) => Promise<void>;
   /** Add an ad-hoc tracer item to this job (optimistic; rolls back + throws on error). */
   addItem: (label: string, phase: JobItem["phase"]) => Promise<void>;
+  /** Re-fetch all items from the DB — call after materialiseTemplates so newly
+   *  inserted template items appear even if the Realtime push hasn't arrived. */
+  refresh: () => Promise<void>;
 };
 
 function localLoad(): JobItem[] {
@@ -188,6 +191,33 @@ export function useJobProgress(jobId: string): UseJobProgress {
     [backend, jobId]
   );
 
+  const refresh = useCallback(async () => {
+    if (backend !== "supabase") return;
+    const { data } = await getSupabase().from(JOB_ITEMS_TABLE).select("*").eq("job_id", jobId);
+    if (data) {
+      const loaded = (data as JobItemRow[]).map(rowToJobItem);
+      // Merge-ADD, never wholesale-replace: refresh exists only to surface
+      // newly-inserted rows (e.g. template items) that Realtime may not have
+      // pushed yet. Replacing would clobber an in-flight optimistic tap whose
+      // DB write hasn't committed before this SELECT — the user's tap would be
+      // silently lost. Existing rows keep their (possibly optimistic) local
+      // state; cross-client status changes still arrive via the Realtime channel.
+      const byId = new Map(itemsRef.current.map((x) => [x.id, x]));
+      let changed = false;
+      for (const row of loaded) {
+        if (!byId.has(row.id)) {
+          byId.set(row.id, row);
+          changed = true;
+        }
+      }
+      if (changed) {
+        const next = Array.from(byId.values());
+        itemsRef.current = next;
+        setItems(next);
+      }
+    }
+  }, [backend, jobId]);
+
   const sorted = useMemo(
     () =>
       [...items].sort(
@@ -196,5 +226,5 @@ export function useJobProgress(jobId: string): UseJobProgress {
     [items]
   );
 
-  return { items: sorted, backend, loading, cycleItem, addItem };
+  return { items: sorted, backend, loading, cycleItem, addItem, refresh };
 }
