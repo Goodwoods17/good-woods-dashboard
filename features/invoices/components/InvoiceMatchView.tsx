@@ -1,8 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Building2, Briefcase, AlertCircle, Send } from "lucide-react";
+import {
+  ArrowLeft,
+  CheckCircle,
+  Building2,
+  Briefcase,
+  AlertCircle,
+  AlertTriangle,
+  TrendingUp,
+  TrendingDown,
+  Tag,
+  Send,
+} from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { formatCAD } from "@shared/lib/format";
 import { formatError } from "@shared/lib/formatError";
@@ -10,6 +21,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useCatalog } from "@features/catalog/lib/catalogStore";
 import { saveInvoiceMatch, postInvoice } from "../lib/invoicesData";
 import { detectSupplier, suggestJob } from "../lib/invoiceMatch";
+import { buildSkuMatches, type LineSkuMatch } from "../lib/catalogPriceUpdate";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
 // ---------------------------------------------------------------------------
@@ -44,7 +56,7 @@ export function InvoiceMatchView({
   onSaved: () => void;
 }) {
   const { jobs } = useJobs();
-  const { suppliers } = useCatalog();
+  const { suppliers, itemsWithOffers, updateOffer } = useCatalog();
 
   // ── Supplier state ──────────────────────────────────────────────────────
   // Start from whatever is already persisted; fall back to auto-detect.
@@ -127,6 +139,36 @@ export function InvoiceMatchView({
   const setLineJob = useCallback((lineId: string, jobId: string | null) => {
     setLineAssignments((prev) => prev.map((a) => (a.lineId === lineId ? { ...a, jobId } : a)));
   }, []);
+
+  // ── Slice 6: catalog price update (SKU match → delta → import) ───────────────
+  // Match each line's product-no to a catalog offer, scoped to the linked
+  // supplier when one is chosen (a SKU can recur across vendors). Door/matrix
+  // items are excluded inside buildSkuMatches (no SKUs — New Surrey).
+  const skuMatches = useMemo(
+    () => buildSkuMatches(lines, itemsWithOffers, { preferSupplierId: selectedSupplierId }),
+    [lines, itemsWithOffers, selectedSupplierId]
+  );
+  // Only lines that carry a SKU surface in the price-update panel; those with a
+  // match offer a one-click reprice, those without fall back to manual handling.
+  const skuLines = useMemo(() => skuMatches.filter((m) => m.lineSku), [skuMatches]);
+  const updatableMatches = useMemo(
+    () => skuMatches.filter((m) => m.matched && m.update && m.update.direction !== "flat"),
+    [skuMatches]
+  );
+
+  // Offers already repriced this session (so the button reads "Updated").
+  const [appliedOfferIds, setAppliedOfferIds] = useState<Set<string>>(new Set());
+
+  const applyPriceUpdate = useCallback(
+    (match: LineSkuMatch) => {
+      if (!match.offer || !match.update) return;
+      // Reuse the catalog store path: update the offer price + log history with
+      // source "import" (not "manual") so the audit trail shows the bill drove it.
+      updateOffer(match.offer.id, { unitPrice: match.update.newPrice }, { priceSource: "import" });
+      setAppliedOfferIds((prev) => new Set(prev).add(match.offer!.id));
+    },
+    [updateOffer]
+  );
 
   // Helpers
   const selectedSupplier = suppliers.find((s) => s.id === selectedSupplierId) ?? null;
@@ -323,6 +365,32 @@ export function InvoiceMatchView({
           )}
         </section>
 
+        {/* ── Catalog price updates (slice 6) ───────────────────────────── */}
+        {skuLines.length > 0 && (
+          <section
+            className="overflow-hidden rounded-lg border border-border bg-surface shadow-resting"
+            data-testid="price-update-section"
+          >
+            <div className="flex items-center gap-2 border-b border-border px-5 py-3">
+              <Tag className="h-4 w-4 text-text-tertiary" />
+              <h2 className="text-sm font-semibold text-text-primary">
+                Catalog price updates ({updatableMatches.length})
+              </h2>
+            </div>
+
+            <div className="divide-y divide-border">
+              {skuLines.map((match) => (
+                <PriceUpdateRow
+                  key={match.lineId}
+                  match={match}
+                  applied={match.offer ? appliedOfferIds.has(match.offer.id) : false}
+                  onApply={() => applyPriceUpdate(match)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Actions ──────────────────────────────────────────────────── */}
         <div className="flex flex-col items-end gap-2">
           <div className="flex items-center gap-3">
@@ -353,6 +421,126 @@ export function InvoiceMatchView({
               : "No lines assigned to a job — posting will mark this invoice posted without writing any actuals."}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Price-update row (slice 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * One SKU line in the catalog price-update panel. A matched line shows the
+ * old → new offer-price delta with a re-quote nudge on a large jump and a
+ * one-click "Apply price update" (writes the offer + import history). An
+ * unmatched line states it has no catalog match and falls back to manual
+ * assignment via the Materials book.
+ */
+function PriceUpdateRow({
+  match,
+  applied,
+  onApply,
+}: {
+  match: LineSkuMatch;
+  applied: boolean;
+  onApply: () => void;
+}) {
+  // Unmatched SKU — nothing to update automatically.
+  if (!match.matched || !match.offer || !match.update) {
+    return (
+      <div
+        data-testid="price-update-row"
+        className="flex flex-wrap items-center gap-3 px-5 py-3 sm:flex-nowrap"
+      >
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm text-text-primary">
+            <span className="font-mono text-xs text-text-tertiary">[{match.lineSku}]</span>
+          </p>
+        </div>
+        <p className="flex items-center gap-1.5 text-xs text-text-tertiary">
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          No catalog match — assign by hand
+        </p>
+      </div>
+    );
+  }
+
+  const { update } = match;
+  const up = update.direction === "up";
+  const flat = update.direction === "flat";
+  const Arrow = up ? TrendingUp : TrendingDown;
+  const pctLabel =
+    update.deltaPct === null
+      ? "new"
+      : `${update.deltaPct > 0 ? "+" : ""}${update.deltaPct.toFixed(1)}%`;
+
+  return (
+    <div
+      data-testid="price-update-row"
+      data-large-jump={update.isLargeJump ? "true" : "false"}
+      className="flex flex-wrap items-start gap-3 px-5 py-3 sm:flex-nowrap"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-text-primary">
+          {match.itemName}
+          <span className="ml-1.5 font-mono text-xs text-text-tertiary">[{match.lineSku}]</span>
+        </p>
+        <p className="mt-0.5 flex items-center gap-1.5 text-xs text-text-tertiary">
+          <span>{formatCAD(update.oldPrice)}</span>
+          <span aria-hidden>→</span>
+          <span className="font-medium text-text-primary">{formatCAD(update.newPrice)}</span>
+          {match.itemUnit ? <span>/ {match.itemUnit}</span> : null}
+          {!flat && (
+            <span
+              className={`inline-flex items-center gap-0.5 font-medium ${
+                up ? "text-red-600" : "text-emerald-600"
+              }`}
+            >
+              <Arrow className="h-3 w-3" />
+              {pctLabel}
+            </span>
+          )}
+        </p>
+        {update.isLargeJump && !applied && (
+          <p
+            data-testid="price-jump-nudge"
+            className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-700"
+          >
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+            Large move — worth a re-quote
+          </p>
+        )}
+      </div>
+
+      <div className="w-full sm:w-auto">
+        {/* `applied` is checked before `flat`: once accepted, the offer reprices
+            to match the line so the recomputed delta reads flat — but the row
+            must still confirm the update landed, not "already up to date". */}
+        {applied ? (
+          <span
+            data-testid="price-update-applied"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700"
+          >
+            <CheckCircle className="h-4 w-4" />
+            Updated
+          </span>
+        ) : flat ? (
+          <span className="inline-flex items-center gap-1.5 px-1 text-xs text-text-tertiary">
+            <CheckCircle className="h-3.5 w-3.5" />
+            Catalog price up to date
+          </span>
+        ) : (
+          <button
+            type="button"
+            data-testid="apply-price-update-btn"
+            onClick={onApply}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-text-primary transition-colors duration-fast hover:bg-surface-muted"
+          >
+            <Tag className="h-4 w-4" />
+            Apply price update
+          </button>
+        )}
       </div>
     </div>
   );
