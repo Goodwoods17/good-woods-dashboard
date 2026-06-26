@@ -17,6 +17,9 @@ export type UseJobProgress = {
   cycleItem: (id: string) => Promise<void>;
   /** Add an ad-hoc tracer item to this job (optimistic; rolls back + throws on error). */
   addItem: (label: string, phase: JobItem["phase"]) => Promise<void>;
+  /** Re-fetch all items from the DB — call after materialiseTemplates so newly
+   *  inserted template items appear even if the Realtime push hasn't arrived. */
+  refresh: () => Promise<void>;
 };
 
 function localLoad(): JobItem[] {
@@ -188,6 +191,19 @@ export function useJobProgress(jobId: string): UseJobProgress {
     [backend, jobId]
   );
 
+  const refresh = useCallback(async () => {
+    if (backend !== "supabase") return;
+    const { data } = await getSupabase()
+      .from(JOB_ITEMS_TABLE)
+      .select("*")
+      .eq("job_id", jobId);
+    if (data) {
+      const loaded = (data as JobItemRow[]).map(rowToJobItem);
+      itemsRef.current = loaded;
+      setItems(loaded);
+    }
+  }, [backend, jobId]);
+
   const sorted = useMemo(
     () =>
       [...items].sort(
@@ -196,5 +212,5 @@ export function useJobProgress(jobId: string): UseJobProgress {
     [items]
   );
 
-  return { items: sorted, backend, loading, cycleItem, addItem };
+  return { items: sorted, backend, loading, cycleItem, addItem, refresh };
 }

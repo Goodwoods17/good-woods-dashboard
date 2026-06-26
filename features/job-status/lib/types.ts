@@ -42,3 +42,25 @@ export type JobItem = {
   statusUpdatedBy: string | null;
   createdAt: string;
 };
+
+// ─── Unified read-layer model ─────────────────────────────────────────────────
+
+// Which home table a TrackableItem came from. 'piece' is added in slice 4
+// (Drawings pieces folded into the unified view).
+export type TrackableItemKind = "job_item"; // | "piece" added in slice 4
+
+// The unified read-layer model for progress math and the live board. Produced
+// by adapter.ts at read time — never stored. Each physical home table (job_items
+// or Drawings pieces) maps into this shape with a normalised `done` flag.
+export type TrackableItem = {
+  id: string;
+  jobId: string;
+  phase: Phase;
+  label: string;
+  /** Normalised done: the only flag progress.ts needs. kind-specific rule:
+   *  job_item = status 'done'; piece = terminal Drawings status (slice 4). */
+  done: boolean;
+  /** Which home table this came from (discriminant for slice 4). */
+  kind: TrackableItemKind;
+  sortOrder: number;
+};
