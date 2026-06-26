@@ -583,7 +583,7 @@ export function TemplateEditor({
             items={templateFields.map((f) => f.id)}
             strategy={verticalListSortingStrategy}
           >
-            <ul className="space-y-2">
+            <ul data-testid="template-fields-list" className="space-y-2">
               {templateFields.map((field, idx) => (
                 <div key={field.id}>
                   {editingFieldId === field.id ? (

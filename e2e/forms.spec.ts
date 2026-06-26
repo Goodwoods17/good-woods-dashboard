@@ -901,7 +901,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
     await page.getByLabel("Field label").fill("Has additional notes?");
     await page.getByLabel("Field type").selectOption({ label: "Yes / No" });
     await page.getByRole("button", { name: /save field/i }).click();
-    await expect(page.getByText("Has additional notes?")).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Has additional notes?", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
 
     // Add field B: short_text, conditional on A.
     await page.getByRole("button", { name: /add field/i }).click();
@@ -916,7 +918,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
       .selectOption({ label: "Has additional notes?" });
     // Operator defaults to is_checked — leave it.
     await page.getByRole("button", { name: /save field/i }).click();
-    await expect(page.getByText("Additional notes")).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Additional notes", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
 
     // 2. Navigate to the sentinel job, attach this template, open the share panel,
     //    and mint a link.
@@ -928,8 +932,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
     const instance = page.getByTestId("form-instance").last();
     // Field A should be visible.
     await expect(instance.getByText("Has additional notes?")).toBeVisible({ timeout: 15_000 });
-    // Field B should be hidden (trigger not yet answered).
-    await expect(instance.getByText("Additional notes")).toHaveCount(0);
+    // Field B should be hidden (trigger not yet answered). Exact match so we
+    // don't collide with field A's label "Has additional notes?".
+    await expect(instance.getByText("Additional notes", { exact: true })).toHaveCount(0);
 
     // 3. Mint a share link.
     await instance.getByTestId("open-share-panel").click();
@@ -954,8 +959,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
 
       // Field A (yes_no) is visible.
       await expect(guestPage.getByText("Has additional notes?")).toBeVisible();
-      // Field B is hidden (trigger unanswered).
-      await expect(guestPage.getByText("Additional notes")).toHaveCount(0);
+      // Field B is hidden (trigger unanswered). Exact match so we don't collide
+      // with field A's label "Has additional notes?" (substring "additional notes").
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toHaveCount(0);
 
       // Answer A = Yes.  The yes_no control renders two radio buttons or similar —
       // find the "Yes" option via role/label. The fieldControls.tsx control for
@@ -965,7 +971,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
       await yesOption.click();
 
       // Field B should now be visible (conditional revealed).
-      await expect(guestPage.getByText("Additional notes")).toBeVisible({ timeout: 5_000 });
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toBeVisible({
+        timeout: 5_000,
+      });
 
       // Submission works even if B is still empty — hidden required fields don't block.
       await guestPage.getByTestId("submit-form").click();
