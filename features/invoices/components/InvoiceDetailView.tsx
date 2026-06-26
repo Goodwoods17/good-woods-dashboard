@@ -90,6 +90,17 @@ export function InvoiceDetailView({ id }: { id: string }) {
           <ArrowLeft className="h-4 w-4" /> All invoices
         </Link>
 
+        {invoice.status === "posted" && (
+          <div
+            data-testid="invoice-posted-view"
+            className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700"
+          >
+            Posted to actuals. This bill&rsquo;s pre-tax line amounts are now booked to
+            estimated-vs-actual for the assigned job(s); each actual links back here. Re-posting is
+            blocked so it can&rsquo;t double-count.
+          </div>
+        )}
+
         {invoice.errorMessage && (
           <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
             Extraction error: {invoice.errorMessage}

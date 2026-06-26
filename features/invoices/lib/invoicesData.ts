@@ -15,7 +15,11 @@ import {
   type InvoiceRow,
   type InvoiceLineRow,
 } from "./invoiceRowMaps";
+import { buildActualRows, postBlockedReason } from "./postInvoice";
 import type { Invoice, InvoiceLine } from "./types";
+
+/** Material/subtrade actuals ledger (job-costing). No shared const exists yet. */
+const JOB_COST_ACTUALS_TABLE = "job_cost_actuals";
 
 /** MIME → accepted? Drives both the <input accept> and a defensive guard. */
 export const ACCEPTED_INVOICE_MIME = [
@@ -213,6 +217,81 @@ export async function saveInvoiceMatch(
   );
 
   return rowToInvoice(updated);
+}
+
+/**
+ * Slice 5: post a reviewed invoice to job cost actuals (with provenance).
+ *
+ * Writes one `job_cost_actuals` row per job-assigned line — pre-tax `amount` as
+ * the headline, `amount_with_tax` alongside (ADR 0019) — each linked back to its
+ * source invoice + line for the audit trail. Then flips status → `posted`.
+ *
+ * Re-post guard (no double-count): the status flip is an atomic compare-and-set
+ * (`.eq("status", "reviewed")`) that serializes concurrent posts — only the
+ * winner proceeds to insert. If the insert then fails, the status is reverted to
+ * `reviewed` so the owner can retry. A belt-and-suspenders check also blocks a
+ * post when actuals from this invoice already exist.
+ */
+export async function postInvoice(invoiceId: string): Promise<Invoice> {
+  const sb = getSupabase();
+
+  const loaded = await getInvoiceWithLines(invoiceId);
+  if (!loaded) throw new Error("Invoice not found.");
+  const { invoice, lines } = loaded;
+
+  const blocked = postBlockedReason(invoice);
+  if (blocked) throw new Error(blocked);
+
+  // Belt: never post twice, even if a prior attempt flipped status but the
+  // status revert below didn't land.
+  const { data: existing, error: existErr } = await sb
+    .from(JOB_COST_ACTUALS_TABLE)
+    .select("id")
+    .eq("source_invoice_id", invoiceId)
+    .limit(1);
+  if (existErr) throw existErr;
+  if (existing && existing.length > 0) {
+    throw new Error("This invoice has already been posted to actuals.");
+  }
+
+  // 1. Claim the invoice: atomic reviewed → posted. Only one caller wins.
+  const { data: claimed, error: claimErr } = await sb
+    .from(INVOICES_TABLE)
+    .update({ status: "posted" })
+    .eq("id", invoiceId)
+    .eq("status", "reviewed")
+    .select("*")
+    .maybeSingle<InvoiceRow>();
+  if (claimErr) throw claimErr;
+  if (!claimed) {
+    // Lost the race (or status changed under us) — treat as already posted.
+    throw new Error("This invoice has already been posted to actuals.");
+  }
+
+  // 2. Write the actuals. On failure, revert the claim so a retry is possible.
+  const rows = buildActualRows(invoice, lines);
+  if (rows.length > 0) {
+    const { error: insertErr } = await sb.from(JOB_COST_ACTUALS_TABLE).insert(
+      rows.map((r) => ({
+        job_id: r.jobId,
+        kind: r.kind,
+        amount: r.amount,
+        amount_with_tax: r.amountWithTax,
+        source_invoice_id: r.sourceInvoiceId,
+        source_invoice_line_id: r.sourceInvoiceLineId,
+      }))
+    );
+    if (insertErr) {
+      await sb
+        .from(INVOICES_TABLE)
+        .update({ status: "reviewed" })
+        .eq("id", invoiceId)
+        .eq("status", "posted");
+      throw insertErr;
+    }
+  }
+
+  return rowToInvoice(claimed);
 }
 
 /**

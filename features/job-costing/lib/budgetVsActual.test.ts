@@ -9,6 +9,8 @@ import {
   rowsToLabourBudget,
   sessionsToLabourActuals,
   materialActualTotal,
+  materialActuals,
+  materialActualWithTaxTotal,
   subtradeActualsByLine,
   rowsToSubtradeLines,
   subtradeLineProjected,
@@ -178,7 +180,17 @@ const underBudgetInput: BvaInput = {
   materialsBudget: 2000,
   materialsActual: 1500,
   subtradeLines: [
-    { lineId: "T1", tradeName: "Countertop", subtradeName: null, subtradeId: null, status: "needed", budget: 800, actual: 0, variance: -800, variancePct: -100 },
+    {
+      lineId: "T1",
+      tradeName: "Countertop",
+      subtradeName: null,
+      subtradeId: null,
+      status: "needed",
+      budget: 800,
+      actual: 0,
+      variance: -800,
+      variancePct: -100,
+    },
   ],
   overhead: 300,
   quotedMargin: 10000,
@@ -359,7 +371,6 @@ const actualRows = [
   { kind: "labour", amount: 200 }, // non-material → ignored
 ];
 
-
 // Code-name resolver: maps "u1" → "Unassembly"
 const resolver = (id: string) => (id === "u1" ? "Unassembly" : undefined);
 
@@ -430,8 +441,8 @@ describe("subtrade actuals (Slice C)", () => {
     { id: "L1", trade_id: "t-counter", subtrade_id: "s-stone", status: "booked", cost: 800 },
     { id: "L2", trade_id: "t-elec", subtrade_id: null, status: "needed", cost: 600 },
   ];
-  const tradeName = (id: string) => ({ "t-counter": "Countertop", "t-elec": "Electrical" }[id]);
-  const subName = (id: string) => ({ "s-stone": "Stoneworks" }[id]);
+  const tradeName = (id: string) => ({ "t-counter": "Countertop", "t-elec": "Electrical" })[id];
+  const subName = (id: string) => ({ "s-stone": "Stoneworks" })[id];
 
   it("subtradeActualsByLine sums kind='subtrade' by trade_line_id; null → UNASSIGNED", () => {
     const rows = [
@@ -467,7 +478,17 @@ describe("subtrade actuals (Slice C)", () => {
   });
 
   it("subtradeLineProjected: done → actual; open → max(actual,budget)", () => {
-    const done: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "done", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    const done: SubtradeLine = {
+      lineId: "L1",
+      tradeName: "C",
+      subtradeName: null,
+      subtradeId: null,
+      status: "done",
+      budget: 800,
+      actual: 1000,
+      variance: 200,
+      variancePct: 25,
+    };
     expect(subtradeLineProjected(done, false)).toBe(1000);
     const openUnder: SubtradeLine = { ...done, status: "booked", actual: 500 };
     expect(subtradeLineProjected(openUnder, false)).toBe(800); // under-budget open → budget (0 drift)
@@ -476,13 +497,27 @@ describe("subtrade actuals (Slice C)", () => {
   });
 
   it("computeBudgetVsActual folds subtrade drift into projectedMargin + clawback", () => {
-    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 1000, variance: 200, variancePct: 25 };
+    const line: SubtradeLine = {
+      lineId: "L1",
+      tradeName: "C",
+      subtradeName: null,
+      subtradeId: null,
+      status: "booked",
+      budget: 800,
+      actual: 1000,
+      variance: 200,
+      variancePct: 25,
+    };
     const result: BvaResult = computeBudgetVsActual({
-      labourBudget: [], labourActuals: [],
-      materialsBudget: 0, materialsActual: 0,
+      labourBudget: [],
+      labourActuals: [],
+      materialsBudget: 0,
+      materialsActual: 0,
       subtradeLines: [line],
-      overhead: 0, quotedMargin: 10000,
-      currentMilestone: "cnc", pipelineComplete: false,
+      overhead: 0,
+      quotedMargin: 10000,
+      currentMilestone: "cnc",
+      pipelineComplete: false,
     });
     expect(result.subtradeDrift).toBe(200); // projected 1000 − budget 800
     expect(result.projectedMargin).toBe(9800); // 10000 − 0 − 0 − 200
@@ -493,13 +528,79 @@ describe("subtrade actuals (Slice C)", () => {
   });
 
   it("under-budget open subtrade contributes zero drift", () => {
-    const line: SubtradeLine = { lineId: "L1", tradeName: "C", subtradeName: null, subtradeId: null, status: "booked", budget: 800, actual: 200, variance: -600, variancePct: -75 };
+    const line: SubtradeLine = {
+      lineId: "L1",
+      tradeName: "C",
+      subtradeName: null,
+      subtradeId: null,
+      status: "booked",
+      budget: 800,
+      actual: 200,
+      variance: -600,
+      variancePct: -75,
+    };
     const result = computeBudgetVsActual({
-      labourBudget: [], labourActuals: [], materialsBudget: 0, materialsActual: 0,
-      subtradeLines: [line], overhead: 0, quotedMargin: 10000,
-      currentMilestone: "cnc", pipelineComplete: false,
+      labourBudget: [],
+      labourActuals: [],
+      materialsBudget: 0,
+      materialsActual: 0,
+      subtradeLines: [line],
+      overhead: 0,
+      quotedMargin: 10000,
+      currentMilestone: "cnc",
+      pipelineComplete: false,
     });
     expect(result.subtradeDrift).toBe(0);
     expect(result.projectedMargin).toBe(10000);
+  });
+});
+
+// ── material actuals provenance (invoice slice 5) ───────────────────────────────
+
+describe("materialActuals", () => {
+  it("keeps only material rows and carries provenance back to the bill", () => {
+    const rows = [
+      {
+        id: "act-1",
+        kind: "material",
+        amount: 100,
+        amount_with_tax: 107,
+        source_invoice_id: "inv-1",
+        source_invoice_line_id: "line-1",
+        note: "Reimer maple",
+      },
+      { id: "act-2", kind: "subtrade", amount: 500, trade_line_id: "L1" },
+    ];
+    const out = materialActuals(rows);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({
+      id: "act-1",
+      amount: 100,
+      amountWithTax: 107,
+      sourceInvoiceId: "inv-1",
+      sourceInvoiceLineId: "line-1",
+      note: "Reimer maple",
+    });
+  });
+
+  it("falls back to amount for manually logged actuals (no tax, no provenance)", () => {
+    const out = materialActuals([{ id: "act-3", kind: "material", amount: 80 }]);
+    expect(out[0].amountWithTax).toBe(80);
+    expect(out[0].sourceInvoiceId).toBeNull();
+    expect(out[0].sourceInvoiceLineId).toBeNull();
+    expect(out[0].note).toBeNull();
+  });
+});
+
+describe("materialActualWithTaxTotal", () => {
+  it("sums the with-PST figure across material rows, falling back to amount", () => {
+    const rows = [
+      { kind: "material", amount: 100, amount_with_tax: 107 },
+      { kind: "material", amount: 50 }, // no tax captured → falls back to 50
+      { kind: "subtrade", amount: 999, amount_with_tax: 999 }, // ignored
+    ];
+    expect(materialActualWithTaxTotal(rows)).toBe(157);
+    // headline (pre-tax) total is unchanged by the new column
+    expect(materialActualTotal(rows)).toBe(150);
   });
 });
