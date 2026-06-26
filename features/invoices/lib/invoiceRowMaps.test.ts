@@ -25,6 +25,8 @@ const invoiceRow: InvoiceRow = {
   total: 1120,
   extracted_json: { supplier: "Reimer Hardwoods", lines: [] } as never,
   error_message: null,
+  // Slice 4: supplier link — null until match step fills it.
+  supplier_id: null,
   created_at: "2026-06-25T00:00:00Z",
   updated_at: "2026-06-25T01:00:00Z",
 };
@@ -41,6 +43,8 @@ const lineRow: InvoiceLineRow = {
   amount: 800,
   tax_flag: true,
   confidence: 0.98,
+  // Slice 4: job assignment — null until match step fills it.
+  job_id: null,
   created_at: "2026-06-25T00:00:00Z",
 };
 

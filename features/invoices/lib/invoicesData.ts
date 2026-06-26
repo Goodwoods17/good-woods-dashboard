@@ -181,6 +181,41 @@ export async function saveReviewedInvoice(
 }
 
 /**
+ * Slice 4: save supplier + line job assignments for a reviewed invoice.
+ *
+ * Writes `invoices.supplier_id` and each `invoice_lines.job_id` (null = shop
+ * stock). Does NOT change the invoice status — the invoice stays `reviewed`
+ * until the owner posts it in slice 5. Updates are fired in parallel for lines.
+ */
+export async function saveInvoiceMatch(
+  invoiceId: string,
+  supplierId: string | null,
+  lineAssignments: Array<{ lineId: string; jobId: string | null }>
+): Promise<Invoice> {
+  const sb = getSupabase();
+
+  const { data: updated, error: headerErr } = await sb
+    .from(INVOICES_TABLE)
+    .update({ supplier_id: supplierId })
+    .eq("id", invoiceId)
+    .select("*")
+    .single<InvoiceRow>();
+  if (headerErr) throw headerErr;
+
+  await Promise.all(
+    lineAssignments.map(async ({ lineId, jobId }) => {
+      const { error } = await sb
+        .from(INVOICE_LINES_TABLE)
+        .update({ job_id: jobId })
+        .eq("id", lineId);
+      if (error) throw error;
+    })
+  );
+
+  return rowToInvoice(updated);
+}
+
+/**
  * Slice 3: duplicate-invoice guard.
  *
  * Returns a matching invoice if another row already exists with the same

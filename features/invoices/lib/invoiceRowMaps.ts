@@ -18,6 +18,8 @@ export type InvoiceRow = {
   total: number | null;
   extracted_json: ExtractedInvoice | null;
   error_message: string | null;
+  // Slice 4: resolved catalog supplier FK (nullable until match step).
+  supplier_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -35,6 +37,8 @@ export type InvoiceLineRow = {
   amount: number | null;
   tax_flag: boolean | null;
   confidence: number | null;
+  // Slice 4: job assignment FK (null = shop stock).
+  job_id: string | null;
   created_at: string;
 };
 
@@ -56,6 +60,7 @@ export function rowToInvoice(row: InvoiceRow): Invoice {
     total: row.total,
     extractedJson: row.extracted_json,
     errorMessage: row.error_message,
+    supplierId: row.supplier_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -74,6 +79,7 @@ export function rowToInvoiceLine(row: InvoiceLineRow): InvoiceLine {
     amount: row.amount,
     taxFlag: row.tax_flag,
     confidence: row.confidence,
+    jobId: row.job_id ?? null,
     createdAt: row.created_at,
   };
 }

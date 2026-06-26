@@ -43,6 +43,8 @@ export type Invoice = {
   extractedJson: ExtractedInvoice | null;
   // Captured when extraction fails after bounded retry (slice 2 surfaces it).
   errorMessage: string | null;
+  // Slice 4: resolved catalog supplier (null until the match step fills it).
+  supplierId: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -62,6 +64,8 @@ export type InvoiceLine = {
   taxFlag: boolean | null;
   // Per-field extraction confidence 0..1 (amber-highlights low fields in slice 3).
   confidence: number | null;
+  // Slice 4: job this line is assigned to (null = "no job / shop stock").
+  jobId: string | null;
   createdAt: string;
 };
 
