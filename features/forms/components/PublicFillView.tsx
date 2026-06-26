@@ -6,7 +6,9 @@ import type { FormInstance, FormInstanceField } from "@shared/lib/types";
 import { getFieldEntry } from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import type { ShareAnswerPatch, ShareAnswers } from "../lib/shareLink";
+import { missingVisibleRequiredFields } from "../lib/shareLink";
 import { isFieldVisible } from "../lib/conditionals";
+import { CompletionMeter } from "./CompletionMeter";
 
 /**
  * The bare, no-login fill page rendered behind a /f/<token> link. Lists the
@@ -41,15 +43,28 @@ export function PublicFillView({
     alreadySubmitted ? "saved" : "idle"
   );
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Non-blocking warning: names of visible required fields left blank on submit.
+  const [warnFields, setWarnFields] = useState<string[]>([]);
 
   function patchField(id: string, patch: Partial<FormInstanceField>) {
     setWorking((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
     if (status === "saved") setStatus("idle");
+    // Clear soft-warn when the user starts editing again.
+    if (warnFields.length > 0) setWarnFields([]);
   }
 
   async function submit() {
     setStatus("saving");
     setErrorMsg(null);
+
+    // Soft-warn: collect visible required fields still blank on the OPEN (unlocked)
+    // side. We warn but do NOT block — partial saves/resume are intentional.
+    const openWorking = working.map((f) =>
+      locked.has(f.id) ? f : f
+    );
+    const missing = missingVisibleRequiredFields(openWorking).filter((f) => !locked.has(f.id));
+    setWarnFields(missing.map((f) => f.label));
+
     // Build the answer payload for the OPEN fields only; the server also strips
     // locked ids, so this is belt-and-suspenders.
     const answers: ShareAnswers = {};
@@ -122,6 +137,7 @@ export function PublicFillView({
               const isLocked = locked.has(field.id);
               const entry = getFieldEntry(field.type);
               const Control = getFillControl(field.type);
+              const isRequired = (field.config as Record<string, unknown>)?.required === true;
               return (
                 <div key={field.id} className="relative">
                   {entry?.implemented && Control ? (
@@ -131,6 +147,15 @@ export function PublicFillView({
                         disabled={isLocked}
                         onChange={(patch) => patchField(field.id, patch)}
                       />
+                      {isRequired && !entry.isLayout && !isLocked && (
+                        <span
+                          className="ml-0.5 text-accent"
+                          aria-label="required"
+                          title="Required"
+                        >
+                          *
+                        </span>
+                      )}
                       {isLocked && !entry.isLayout && (
                         <span
                           className="inline-flex items-center gap-1 text-[11px] text-text-tertiary"
@@ -151,6 +176,29 @@ export function PublicFillView({
               );
             })}
           </div>
+
+          {/* Live completeness meter — updates as fields fill */}
+          <div className="mt-4">
+            <CompletionMeter fields={working} />
+          </div>
+
+          {/* Soft-warn: shown after submit if visible required fields are blank */}
+          {warnFields.length > 0 && (
+            <div
+              className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm"
+              data-testid="required-fields-warning"
+            >
+              <p className="font-medium text-amber-800">Some fields were left blank:</p>
+              <ul className="mt-1 list-disc pl-4 text-amber-700">
+                {warnFields.map((label) => (
+                  <li key={label}>{label}</li>
+                ))}
+              </ul>
+              <p className="mt-1 text-amber-600">
+                Your answers were saved — you can reopen this link to fill them in.
+              </p>
+            </div>
+          )}
 
           <div className="mt-6 flex items-center justify-between gap-3">
             <div className="min-h-[20px] text-sm">

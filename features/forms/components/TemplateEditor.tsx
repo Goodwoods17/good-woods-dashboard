@@ -204,6 +204,7 @@ function FieldConfigPanel({
         <label className="flex items-center gap-2 cursor-pointer">
           <input
             type="checkbox"
+            data-testid="field-required"
             className="h-4 w-4 rounded border-border accent-accent"
             checked={(config.required as boolean) === true}
             onChange={(e) => setConfig((c) => ({ ...c, required: e.target.checked }))}
