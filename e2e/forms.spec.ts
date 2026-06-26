@@ -968,10 +968,9 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
       // with field A's label "Has additional notes?" (substring "additional notes").
       await expect(guestPage.getByText("Additional notes", { exact: true })).toHaveCount(0);
 
-      // Answer A = Yes.  The yes_no control renders two radio buttons or similar —
-      // find the "Yes" option via role/label. The fieldControls.tsx control for
-      // yes_no uses radio inputs with value "yes"/"no" and aria-labels.
-      const yesOption = guestPage.getByRole("radio", { name: /yes/i }).first();
+      // Answer A = Yes. The yes_no control (fieldControls.tsx YesNoFill) renders
+      // two <button> toggles labelled "Yes" / "No" — not radio inputs.
+      const yesOption = guestPage.getByRole("button", { name: "Yes", exact: true });
       await expect(yesOption).toBeVisible({ timeout: 5_000 });
       await yesOption.click();
 
