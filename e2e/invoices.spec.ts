@@ -1,6 +1,5 @@
 import { test, expect, type Page } from "@playwright/test";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 
 // Invoices slice 1 (issue #46) authed smoke: prove the capture tracer cuts
 // end-to-end — upload a file at /invoices and it lands as a `pending` row in the
@@ -17,8 +16,11 @@ import { dirname, join } from "node:path";
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const SAMPLE_PDF = join(__dirname, "fixtures", "sample-invoice.pdf");
+// Resolve the fixture from the repo root (Playwright runs with cwd = repo root,
+// both in CI and locally). Deliberately NOT import.meta.url: that token forces
+// this spec into ESM scope, which collides with Playwright's CJS transpile of the
+// node: imports → "require is not defined in ES module scope" at collection time.
+const SAMPLE_PDF = join(process.cwd(), "e2e", "fixtures", "sample-invoice.pdf");
 
 async function login(page: Page) {
   await page.goto("/login");
