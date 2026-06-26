@@ -1,7 +1,12 @@
-"use client";
-
+// No "use client": this is an environment-agnostic @react-pdf/renderer
+// document, rendered to a PDF on BOTH the browser path (signoff.ts) and the
+// server auto-file path (signoffServer.ts) — never mounted in the React tree.
+// With "use client" the server's dynamic import resolves to a client-reference
+// PROXY instead of the real function, so calling it threw "x is not a function"
+// and the signoff PDF was never filed to the job (Forms P2 · Slice 4 bug).
 import { Document, Page, Text, View, Image, StyleSheet } from "@react-pdf/renderer";
 import type { FormInstance, FormInstanceField } from "@shared/lib/types";
+import type { CompanyInfo } from "@features/jobs/lib/invoice";
 import { getCompany } from "@features/jobs/lib/invoice";
 import { PALETTE } from "@shared/lib/chartPalette";
 
@@ -236,6 +241,14 @@ export type FormSignoffDocumentProps = {
   jobContext?: { code: string; name: string } | null;
   /** Optional server-logged IP/UA for the client signature (owner audit). */
   signatureAudit?: SignatureAudit | null;
+  /**
+   * Company identity for the branding block. The browser path omits this and
+   * falls back to `getCompany()` (live workspace settings). The SERVER auto-file
+   * path MUST pass it explicitly: `getCompany` lives in the `"use client"`
+   * invoice module, so calling it across the RSC boundary throws
+   * "(0, a.tI) is not a function". Server callers pass the static default.
+   */
+  company?: CompanyInfo;
 };
 
 export function FormSignoffDocument({
@@ -244,8 +257,9 @@ export function FormSignoffDocument({
   resolvedImages,
   jobContext,
   signatureAudit,
+  company: companyProp,
 }: FormSignoffDocumentProps) {
-  const company = getCompany();
+  const company = companyProp ?? getCompany();
   // Pick the last completed signature field for the headline signer line, if any.
   const lastSignature = [...fields].reverse().find((f) => f.type === "signature" && signerName(f));
   const headlineSigner = lastSignature ? signerName(lastSignature) : null;

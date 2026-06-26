@@ -264,6 +264,7 @@ async function fileSignoffToJob(
   };
 
   const { storagePath } = await generateSignoffPdfServer(
+    sb,
     completedInstance,
     fields,
     jobCtx,
