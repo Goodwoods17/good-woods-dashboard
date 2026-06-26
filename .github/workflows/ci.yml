@@ -57,6 +57,10 @@ jobs:
     env:
       E2E_EMAIL: e2e@goodwoods.local
       E2E_PASSWORD: e2e-smoke-password
+      # Invoices (milestone #4) is feature-flagged OFF in prod; turn it ON for
+      # the e2e job so the capture-tracer smoke can reach /invoices. Inlined at
+      # build time (NEXT_PUBLIC_*), so it must be set before the build step.
+      NEXT_PUBLIC_INVOICES_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -22,15 +22,19 @@ import {
   ScanLine,
   Timer,
   ClipboardList,
+  Receipt,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
 import { versionBadgeLabel } from "@shared/lib/versionBadge";
+import { invoicesEnabled } from "@features/invoices/lib/featureFlag";
 
 type NavItem = {
   href: string;
   label: string;
   icon: typeof LayoutGrid;
+  /** When set, the item only renders if the predicate returns true (feature flag). */
+  enabled?: () => boolean;
 };
 
 type NavSection = {
@@ -70,6 +74,7 @@ const NAV: NavSection[] = [
     label: "Stock & Money",
     items: [
       { href: "/catalog", label: "Catalog", icon: FileText },
+      { href: "/invoices", label: "Invoices", icon: Receipt, enabled: invoicesEnabled },
       { href: "/inventory", label: "Inventory", icon: Package },
       { href: "/reports", label: "Reports", icon: BarChart3 },
       { href: "/pnl", label: "P&L", icon: TrendingUp },
@@ -109,35 +114,37 @@ export function Sidebar() {
               </div>
             )}
             <ul className="space-y-0.5">
-              {section.items.map((item) => {
-                const active =
-                  item.href === "/"
-                    ? pathname === "/"
-                    : item.href === "/projects"
-                      ? pathname.startsWith("/projects") || pathname.startsWith("/jobs")
-                      : item.href === "/partners"
-                        ? pathname.startsWith("/partners") ||
-                          pathname.startsWith("/suppliers") ||
-                          pathname.startsWith("/subtrades")
-                        : pathname.startsWith(item.href);
-                const Icon = item.icon;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-fast ease-standard",
-                        active
-                          ? "bg-accent-soft text-accent font-medium"
-                          : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" strokeWidth={1.75} />
-                      <span>{item.label}</span>
-                    </Link>
-                  </li>
-                );
-              })}
+              {section.items
+                .filter((item) => !item.enabled || item.enabled())
+                .map((item) => {
+                  const active =
+                    item.href === "/"
+                      ? pathname === "/"
+                      : item.href === "/projects"
+                        ? pathname.startsWith("/projects") || pathname.startsWith("/jobs")
+                        : item.href === "/partners"
+                          ? pathname.startsWith("/partners") ||
+                            pathname.startsWith("/suppliers") ||
+                            pathname.startsWith("/subtrades")
+                          : pathname.startsWith(item.href);
+                  const Icon = item.icon;
+                  return (
+                    <li key={item.href}>
+                      <Link
+                        href={item.href}
+                        className={cn(
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-colors duration-fast ease-standard",
+                          active
+                            ? "bg-accent-soft text-accent font-medium"
+                            : "text-text-secondary hover:bg-surface-muted hover:text-text-primary"
+                        )}
+                      >
+                        <Icon className="h-4 w-4" strokeWidth={1.75} />
+                        <span>{item.label}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
             </ul>
           </div>
         ))}
