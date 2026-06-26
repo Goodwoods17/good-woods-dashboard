@@ -35,3 +35,6 @@ export const FORM_INSTANCE_FIELDS_TABLE = "form_instance_fields";
 export const FORM_SHARE_LINKS_TABLE = "form_share_links";
 export const INVOICES_TABLE = "invoices";
 export const INVOICE_LINES_TABLE = "invoice_lines";
+export const JOB_ITEMS_TABLE = "job_items";
+export const JOB_ITEM_EVENTS_TABLE = "job_item_events";
+export const PHASE_STEP_TEMPLATES_TABLE = "phase_step_templates";

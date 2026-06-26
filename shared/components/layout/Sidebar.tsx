@@ -23,11 +23,13 @@ import {
   Timer,
   ClipboardList,
   Receipt,
+  Activity,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useAuth } from "@shared/lib/authStore";
 import { versionBadgeLabel } from "@shared/lib/versionBadge";
 import { invoicesEnabled } from "@features/invoices/lib/featureFlag";
+import { jobStatusEnabled } from "@features/job-status/lib/featureFlag";
 
 type NavItem = {
   href: string;
@@ -66,6 +68,7 @@ const NAV: NavSection[] = [
       { href: "/reface", label: "Reface Studio", icon: ScanLine },
       { href: "/labour", label: "Labour", icon: Timer },
       { href: "/forms", label: "Forms", icon: ClipboardList },
+      { href: "/status", label: "Job status", icon: Activity, enabled: jobStatusEnabled },
       { href: "/sops", label: "SOPs", icon: BookOpen },
       { href: "/installer", label: "Installer", icon: Truck },
     ],
