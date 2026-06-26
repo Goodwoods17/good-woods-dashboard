@@ -13,10 +13,13 @@ import {
   rowsToLabourBudget,
   sessionsToLabourActuals,
   materialActualTotal,
+  materialActuals,
+  materialActualWithTaxTotal,
   subtradeActualsByLine,
   rowsToSubtradeLines,
   type BudgetLine,
   type LabourActual,
+  type MaterialActual,
   type SubtradeLine,
 } from "@features/job-costing/lib/budgetVsActual";
 
@@ -26,6 +29,8 @@ type BvaData = {
   labourBudget: BudgetLine[];
   labourActuals: LabourActual[];
   materialsActual: number;
+  materialsActualWithTax: number;
+  materialActuals: MaterialActual[];
   subtradeLines: SubtradeLine[];
 };
 
@@ -33,12 +38,27 @@ const EMPTY_DATA: BvaData = {
   labourBudget: [],
   labourActuals: [],
   materialsActual: 0,
+  materialsActualWithTax: 0,
+  materialActuals: [],
   subtradeLines: [],
 };
 
 export type LogActualInput =
-  | { kind: "material"; phaseId: MilestoneStage | null; amount: number; date?: string; note?: string }
-  | { kind: "subtrade"; tradeLineId: string; partnerId: string | null; amount: number; date?: string; note?: string };
+  | {
+      kind: "material";
+      phaseId: MilestoneStage | null;
+      amount: number;
+      date?: string;
+      note?: string;
+    }
+  | {
+      kind: "subtrade";
+      tradeLineId: string;
+      partnerId: string | null;
+      amount: number;
+      date?: string;
+      note?: string;
+    };
 
 // ── Row shapes (internal) ─────────────────────────────────────────────────────
 
@@ -111,6 +131,8 @@ export function useBudgetVsActual(jobId: string): {
         ),
         labourActuals: sessionsToLabourActuals((sessions.data ?? []) as Record<string, unknown>[]),
         materialsActual: materialActualTotal(actualRows),
+        materialsActualWithTax: materialActualWithTaxTotal(actualRows),
+        materialActuals: materialActuals(actualRows),
         subtradeLines,
       });
       setError(null);
@@ -138,7 +160,12 @@ export function useBudgetVsActual(jobId: string): {
                 .insert({ ...base, kind: "material" as const, phase_id: a.phaseId })
             : await getSupabase()
                 .from("job_cost_actuals")
-                .insert({ ...base, kind: "subtrade" as const, trade_line_id: a.tradeLineId, partner_id: a.partnerId });
+                .insert({
+                  ...base,
+                  kind: "subtrade" as const,
+                  trade_line_id: a.tradeLineId,
+                  partner_id: a.partnerId,
+                });
         if (insertErr) throw insertErr;
         await refresh();
       } catch (e) {

@@ -291,6 +291,121 @@ test.describe("invoices slice 4 — supplier + job matching", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Slice 5 — post to actuals + provenance
+// ---------------------------------------------------------------------------
+
+test.describe("invoices slice 5 — post to actuals + provenance", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("posting a reviewed invoice writes a job_cost_actual with provenance; re-post is blocked", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // The sentinel job seeded by scripts/seed-e2e.mjs.
+    const JOB_ID = "e2e-smoke-job";
+
+    // Clean slate from any prior attempt (actuals first — FK to the invoice).
+    const { data: priorInv } = await sb
+      .from("invoices")
+      .select("id")
+      .ilike("invoice_number", "E2E-POST-001");
+    for (const row of priorInv ?? []) {
+      await sb.from("job_cost_actuals").delete().eq("source_invoice_id", row.id);
+    }
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-POST-001");
+
+    // 1. Seed a reviewed invoice with one taxable line already assigned to the job.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-slice5/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-post-test.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-POST-001",
+        pre_tax_total: 500,
+        gst: 25,
+        pst: 35,
+        total: 560,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    const { data: lineRows, error: lineErr } = await sb
+      .from("invoice_lines")
+      .insert({
+        invoice_id: inv.id,
+        line_no: 1,
+        qty: 2,
+        sku: "MAP-34",
+        description: "Hard maple sheet",
+        unit: "sheet",
+        unit_price: 250,
+        amount: 500,
+        tax_flag: true,
+        confidence: 0.95,
+        job_id: JOB_ID,
+      })
+      .select("*");
+    expect(lineErr).toBeNull();
+    const line = lineRows![0];
+
+    // 2. Login and open the match page (reviewed invoices route there).
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 3. Post to actuals.
+    const postBtn = page.locator('[data-testid="post-actuals-btn"]');
+    await expect(postBtn).toBeVisible();
+    await postBtn.click();
+
+    // 4. The detail view advances to the posted state (status flipped → posted).
+    await expect(page.locator('[data-testid="invoice-posted-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 5. Re-post is blocked — the posted read-only view has no Post button.
+    await expect(page.locator('[data-testid="post-actuals-btn"]')).toHaveCount(0);
+
+    // 6. A job_cost_actual exists, traceable back to this invoice line, with the
+    //    pre-tax headline amount and the with-PST figure alongside (ADR 0019).
+    const { data: actuals } = await sb
+      .from("job_cost_actuals")
+      .select("*")
+      .eq("source_invoice_id", inv.id);
+    expect(actuals).toHaveLength(1);
+    expect(actuals![0].job_id).toBe(JOB_ID);
+    expect(actuals![0].kind).toBe("material");
+    expect(actuals![0].source_invoice_line_id).toBe(line.id);
+    expect(Number(actuals![0].amount)).toBeCloseTo(500, 2); // pre-tax headline
+    expect(Number(actuals![0].amount_with_tax)).toBeCloseTo(535, 2); // + full PST 35
+
+    // 7. Verify the invoice is at `posted`.
+    const { data: afterPost } = await sb
+      .from("invoices")
+      .select("status")
+      .eq("id", inv.id)
+      .single();
+    expect(afterPost?.status).toBe("posted");
+
+    // 8. Clean up (actuals first — FK to the invoice).
+    await sb.from("job_cost_actuals").delete().eq("source_invoice_id", inv.id);
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
+
 test.describe("invoices slice 2 — processor status + manual trigger", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 

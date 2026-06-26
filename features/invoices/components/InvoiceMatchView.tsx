@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, CheckCircle, Building2, Briefcase, AlertCircle } from "lucide-react";
+import { ArrowLeft, CheckCircle, Building2, Briefcase, AlertCircle, Send } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { formatCAD } from "@shared/lib/format";
 import { formatError } from "@shared/lib/formatError";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useCatalog } from "@features/catalog/lib/catalogStore";
-import { saveInvoiceMatch } from "../lib/invoicesData";
+import { saveInvoiceMatch, postInvoice } from "../lib/invoicesData";
 import { detectSupplier, suggestJob } from "../lib/invoiceMatch";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
@@ -88,8 +88,9 @@ export function InvoiceMatchView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, invoice.poRef]);
 
-  // ── Save ────────────────────────────────────────────────────────────────
+  // ── Save / Post ───────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
+  const [posting, setPosting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const handleSave = useCallback(async () => {
@@ -104,6 +105,24 @@ export function InvoiceMatchView({
       setSaving(false);
     }
   }, [invoice.id, selectedSupplierId, lineAssignments, onSaved]);
+
+  // Post commits the current assignments first (so what you see is what posts),
+  // then writes job cost actuals with provenance and flips the invoice to posted.
+  const handlePost = useCallback(async () => {
+    setPosting(true);
+    setSaveError(null);
+    try {
+      await saveInvoiceMatch(invoice.id, selectedSupplierId, lineAssignments);
+      await postInvoice(invoice.id);
+      onSaved();
+    } catch (e) {
+      setSaveError(formatError(e));
+    } finally {
+      setPosting(false);
+    }
+  }, [invoice.id, selectedSupplierId, lineAssignments, onSaved]);
+
+  const assignedLineCount = lineAssignments.filter((a) => a.jobId !== null).length;
 
   const setLineJob = useCallback((lineId: string, jobId: string | null) => {
     setLineAssignments((prev) => prev.map((a) => (a.lineId === lineId ? { ...a, jobId } : a)));
@@ -305,17 +324,34 @@ export function InvoiceMatchView({
         </section>
 
         {/* ── Actions ──────────────────────────────────────────────────── */}
-        <div className="flex items-center justify-end">
-          <button
-            type="button"
-            data-testid="save-match-btn"
-            disabled={saving}
-            onClick={() => void handleSave()}
-            className="inline-flex items-center gap-2 rounded-lg bg-ink-pill px-5 py-2 text-sm font-medium text-white transition-colors duration-fast hover:opacity-90 disabled:opacity-60"
-          >
-            <CheckCircle className="h-4 w-4" />
-            {saving ? "Saving…" : "Save assignments"}
-          </button>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              data-testid="save-match-btn"
+              disabled={saving || posting}
+              onClick={() => void handleSave()}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-surface px-5 py-2 text-sm font-medium text-text-primary transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
+            >
+              <CheckCircle className="h-4 w-4" />
+              {saving ? "Saving…" : "Save assignments"}
+            </button>
+            <button
+              type="button"
+              data-testid="post-actuals-btn"
+              disabled={saving || posting}
+              onClick={() => void handlePost()}
+              className="inline-flex items-center gap-2 rounded-lg bg-ink-pill px-5 py-2 text-sm font-medium text-white transition-colors duration-fast hover:opacity-90 disabled:opacity-60"
+            >
+              <Send className="h-4 w-4" />
+              {posting ? "Posting…" : "Post to actuals"}
+            </button>
+          </div>
+          <p className="text-xs text-text-tertiary">
+            {assignedLineCount > 0
+              ? `Posts ${assignedLineCount} assigned ${assignedLineCount === 1 ? "line" : "lines"} to job actuals (pre-tax) and marks this invoice posted.`
+              : "No lines assigned to a job — posting will mark this invoice posted without writing any actuals."}
+          </p>
         </div>
       </div>
     </div>

@@ -167,6 +167,51 @@ export function materialActualTotal(rows: Record<string, unknown>[]): number {
   return total;
 }
 
+// A material actual carrying its provenance (the bill it was posted from).
+// `amount` is the pre-tax headline; `amountWithTax` is the "with PST" figure
+// (falls back to `amount` for manually logged actuals with no tax captured).
+export type MaterialActual = {
+  id: string;
+  amount: number;
+  amountWithTax: number;
+  sourceInvoiceId: string | null;
+  sourceInvoiceLineId: string | null;
+  note: string | null;
+};
+
+// Maps kind='material' job_cost_actuals rows to MaterialActual[], preserving
+// provenance (source_invoice_id / line) so the BvA UI can link an actual back to
+// its originating bill (invoice slice 5, issue #50).
+export function materialActuals(rows: Record<string, unknown>[]): MaterialActual[] {
+  const out: MaterialActual[] = [];
+  for (const r of rows) {
+    if (r.kind !== "material") continue;
+    const amount = Number(r.amount ?? 0);
+    out.push({
+      id: String(r.id),
+      amount,
+      amountWithTax: r.amount_with_tax == null ? amount : Number(r.amount_with_tax),
+      sourceInvoiceId: r.source_invoice_id != null ? String(r.source_invoice_id) : null,
+      sourceInvoiceLineId:
+        r.source_invoice_line_id != null ? String(r.source_invoice_line_id) : null,
+      note: r.note != null ? String(r.note) : null,
+    });
+  }
+  return out;
+}
+
+// Σ of the "with PST" figure for kind='material' rows — shown alongside the
+// pre-tax materials actual. Falls back to `amount` where no tax was captured.
+export function materialActualWithTaxTotal(rows: Record<string, unknown>[]): number {
+  let total = 0;
+  for (const r of rows) {
+    if (r.kind !== "material") continue;
+    const amount = Number(r.amount ?? 0);
+    total += r.amount_with_tax == null ? amount : Number(r.amount_with_tax);
+  }
+  return total;
+}
+
 // Sums `amount` of kind='subtrade' actuals, grouped by trade_line_id.
 // Rows with a null trade_line_id accumulate under UNASSIGNED_LINE so money is
 // never silently dropped.

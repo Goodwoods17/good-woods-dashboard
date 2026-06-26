@@ -7,7 +7,11 @@ import { computeMargin, MILESTONE_STAGES } from "@shared/lib/types";
 import { formatCAD, formatPct } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { useBudgetVsActual } from "@features/job-costing/lib/budgetVsActualStore";
-import { computeBudgetVsActual, marginTone, UNASSIGNED_LINE } from "@features/job-costing/lib/budgetVsActual";
+import {
+  computeBudgetVsActual,
+  marginTone,
+  UNASSIGNED_LINE,
+} from "@features/job-costing/lib/budgetVsActual";
 import { TimelineView } from "@features/job-costing/components/bva/TimelineView";
 import { PhaseBarsView } from "@features/job-costing/components/bva/PhaseBarsView";
 import { PaceMarginView } from "@features/job-costing/components/bva/PaceMarginView";
@@ -120,6 +124,27 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
     currentMilestone: job.currentMilestone,
     pipelineComplete,
   });
+
+  // Group posted material actuals by their source bill so the BvA report can
+  // link each back to its originating invoice (provenance — invoice slice 5).
+  const billMap = new Map<
+    string,
+    { invoiceId: string; amount: number; amountWithTax: number; lineCount: number }
+  >();
+  for (const a of data.materialActuals) {
+    if (a.sourceInvoiceId == null) continue;
+    const existing = billMap.get(a.sourceInvoiceId) ?? {
+      invoiceId: a.sourceInvoiceId,
+      amount: 0,
+      amountWithTax: 0,
+      lineCount: 0,
+    };
+    existing.amount += a.amount;
+    existing.amountWithTax += a.amountWithTax;
+    existing.lineCount += 1;
+    billMap.set(a.sourceInvoiceId, existing);
+  }
+  const sourceBills = Array.from(billMap.values());
 
   const tone = marginTone(bva.clawback, bva.budgetedMargin);
   const toneChip = {
@@ -466,9 +491,7 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
               <button
                 type="submit"
                 disabled={
-                  !(Number(amount) > 0) ||
-                  (logKind === "subtrade" && !tradeLineId) ||
-                  submitting
+                  !(Number(amount) > 0) || (logKind === "subtrade" && !tradeLineId) || submitting
                 }
                 className="inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-xs font-medium bg-accent text-white hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity duration-fast min-h-[44px]"
               >
@@ -480,28 +503,66 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
 
         <div className="space-y-3">
           {/* Materials */}
-          <div className="flex items-center justify-between gap-4 py-2 border-b border-border">
-            <span className="text-sm font-medium text-text-primary">Materials</span>
-            <div className="flex items-center gap-6 text-sm tabular-nums">
-              <span className="text-text-tertiary">
-                Budget: {formatCAD(bva.other.materials.budget)}
-              </span>
-              <span className="text-text-secondary">
-                Actual: {formatCAD(bva.other.materials.actual)}
-              </span>
-              <span
-                className={cn(
-                  "font-medium",
-                  bva.other.materials.variance > 0
-                    ? "text-status-blocked"
-                    : bva.other.materials.variance < 0
-                      ? "text-status-on-track"
-                      : "text-text-secondary"
-                )}
-              >
-                {formatCAD(bva.other.materials.variance)}
-              </span>
+          <div className="border-b border-border pb-2">
+            <div className="flex items-center justify-between gap-4 py-2">
+              <span className="text-sm font-medium text-text-primary">Materials</span>
+              <div className="flex items-center gap-6 text-sm tabular-nums">
+                <span className="text-text-tertiary">
+                  Budget: {formatCAD(bva.other.materials.budget)}
+                </span>
+                <span className="text-text-secondary">
+                  Actual: {formatCAD(bva.other.materials.actual)}
+                  {data.materialsActualWithTax > bva.other.materials.actual && (
+                    <span className="ml-1 text-xs text-text-tertiary">
+                      (with PST {formatCAD(data.materialsActualWithTax)})
+                    </span>
+                  )}
+                </span>
+                <span
+                  className={cn(
+                    "font-medium",
+                    bva.other.materials.variance > 0
+                      ? "text-status-blocked"
+                      : bva.other.materials.variance < 0
+                        ? "text-status-on-track"
+                        : "text-text-secondary"
+                  )}
+                >
+                  {formatCAD(bva.other.materials.variance)}
+                </span>
+              </div>
             </div>
+
+            {/* Source bills — provenance for posted invoice actuals (#50). */}
+            {sourceBills.length > 0 && (
+              <div className="mt-1" data-testid="material-source-bills">
+                <div className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1">
+                  Source bills
+                </div>
+                <ul className="space-y-0.5">
+                  {sourceBills.map((bill) => (
+                    <li
+                      key={bill.invoiceId}
+                      className="flex items-center justify-between gap-4 text-xs"
+                    >
+                      <Link
+                        href={`/invoices/${bill.invoiceId}`}
+                        data-testid="material-source-bill-link"
+                        className="text-accent hover:text-accent-hover underline underline-offset-2 transition-colors duration-fast"
+                      >
+                        View bill ({bill.lineCount} {bill.lineCount === 1 ? "line" : "lines"})
+                      </Link>
+                      <span className="tabular-nums text-text-secondary">
+                        {formatCAD(bill.amount)}
+                        <span className="ml-1 text-text-tertiary">
+                          (with PST {formatCAD(bill.amountWithTax)})
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
 
           {/* Subtrades — per-line table */}
@@ -521,65 +582,62 @@ export function BudgetVsActualTab({ job }: { job: Job }) {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {bva.other.subtrades.lines
-                    .map((l) => (
-                      <tr key={l.lineId}>
-                        <td className="py-2 pr-4 text-text-primary">{l.tradeName}</td>
-                        <td className="py-2 pr-4 text-text-secondary">
-                          {l.subtradeName ?? (
-                            <span className="text-text-tertiary italic">TBD</span>
-                          )}
-                        </td>
-                        <td className="py-2 pr-4">
-                          <span
-                            className={cn(
-                              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                              l.status === "done"
-                                ? "bg-status-on-track-soft text-status-on-track"
-                                : l.status === "booked"
-                                  ? "bg-status-at-risk-soft text-status-at-risk"
-                                  : "bg-surface-muted text-text-tertiary"
-                            )}
-                          >
-                            {l.status === "done"
-                              ? "Done"
+                  {bva.other.subtrades.lines.map((l) => (
+                    <tr key={l.lineId}>
+                      <td className="py-2 pr-4 text-text-primary">{l.tradeName}</td>
+                      <td className="py-2 pr-4 text-text-secondary">
+                        {l.subtradeName ?? <span className="text-text-tertiary italic">TBD</span>}
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={cn(
+                            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
+                            l.status === "done"
+                              ? "bg-status-on-track-soft text-status-on-track"
                               : l.status === "booked"
-                                ? "Booked"
-                                : "Needed"}
-                          </span>
-                        </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-text-secondary">
-                          {formatCAD(l.budget)}
-                        </td>
-                        <td className="py-2 px-3 text-right tabular-nums text-text-primary">
-                          {formatCAD(l.actual)}
-                        </td>
-                        <td
-                          className={cn(
-                            "py-2 px-3 text-right tabular-nums",
-                            l.variance > 0
-                              ? "text-status-blocked"
-                              : l.variance < 0
-                                ? "text-status-on-track"
-                                : "text-text-secondary"
+                                ? "bg-status-at-risk-soft text-status-at-risk"
+                                : "bg-surface-muted text-text-tertiary"
                           )}
                         >
-                          {formatCAD(l.variance)}
-                        </td>
-                        <td
-                          className={cn(
-                            "py-2 pl-3 text-right tabular-nums",
-                            l.variance > 0
-                              ? "text-status-blocked"
-                              : l.variance < 0
-                                ? "text-status-on-track"
-                                : "text-text-secondary"
-                          )}
-                        >
-                          {l.variancePct != null ? formatPct(l.variancePct) : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                          {l.status === "done"
+                            ? "Done"
+                            : l.status === "booked"
+                              ? "Booked"
+                              : "Needed"}
+                        </span>
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums text-text-secondary">
+                        {formatCAD(l.budget)}
+                      </td>
+                      <td className="py-2 px-3 text-right tabular-nums text-text-primary">
+                        {formatCAD(l.actual)}
+                      </td>
+                      <td
+                        className={cn(
+                          "py-2 px-3 text-right tabular-nums",
+                          l.variance > 0
+                            ? "text-status-blocked"
+                            : l.variance < 0
+                              ? "text-status-on-track"
+                              : "text-text-secondary"
+                        )}
+                      >
+                        {formatCAD(l.variance)}
+                      </td>
+                      <td
+                        className={cn(
+                          "py-2 pl-3 text-right tabular-nums",
+                          l.variance > 0
+                            ? "text-status-blocked"
+                            : l.variance < 0
+                              ? "text-status-on-track"
+                              : "text-text-secondary"
+                        )}
+                      >
+                        {l.variancePct != null ? formatPct(l.variancePct) : "—"}
+                      </td>
+                    </tr>
+                  ))}
                   {/* Total row */}
                   <tr className="font-medium border-t border-border">
                     <td className="pt-2 pr-4 text-text-primary" colSpan={3}>
