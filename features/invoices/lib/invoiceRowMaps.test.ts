@@ -27,6 +27,8 @@ const invoiceRow: InvoiceRow = {
   error_message: null,
   // Slice 4: supplier link — null until match step fills it.
   supplier_id: null,
+  // Slice 7: multi-page camera paths — null for single-file uploads.
+  pages: null,
   created_at: "2026-06-25T00:00:00Z",
   updated_at: "2026-06-25T01:00:00Z",
 };

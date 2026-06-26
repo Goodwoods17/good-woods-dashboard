@@ -9,6 +9,7 @@ import { formatDate } from "@shared/lib/format";
 import { hasSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import { captureInvoice, isAcceptedInvoiceFile, listInvoices } from "../lib/invoicesData";
+import { CameraCapture } from "./CameraCapture";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
 import { getProcessorStatus, type ProcessorStatus } from "../lib/processorStatus";
 import type { Invoice } from "../lib/types";
@@ -102,23 +103,26 @@ export function InvoicesView() {
         title="Supplier invoices"
         subtitle="Capture a bill — it's stored instantly, then extracted out-of-band."
         actions={
-          <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-ink-pill px-4 py-1.5 text-sm font-medium text-white transition-colors duration-fast hover:opacity-90 disabled:opacity-60">
-            <Upload className="h-4 w-4" />
-            {uploading ? "Uploading…" : "Upload invoice"}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,image/jpeg,image/png,image/heic,.pdf,.jpg,.jpeg,.png,.heic"
-              aria-label="Upload invoice file"
-              data-testid="invoice-upload-input"
-              className="hidden"
-              disabled={uploading || !hasSupabase()}
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) void onFile(f);
-              }}
-            />
-          </label>
+          <div className="flex items-center gap-2">
+            <CameraCapture onCaptured={() => void refresh()} />
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg bg-ink-pill px-4 py-1.5 text-sm font-medium text-white transition-colors duration-fast hover:opacity-90 disabled:opacity-60">
+              <Upload className="h-4 w-4" />
+              {uploading ? "Uploading…" : "Upload invoice"}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="application/pdf,image/jpeg,image/png,image/heic,.pdf,.jpg,.jpeg,.png,.heic"
+                aria-label="Upload invoice file"
+                data-testid="invoice-upload-input"
+                className="hidden"
+                disabled={uploading || !hasSupabase()}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) void onFile(f);
+                }}
+              />
+            </label>
+          </div>
         }
       />
 

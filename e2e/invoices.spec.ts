@@ -571,6 +571,59 @@ test.describe("invoices slice 6 — catalog price update", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Slice 7 — mobile camera capture (PWA)
+// ---------------------------------------------------------------------------
+
+test.describe("invoices slice 7 — camera capture (PWA)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("camera capture button is present; panel opens; adding an image shows preview; upload creates a pending invoice", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/invoices");
+    await expect(page.getByText("Supplier invoices")).toBeVisible({ timeout: 15_000 });
+
+    // 1. "Snap invoice" button is visible in the page header.
+    const cameraBtn = page.locator('[data-testid="camera-capture-btn"]');
+    await expect(cameraBtn).toBeVisible();
+
+    // 2. Clicking opens the camera capture panel.
+    await cameraBtn.click();
+    const panel = page.locator('[data-testid="camera-capture-panel"]');
+    await expect(panel).toBeVisible({ timeout: 5_000 });
+
+    // 3. Simulate adding a page via the hidden camera input (Playwright calls
+    //    setInputFiles directly — capture="environment" is a hint ignored in test).
+    //    The sample PDF is the available fixture; the camera input accepts images
+    //    but any file works for the upload smoke (type is sent in the request body).
+    await page.locator('[data-testid="camera-page-input"]').setInputFiles(SAMPLE_PDF);
+
+    // 4. A page preview thumbnail appears.
+    await expect(
+      panel.locator('[data-testid="camera-page-preview"]').first()
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 5. The upload button is shown and shows the page count.
+    const uploadBtn = panel.locator('[data-testid="camera-upload-btn"]');
+    await expect(uploadBtn).toBeVisible();
+    await expect(uploadBtn).toHaveText(/upload invoice/i);
+
+    // 6. Click upload — the file lands as a `pending` invoice row in the list.
+    await uploadBtn.click();
+
+    // Panel closes after successful upload.
+    await expect(panel).not.toBeVisible({ timeout: 15_000 });
+
+    // A new invoice row is visible with status "Pending" — indistinguishable
+    // from a file-upload row.
+    const row = page.locator('[data-testid="invoice-row"]').first();
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await expect(row.getByText("Pending")).toBeVisible();
+  });
+});
+
 test.describe("invoices slice 2 — processor status + manual trigger", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
