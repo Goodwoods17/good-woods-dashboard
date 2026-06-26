@@ -20,6 +20,8 @@ export type InvoiceRow = {
   error_message: string | null;
   // Slice 4: resolved catalog supplier FK (nullable until match step).
   supplier_id: string | null;
+  // Slice 7: multi-page camera capture paths (null for single-file uploads).
+  pages: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -61,6 +63,7 @@ export function rowToInvoice(row: InvoiceRow): Invoice {
     extractedJson: row.extracted_json,
     errorMessage: row.error_message,
     supplierId: row.supplier_id ?? null,
+    pages: row.pages ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };

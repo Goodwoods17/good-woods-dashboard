@@ -45,6 +45,9 @@ export type Invoice = {
   errorMessage: string | null;
   // Slice 4: resolved catalog supplier (null until the match step fills it).
   supplierId: string | null;
+  // Slice 7: additional page paths for multi-page camera captures. Null for
+  // single-file uploads. storage_path always points to page 1.
+  pages: string[] | null;
   createdAt: string;
   updatedAt: string;
 };
