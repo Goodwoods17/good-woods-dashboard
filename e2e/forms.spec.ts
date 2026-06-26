@@ -863,3 +863,127 @@ test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () =
     ).toBeVisible({ timeout: 15_000 });
   });
 });
+
+test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner attaches a Pre-Install form, opens the share panel to mint a link,
+  // then edits one field in the TemplateEditor to add a showWhen condition on a
+  // yes_no trigger. The public /f/<token> page must hide the dependent field
+  // until the trigger is answered, then show it — without requiring a page reload.
+  //
+  // This test also verifies that the hidden field does not block the progress
+  // meter (submission is allowed while the dependent field is hidden and empty).
+  test("conditional showWhen: field B hidden until field A (yes_no) is answered yes; public /f/<token> shows/hides live", async ({
+    page,
+    browser,
+  }: {
+    page: Page;
+    browser: Browser;
+  }) => {
+    await login(page);
+
+    // 1. Create a fresh template with two fields: a yes_no trigger (A) and a
+    //    short_text dependent (B, showWhen A is_checked). We use the TemplateEditor
+    //    which the owner accesses from /forms.
+    await page.goto("/forms");
+    await page.getByRole("button", { name: /new template/i }).click();
+    await page.getByPlaceholder(/pre-install/i).fill("Conditional Test Template");
+    await page.getByRole("button", { name: /create & edit fields/i }).click();
+
+    // Should be in the TemplateEditor now.
+    await expect(page.getByText("Edit template: Conditional Test Template")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Add field A: yes_no trigger.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Has additional notes?");
+    await page.getByLabel("Field type").selectOption({ label: "Yes / No" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Has additional notes?", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Add field B: short_text, conditional on A.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Additional notes");
+    // Type stays short_text (default). Now set up the visibility condition.
+    // Switch visibility mode to "Show only when…".
+    await page.getByTestId("field-visibility-mode").selectOption("conditional");
+    // The trigger dropdown should list field A.
+    await expect(page.getByTestId("field-visibility-trigger")).toBeVisible({ timeout: 3_000 });
+    await page
+      .getByTestId("field-visibility-trigger")
+      .selectOption({ label: "Has additional notes?" });
+    // Operator defaults to is_checked — leave it.
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Additional notes", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 2. Navigate to the sentinel job, attach this template, open the share panel,
+    //    and mint a link.
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    // .first(): a Playwright retry re-runs this spec and would leave a second
+    // template of the same name behind on the (per-run) seeded DB.
+    await page
+      .getByRole("button", { name: new RegExp("Conditional Test Template") })
+      .first()
+      .click();
+
+    const instance = page.getByTestId("form-instance").last();
+    // Field A should be visible.
+    await expect(instance.getByText("Has additional notes?")).toBeVisible({ timeout: 15_000 });
+    // Field B should be hidden (trigger not yet answered). Exact match so we
+    // don't collide with field A's label "Has additional notes?".
+    await expect(instance.getByText("Additional notes", { exact: true })).toHaveCount(0);
+
+    // 3. Mint a share link.
+    await instance.getByTestId("open-share-panel").click();
+    await expect(instance.getByTestId("share-panel")).toBeVisible({ timeout: 5_000 });
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Conditional Test Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+    const urlInput = linkRow.locator('input[aria-label="Share URL"]');
+    const shareUrl = await urlInput.inputValue();
+    const tokenPath = new URL(shareUrl).pathname;
+
+    // 4. Open the link as a no-login guest. Verify B is hidden initially, appears
+    //    after A is answered Yes, and submission works (B hidden → not blocking).
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(tokenPath);
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+
+      // Field A (yes_no) is visible.
+      await expect(guestPage.getByText("Has additional notes?")).toBeVisible();
+      // Field B is hidden (trigger unanswered). Exact match so we don't collide
+      // with field A's label "Has additional notes?" (substring "additional notes").
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toHaveCount(0);
+
+      // Answer A = Yes. The yes_no control (fieldControls.tsx YesNoFill) renders
+      // two <button> toggles labelled "Yes" / "No" — not radio inputs.
+      const yesOption = guestPage.getByRole("button", { name: "Yes", exact: true });
+      await expect(yesOption).toBeVisible({ timeout: 5_000 });
+      await yesOption.click();
+
+      // Field B should now be visible (conditional revealed).
+      await expect(guestPage.getByText("Additional notes", { exact: true })).toBeVisible({
+        timeout: 5_000,
+      });
+
+      // Submission works even if B is still empty — hidden required fields don't block.
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+    } finally {
+      await guest.close();
+    }
+  });
+});

@@ -1,5 +1,6 @@
 import type { FormInstanceField, FormShareLink } from "@shared/lib/types";
 import { getFieldEntry } from "./fieldRegistry";
+import { isFieldVisible } from "./conditionals";
 
 /**
  * Share-link token model + the server-side lock enforcement. Pure (no React, no
@@ -67,6 +68,8 @@ export function filterLockedAnswers(
  */
 export function computeProgress(fields: FormInstanceField[]): number {
   const answerable = fields.filter((f) => {
+    // Hidden fields are excluded from the progress meter.
+    if (!isFieldVisible(f, fields)) return false;
     const entry = getFieldEntry(f.type);
     return entry ? !entry.isLayout : false;
   });

@@ -157,6 +157,40 @@ describe("snapshotTemplate (snapshot invariant)", () => {
     const { instance } = snapshotTemplate(template, [checkbox], null);
     expect(instance.jobId).toBeNull();
   });
+
+  it("remaps a conditional field's showWhen.fieldId from template id to the new instance id", () => {
+    const trigger: FormTemplateField = rowToFormTemplateField({
+      ...templateFieldRow,
+      id: "tf-trigger",
+      label: "Has notes?",
+      type: "yes_no",
+      sort_order: 0,
+      config: {},
+    });
+    const dependent: FormTemplateField = rowToFormTemplateField({
+      ...templateFieldRow,
+      id: "tf-dependent",
+      label: "Notes",
+      type: "short_text",
+      sort_order: 1,
+      config: { showWhen: { fieldId: "tf-trigger", operator: "is_checked" } },
+    });
+
+    const { fields } = snapshotTemplate(template, [trigger, dependent], "job-1");
+    const [snapTrigger, snapDependent] = fields;
+    const showWhen = (snapDependent.config as Record<string, unknown>).showWhen as {
+      fieldId: string;
+    };
+
+    // Points at the NEW instance trigger id, not the stale template id.
+    expect(showWhen.fieldId).toBe(snapTrigger.id);
+    expect(showWhen.fieldId).not.toBe("tf-trigger");
+    // Master condition untouched (frozen-copy invariant holds for nested config).
+    expect((dependent.config as Record<string, unknown>).showWhen).toEqual({
+      fieldId: "tf-trigger",
+      operator: "is_checked",
+    });
+  });
 });
 
 describe("fieldRegistry", () => {
