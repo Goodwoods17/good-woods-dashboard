@@ -10,6 +10,26 @@ Read `CONTEXT.md` (glossary) first — `trackable item`, `visibility`, `event`, 
 `done`-normalisation are load-bearing. Full design + rationale:
 `docs/superpowers/specs/2026-06-25-live-job-status-design.md`.
 
+## ⚠️ AUTONOMOUS OVERNIGHT BUILD — MANDATORY CONSTRAINTS (every slice)
+
+This milestone (#5) is being built unattended with the owner's explicit
+authorization (chained after milestone #4). **Every slice MUST obey these:**
+
+1. **Feature-flag everything OFF in production.** Gate the `/status` route, its nav
+   entry, the job-detail tab, and any job-status code path behind a single flag
+   (`JOB_STATUS_ENABLED`, env; **absent/false = off**). Prod stays dormant until the
+   owner flips it on after review. **Enable the flag in dev/test/CI** so the
+   Playwright smoke can run (a smoke blocked by an off flag won't pass CI).
+2. **Additive-only migrations.** `CREATE TABLE`/`ADD COLUMN` (nullable) only —
+   including the Drawings `pieces.visibility` column (slice 4): it MUST be
+   `ADD COLUMN visibility text NOT NULL DEFAULT 'owner'` (additive, safe), never a
+   destructive alter. **No** `DROP` / row mutation. The owner reviews + applies all
+   migrations to prod *after* the run — **do NOT apply any migration to prod.**
+3. **Never weaken existing RLS/auth**; do not alter existing Drawings behaviour
+   beyond adding the nullable `visibility` column. New tables are `authenticated_all
+   | anon_none`.
+4. CI green is non-negotiable before merge.
+
 ## Architecture (A★ — unify at the interface, never duplicate)
 
 Each item lives in exactly one home table; a read-layer adapter presents one model.
