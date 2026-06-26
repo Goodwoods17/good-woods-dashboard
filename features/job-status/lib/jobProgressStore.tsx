@@ -193,14 +193,28 @@ export function useJobProgress(jobId: string): UseJobProgress {
 
   const refresh = useCallback(async () => {
     if (backend !== "supabase") return;
-    const { data } = await getSupabase()
-      .from(JOB_ITEMS_TABLE)
-      .select("*")
-      .eq("job_id", jobId);
+    const { data } = await getSupabase().from(JOB_ITEMS_TABLE).select("*").eq("job_id", jobId);
     if (data) {
       const loaded = (data as JobItemRow[]).map(rowToJobItem);
-      itemsRef.current = loaded;
-      setItems(loaded);
+      // Merge-ADD, never wholesale-replace: refresh exists only to surface
+      // newly-inserted rows (e.g. template items) that Realtime may not have
+      // pushed yet. Replacing would clobber an in-flight optimistic tap whose
+      // DB write hasn't committed before this SELECT — the user's tap would be
+      // silently lost. Existing rows keep their (possibly optimistic) local
+      // state; cross-client status changes still arrive via the Realtime channel.
+      const byId = new Map(itemsRef.current.map((x) => [x.id, x]));
+      let changed = false;
+      for (const row of loaded) {
+        if (!byId.has(row.id)) {
+          byId.set(row.id, row);
+          changed = true;
+        }
+      }
+      if (changed) {
+        const next = Array.from(byId.values());
+        itemsRef.current = next;
+        setItems(next);
+      }
     }
   }, [backend, jobId]);
 

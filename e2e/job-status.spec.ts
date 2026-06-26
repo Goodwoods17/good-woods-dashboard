@@ -63,10 +63,13 @@ test.describe("job status slice 1 — live status cycle tracer", () => {
     });
     expect(seedErr).toBeNull();
 
-    // 2. Open /status (flag is on in CI) — the seeded item shows, Not started.
+    // 2. Open /status (flag is on in CI). Slice 2 auto-materialises template
+    //    steps on open, so the job now holds many items — target the seeded one
+    //    by its label, not a positional .first() (which would land on a design
+    //    template item that sorts ahead of assembly).
     await login(page);
     await page.goto("/status");
-    const item = page.locator('[data-testid="job-status-item"]').first();
+    const item = page.getByRole("button", { name: /E2E tracer step/ });
     await expect(item).toBeVisible({ timeout: 15_000 });
     await expect(item).toHaveAttribute("data-status", "not_started");
 
@@ -80,15 +83,17 @@ test.describe("job status slice 1 — live status cycle tracer", () => {
 
     // 4. Reload — the 'done' status persisted to the DB, not just local state.
     await page.reload();
-    const reloaded = page.locator('[data-testid="job-status-item"]').first();
+    const reloaded = page.getByRole("button", { name: /E2E tracer step/ });
     await expect(reloaded).toBeVisible({ timeout: 15_000 });
     await expect(reloaded).toHaveAttribute("data-status", "done");
 
-    // 5. The status also landed in the DB (the write reached the cloud).
+    // 5. The status also landed in the DB (the write reached the cloud). Scope
+    //    to the seeded row by label — the job holds many materialised items now.
     const { data, error } = await sb
       .from("job_items")
       .select("status")
       .eq("job_id", DEMO_JOB_ID)
+      .eq("label", "E2E tracer step")
       .single();
     expect(error).toBeNull();
     expect(data?.status).toBe("done");

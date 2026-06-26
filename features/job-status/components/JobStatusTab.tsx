@@ -18,9 +18,13 @@ import type { JobItem, Phase } from "../lib/types";
 function ProgressBar({ pct, testId }: { pct: number; testId?: string }) {
   const pctInt = Math.round(pct * 100);
   return (
-    <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted">
+    // testid lives on the always-full-width track, not the fill — the fill is
+    // zero-width at 0% progress, which Playwright treats as not-visible.
+    <div
+      data-testid={testId}
+      className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
+    >
       <div
-        data-testid={testId}
         className="h-full rounded-full bg-accent transition-all duration-slow"
         style={{ width: `${pctInt}%` }}
         role="progressbar"
@@ -84,11 +88,7 @@ function PhaseSection({
         aria-controls={`phase-items-${phase}`}
       >
         <span className="text-text-tertiary">
-          {collapsed ? (
-            <ChevronRight className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )}
+          {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </span>
         <span className="flex-1 min-w-0">
           <span className="text-sm font-medium text-text-primary">{phaseLabel}</span>
@@ -128,9 +128,7 @@ function PhaseSection({
                     aria-label={`${item.label} — ${JOB_ITEM_STATUS_LABELS[item.status]}, tap to advance`}
                     className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
                   >
-                    <span className="min-w-0 truncate text-sm text-text-primary">
-                      {item.label}
-                    </span>
+                    <span className="min-w-0 truncate text-sm text-text-primary">{item.label}</span>
                     <Pill
                       tone={jobItemStatusTone(item.status)}
                       label={JOB_ITEM_STATUS_LABELS[item.status]}
@@ -286,10 +284,7 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
       <div className="mb-5">
         <div className="flex items-center justify-between mb-1.5">
           <span className="text-xs font-medium text-text-secondary">Overall progress</span>
-          <span
-            className="text-xs text-text-tertiary tabular-nums"
-            data-testid="job-progress-pct"
-          >
+          <span className="text-xs text-text-tertiary tabular-nums" data-testid="job-progress-pct">
             {Math.round(jobPct * 100)}%
           </span>
         </div>
