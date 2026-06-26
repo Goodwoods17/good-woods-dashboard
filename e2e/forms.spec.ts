@@ -325,9 +325,17 @@ test.describe("forms P2 slice 1 — token link + public /f/<token> fill page", (
     await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
       timeout: 15_000,
     });
-    await instance.getByTestId("create-share-link").click();
+    // Mint a link through the SharePanel (Slice 2 refactor): open the panel,
+    // add a recipient, then read the per-link share URL off its row.
+    await instance.getByTestId("open-share-panel").click();
+    await expect(instance.getByTestId("share-panel")).toBeVisible({ timeout: 5_000 });
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Token Link Client");
+    await instance.getByTestId("add-recipient-submit").click();
 
-    const urlInput = instance.getByTestId("share-link-url");
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+    const urlInput = linkRow.locator('input[aria-label="Share URL"]');
     await expect(urlInput).toBeVisible({ timeout: 10_000 });
     const shareUrl = await urlInput.inputValue();
     expect(shareUrl).toMatch(/\/f\/[A-Za-z0-9_-]{32,}$/);
