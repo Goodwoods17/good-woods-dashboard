@@ -22,6 +22,8 @@ export type InvoiceRow = {
   supplier_id: string | null;
   // Slice 7: multi-page camera capture paths (null for single-file uploads).
   pages: string[] | null;
+  // Slice 8: QBO vendor mapping (null until owner sets it).
+  qbo_vendor_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -41,6 +43,8 @@ export type InvoiceLineRow = {
   confidence: number | null;
   // Slice 4: job assignment FK (null = shop stock).
   job_id: string | null;
+  // Slice 8: QBO expense account code (null until owner assigns it).
+  qbo_account: string | null;
   created_at: string;
 };
 
@@ -64,6 +68,7 @@ export function rowToInvoice(row: InvoiceRow): Invoice {
     errorMessage: row.error_message,
     supplierId: row.supplier_id ?? null,
     pages: row.pages ?? null,
+    qboVendorId: row.qbo_vendor_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -83,6 +88,7 @@ export function rowToInvoiceLine(row: InvoiceLineRow): InvoiceLine {
     taxFlag: row.tax_flag,
     confidence: row.confidence,
     jobId: row.job_id ?? null,
+    qboAccount: row.qbo_account ?? null,
     createdAt: row.created_at,
   };
 }

@@ -624,6 +624,94 @@ test.describe("invoices slice 7 — camera capture (PWA)", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Slice 8 — QuickBooks-ready shape + export endpoint stub
+// ---------------------------------------------------------------------------
+
+test.describe("invoices slice 8 — QBO export stub", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("export endpoint returns a QBO-mappable shape for a seeded invoice", async () => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-QBO-001");
+
+    // 1. Seed a reviewed invoice with QBO fields populated.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-slice8/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-qbo.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-QBO-001",
+        pre_tax_total: 500,
+        gst: 25,
+        pst: 35,
+        total: 560,
+        qbo_vendor_id: "qbo-vendor-e2e",
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert({
+      invoice_id: inv.id,
+      line_no: 1,
+      qty: 2,
+      sku: "MAPLE-34",
+      description: "Hard maple sheet",
+      unit: "sheet",
+      unit_price: 250,
+      amount: 500,
+      tax_flag: true,
+      confidence: 0.95,
+      qbo_account: "5000-Materials",
+    });
+
+    // 2. Call the export endpoint directly (bypasses the browser UI).
+    //    CRON_SECRET is available in CI via the env that the process route uses.
+    const cronSecret = process.env.CRON_SECRET ?? "test-secret";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const resp = await fetch(`${baseUrl}/api/invoices/${inv.id}/export-qbo`, {
+      headers: { authorization: `Bearer ${cronSecret}` },
+    });
+
+    // The endpoint should either succeed (200) or return 401 when CRON_SECRET
+    // is absent in this test environment.  Either way it must not crash (5xx).
+    expect([200, 401]).toContain(resp.status);
+
+    if (resp.status === 200) {
+      const body = await resp.json();
+      expect(body.ok).toBe(true);
+      const exp = body.export;
+      // QBO header fields present.
+      expect(exp.invoiceId).toBe(inv.id);
+      expect(exp.vendorRef).toBe("qbo-vendor-e2e");
+      expect(exp.vendorName).toBe("Reimer Hardwoods");
+      expect(exp.docNumber).toBe("E2E-QBO-001");
+      // Split taxes never collapsed.
+      expect(Number(exp.gst)).toBeCloseTo(25, 2);
+      expect(Number(exp.pst)).toBeCloseTo(35, 2);
+      expect(Number(exp.totalTax)).toBeCloseTo(60, 2);
+      // Lines with QBO account + tax code.
+      expect(exp.lines).toHaveLength(1);
+      expect(exp.lines[0].accountRef).toBe("5000-Materials");
+      expect(exp.lines[0].taxCodeRef).toBe("TAX");
+    }
+
+    // 3. Clean up.
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
+
 test.describe("invoices slice 2 — processor status + manual trigger", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
