@@ -10,6 +10,7 @@ import {
   Lock,
   Mail,
   QrCode,
+  Send,
   Unlock,
   UserPlus,
   X,
@@ -23,6 +24,7 @@ import type {
 import { useFormInstances } from "../lib/formInstancesStore";
 import { shareLinkStatus, shareLinkStatusLabel } from "../lib/shareLinkStatus";
 import { shareLinkTracking } from "../lib/shareLinkTracking";
+import { canSendReminder, isValidEmail } from "../lib/sendShareLink";
 
 // Owner-only date formatter for the recipient-tracking lines (sent / opened).
 // Short + with the time, so "Jun 23, 2026, 9:41 AM" reads at a glance.
@@ -82,10 +84,15 @@ function ShareLinkRow({
   const [showQr, setShowQr] = useState(false);
   const [showLocks, setShowLocks] = useState(false);
   const [revoking, setRevoking] = useState(false);
+  const [email, setEmail] = useState("");
+  const [sending, setSending] = useState(false);
+  // Owner-facing send feedback: null = idle, otherwise a short status message.
+  const [sendNote, setSendNote] = useState<string | null>(null);
 
   const status = shareLinkStatus(link);
   const tracking = shareLinkTracking(link);
   const isRevoked = status === "revoked";
+  const reminderReady = canSendReminder(link);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
   const shareUrl = `${origin}/f/${link.token}`;
 
@@ -107,6 +114,50 @@ function ShareLinkRow({
     );
     window.open(`mailto:?subject=${subject}&body=${body}`, "_self");
     onStampSent();
+  }
+
+  // Manual "Send to client" / "Send reminder" — every email is an explicit owner
+  // click (no cron, no auto path). Falls back to the mailto draft when the server
+  // has no RESEND_API_KEY (preview / dev / CI return 503 "unconfigured"), so the
+  // button never crashes or dead-ends.
+  async function handleSend(mode: "send" | "reminder") {
+    const to = email.trim();
+    if (!isValidEmail(to)) {
+      setSendNote("Enter a valid email");
+      return;
+    }
+    setSending(true);
+    setSendNote(null);
+    try {
+      const res = await fetch(`/api/forms/share-links/${link.id}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recipientEmail: to, mode }),
+      });
+      if (res.ok) {
+        setSendNote(mode === "reminder" ? "Reminder sent" : "Sent");
+        onStampSent();
+        return;
+      }
+      const data = (await res.json().catch(() => ({}))) as { reason?: string };
+      if (res.status === 503 || data.reason === "unconfigured") {
+        // No email provider configured — fall back to the owner's mail client.
+        handleMailDraft();
+        setSendNote("Opened email draft (no sender configured)");
+        return;
+      }
+      if (data.reason === "invalid_email") {
+        setSendNote("Enter a valid email");
+        return;
+      }
+      setSendNote("Send failed — try copy/email instead");
+    } catch {
+      // Network failure: degrade to the mailto draft rather than dead-end.
+      handleMailDraft();
+      setSendNote("Opened email draft (send unavailable)");
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleSmsDraft() {
@@ -359,6 +410,61 @@ function ShareLinkRow({
           >
             SMS
           </button>
+        </div>
+      )}
+
+      {/* Manual email send — owner types the recipient address, then clicks
+          "Send to client" (or "Send reminder" once already sent). Server uses
+          Resend when configured, else falls back to the mailto draft. */}
+      {!isRevoked && (
+        <div className="mt-2 space-y-1.5" data-testid="send-email-panel">
+          <div className="flex items-center gap-2">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="client@email.com"
+              aria-label="Recipient email"
+              data-testid="recipient-email-input"
+              className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-1 text-xs text-text-primary placeholder:text-text-disabled focus:outline-none focus:ring-1 focus:ring-accent/50"
+            />
+            <button
+              type="button"
+              onClick={() => handleSend("send")}
+              disabled={sending}
+              aria-label="Send to client"
+              data-testid="send-to-client"
+              className="inline-flex shrink-0 items-center gap-1 rounded bg-ink-pill px-2.5 py-1 text-xs font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
+              title="Email the link to the client"
+            >
+              <Send className="h-3 w-3" strokeWidth={2} />
+              Send to client
+            </button>
+            {reminderReady && (
+              <button
+                type="button"
+                onClick={() => handleSend("reminder")}
+                disabled={sending}
+                aria-label="Send reminder"
+                data-testid="send-reminder"
+                className="inline-flex shrink-0 items-center gap-1 rounded border border-border px-2.5 py-1 text-xs font-medium text-text-secondary transition-colors hover:text-text-primary disabled:opacity-50"
+                title="Re-send the link to nudge this recipient"
+              >
+                Send reminder
+              </button>
+            )}
+          </div>
+          {sendNote && (
+            <p className="text-[11px] text-text-tertiary" data-testid="send-note">
+              {sendNote}
+            </p>
+          )}
+          {/* Resend test-mode caveat — the onboarding@resend.dev sender can only
+              deliver to the account owner's own address until a sending domain is
+              verified. Env-only swap to a real domain (no code change). */}
+          <p className="text-[10px] text-text-disabled" data-testid="send-testmode-note">
+            Test mode: emails currently send to your own address until a sending domain is verified.
+          </p>
         </div>
       )}
     </div>

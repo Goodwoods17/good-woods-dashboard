@@ -687,6 +687,106 @@ test.describe("forms P2 slice 3 — owner tracking (sent/opened + days-since) + 
   });
 });
 
+test.describe("forms P2 slice 5 — Resend manual send + reminder buttons", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner attaches a form, mints a link, types a recipient email, and clicks
+  // "Send to client". The send route is MOCKED (route.fulfill) so NO real email
+  // is ever sent in CI — we only prove the button wiring + the success note +
+  // that "Send reminder" appears once sent. A second test proves the missing-key
+  // 503 falls back without crashing (the send-note still appears).
+  test("send to client (mocked) shows confirmation; reminder button appears", async ({ page }) => {
+    await login(page);
+
+    // Mock the send endpoint: pretend Resend is configured and the email went out.
+    await page.route("**/api/forms/share-links/*/send", async (route) => {
+      const body = route.request().postDataJSON() as { mode?: string };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, mode: body?.mode ?? "send", emailId: "email_mock" }),
+      });
+    });
+
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Open the share panel and add a recipient.
+    await instance.getByTestId("open-share-panel").click();
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Send Test Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+
+    // No reminder button before the first send.
+    await expect(linkRow.getByTestId("send-reminder")).toHaveCount(0);
+
+    // The Resend test-mode caveat is surfaced near the Send button.
+    await expect(linkRow.getByTestId("send-testmode-note")).toBeVisible();
+
+    // Type the recipient email and click "Send to client".
+    // Select via the aria-label/testid (NOT input[value=...]) — React controlled
+    // inputs don't reflect value to the attribute, and there's no getByDisplayValue.
+    await linkRow.getByTestId("recipient-email-input").fill("client@example.com");
+    await linkRow.getByTestId("send-to-client").click();
+
+    // The success note appears (mocked 200) and the status flips to Sent.
+    await expect(linkRow.getByTestId("send-note")).toHaveText(/Sent/, { timeout: 10_000 });
+    await expect(linkRow.getByTestId("share-link-status")).toHaveText("Sent", { timeout: 10_000 });
+
+    // Now that it's sent, the "Send reminder" button is available.
+    await expect(linkRow.getByTestId("send-reminder")).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("missing-key 503 falls back to the mailto draft (no crash)", async ({ page }) => {
+    await login(page);
+
+    // Mock the send endpoint as "unconfigured" (503) — preview/dev/CI have no key.
+    await page.route("**/api/forms/share-links/*/send", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, reason: "unconfigured" }),
+      });
+    });
+
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page.getByRole("button", { name: new RegExp(PRE_INSTALL) }).click();
+
+    const instance = page.getByTestId("form-instance").last();
+    await expect(instance.getByRole("checkbox", { name: FIRST_CHECKBOX })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await instance.getByTestId("open-share-panel").click();
+    await instance.getByTestId("add-recipient-button").click();
+    await instance.getByTestId("recipient-name-input").fill("Fallback Client");
+    await instance.getByTestId("add-recipient-submit").click();
+
+    const linkRow = instance.getByTestId("share-link-row").first();
+    await expect(linkRow).toBeVisible({ timeout: 10_000 });
+
+    await linkRow.getByTestId("recipient-email-input").fill("client@example.com");
+    // mailto: navigation is harmless under Playwright; just assert the note.
+    await linkRow.getByTestId("send-to-client").click();
+    await expect(linkRow.getByTestId("send-note")).toContainText(/email draft/i, {
+      timeout: 10_000,
+    });
+  });
+});
+
 test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
