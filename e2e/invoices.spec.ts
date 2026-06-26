@@ -175,10 +175,12 @@ test.describe("invoices slice 3 — review & edit", () => {
     await expect(saveBtn).toBeVisible();
     await expect(saveBtn).not.toBeDisabled();
 
-    // 8. Clicking Save marks the invoice as reviewed and transitions to the
-    //    read-only view (which has the "Raw extracted JSON" section).
+    // 8. Clicking Save marks the invoice as reviewed and advances the detail
+    //    view to the slice-4 match step (a reviewed invoice routes there).
     await saveBtn.click();
-    await expect(page.getByText("Raw extracted JSON")).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
 
     // Verify the invoice is now at `reviewed` status.
     const { data: afterSave } = await sb
@@ -278,8 +280,11 @@ test.describe("invoices slice 4 — supplier + job matching", () => {
     // 9. Click save — verify the request completes (no error banner).
     await saveBtn.click();
     await expect(saveBtn).toHaveText(/save assignments/i, { timeout: 10_000 });
-    // No error banner after save.
-    await expect(page.locator('[role="alert"]')).not.toBeVisible();
+    // No error banner after save. Scope to the match view — a bare [role="alert"]
+    // also matches Next's always-present __next-route-announcer__ at the app root.
+    await expect(
+      page.locator('[data-testid="invoice-match-view"] [role="alert"]')
+    ).not.toBeVisible();
 
     // 10. Clean up.
     await sb.from("invoices").delete().eq("id", inv.id);
