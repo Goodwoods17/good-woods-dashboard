@@ -100,6 +100,91 @@ test.describe("job status slice 1 — live status cycle tracer", () => {
   });
 });
 
+// ─── Slice 3 (issue #59) — photos + notes (event timeline) ──────────────────
+
+test.describe("job status slice 3 — photos + notes + event timeline", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY + a seeded Supabase"
+  );
+
+  test("attaching a note to an item appears in the timeline", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Seed one known item so the timeline item picker always has a target.
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_item_events").delete().eq("job_id", DEMO_JOB_ID);
+    const { data: seedData, error: seedErr } = await sb
+      .from("job_items")
+      .insert({
+        job_id: DEMO_JOB_ID,
+        phase: "assembly",
+        label: "E2E note target",
+        source: "adhoc",
+        status: "not_started",
+        visibility: "owner",
+        sort_order: 0,
+      })
+      .select()
+      .single();
+    expect(seedErr).toBeNull();
+    const itemId = (seedData as { id: string }).id;
+
+    await login(page);
+    await page.goto("/status");
+
+    // The item-timeline section is present.
+    await expect(page.getByTestId("item-timeline")).toBeVisible({ timeout: 15_000 });
+
+    // Initially the timeline shows "No activity yet."
+    await expect(page.getByText("No activity yet.")).toBeVisible({ timeout: 10_000 });
+
+    // Pick the seeded item from the item picker.
+    const pickerBtn = page.getByRole("button", { name: /Add note or photo to E2E note target/i });
+    await expect(pickerBtn).toBeVisible({ timeout: 10_000 });
+    await pickerBtn.click();
+
+    // The capture form opens.
+    await expect(page.getByTestId("capture-form")).toBeVisible();
+
+    // Fill in a note and submit.
+    await page.getByLabel("Note text").fill("Cabinet looking great");
+    await page.getByTestId("capture-submit-btn").click();
+
+    // The form closes and the note appears in the timeline.
+    await expect(page.getByTestId("capture-form")).not.toBeVisible({ timeout: 5_000 });
+    await expect(page.getByTestId("timeline-event")).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText("Cabinet looking great")).toBeVisible({ timeout: 10_000 });
+
+    // The event row is also in the DB.
+    const { data: evtData, error: evtErr } = await sb
+      .from("job_item_events")
+      .select("*")
+      .eq("job_id", DEMO_JOB_ID)
+      .eq("item_id", itemId)
+      .single();
+    expect(evtErr).toBeNull();
+    expect((evtData as { event_type: string }).event_type).toBe("note");
+    expect((evtData as { note: string }).note).toBe("Cabinet looking great");
+  });
+
+  test("timeline renders without errors when there are no events", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+    // Wipe events so the empty state is deterministic.
+    await sb.from("job_item_events").delete().eq("job_id", DEMO_JOB_ID);
+
+    await login(page);
+    await page.goto("/status");
+
+    await expect(page.getByTestId("item-timeline")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("No activity yet.")).toBeVisible({ timeout: 10_000 });
+  });
+});
+
 // ─── Slice 2 (issue #58) — templates + full mobile field view ────────────────
 
 test.describe("job status slice 2 — template materialisation + full field view", () => {
