@@ -15,6 +15,7 @@ import type { SectionId } from "@features/estimator/lib/sections";
 import { hasSupabase, getSupabase } from "@shared/lib/supabase";
 import { useAuth } from "@shared/lib/authStore";
 import { formatError } from "@shared/lib/formatError";
+import type { PriceSource } from "./priceHistory";
 import {
   assembleCatalog,
   offerToRow,
@@ -698,7 +699,11 @@ function logItemPriceChange(i: CatalogItem) {
     .catch(() => {});
 }
 
-function logOfferPriceChange(o: CatalogOffer, supplierName: string) {
+function logOfferPriceChange(
+  o: CatalogOffer,
+  supplierName: string,
+  source: PriceSource = "manual"
+) {
   import("./priceHistory")
     .then((mod) =>
       mod.logPrice({
@@ -706,7 +711,7 @@ function logOfferPriceChange(o: CatalogOffer, supplierName: string) {
         offerId: o.id,
         supplier: supplierName,
         unitPrice: o.unitPrice,
-        source: "manual",
+        source,
       })
     )
     .catch(() => {});
@@ -753,7 +758,11 @@ type CatalogContextValue = {
   updateSupplier: (id: string, patch: Partial<CatalogSupplier>) => void;
   removeSupplier: (id: string) => void;
   addOffer: (itemId: string, supplierId: string, unitPrice?: number) => void;
-  updateOffer: (id: string, patch: Partial<CatalogOffer>) => void;
+  updateOffer: (
+    id: string,
+    patch: Partial<CatalogOffer>,
+    opts?: { priceSource?: PriceSource }
+  ) => void;
   removeOffer: (id: string) => void;
   setPreferredOffer: (itemId: string, offerId: string | null) => void;
   reset: () => void;
@@ -843,12 +852,10 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
 
         // Seed categories first (FK target for item.category_id), then items.
         if (categoryList.length === 0) {
-          await sb
-            .from(CATEGORIES_TABLE)
-            .upsert(SEED_CATEGORIES.map(categoryToRow), {
-              onConflict: "id",
-              ignoreDuplicates: true,
-            });
+          await sb.from(CATEGORIES_TABLE).upsert(SEED_CATEGORIES.map(categoryToRow), {
+            onConflict: "id",
+            ignoreDuplicates: true,
+          });
           categoryList = SEED_CATEGORIES;
         }
 
@@ -1152,7 +1159,7 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
   );
 
   const updateOffer = useCallback(
-    (id: string, patch: Partial<CatalogOffer>) => {
+    (id: string, patch: Partial<CatalogOffer>, opts?: { priceSource?: PriceSource }) => {
       setOffers((prev) =>
         prev.map((o) => {
           if (o.id !== id) return o;
@@ -1160,7 +1167,8 @@ export function CatalogProvider({ children }: { children: ReactNode }) {
           if (patch.unitPrice !== undefined && patch.unitPrice !== o.unitPrice) {
             next.priceUpdatedAt = NOW();
             const sName = suppliersRef.current.find((s) => s.id === next.supplierId)?.name ?? "";
-            logOfferPriceChange(next, sName);
+            // Invoice imports tag the history row "import"; manual edits stay "manual".
+            logOfferPriceChange(next, sName, opts?.priceSource ?? "manual");
           }
           return next;
         })

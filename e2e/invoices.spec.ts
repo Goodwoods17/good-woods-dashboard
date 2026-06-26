@@ -406,6 +406,171 @@ test.describe("invoices slice 5 — post to actuals + provenance", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// Slice 6 — catalog price update (SKU match + delta + import history)
+// ---------------------------------------------------------------------------
+
+test.describe("invoices slice 6 — catalog price update", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("matched SKU line shows the old→new delta + a large-jump nudge; Apply updates the offer and writes import history", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    const SKU = "E2E-SKU-PRICE-1";
+    const ITEM_ID = "e2e-price-item";
+    const SUPPLIER_NAME = "E2E Price Co";
+
+    // Clean slate from any prior attempt (children first — FKs).
+    {
+      const { data: priorItem } = await sb.from("catalog_offers").select("id").eq("sku", SKU);
+      for (const o of priorItem ?? []) {
+        await sb.from("catalog_price_history").delete().eq("offer_id", o.id);
+      }
+      await sb.from("catalog_offers").delete().eq("sku", SKU);
+      await sb.from("catalog_items").delete().eq("id", ITEM_ID);
+      await sb.from("catalog_suppliers").delete().eq("name", SUPPLIER_NAME);
+      await sb.from("invoices").delete().ilike("invoice_number", "E2E-PRICE-001");
+    }
+
+    // 1. Seed a catalog supplier + item + offer (offer at $100, with the SKU).
+    const { data: supRows, error: supErr } = await sb
+      .from("catalog_suppliers")
+      .insert({ name: SUPPLIER_NAME })
+      .select("*");
+    expect(supErr).toBeNull();
+    const supplierId = supRows![0].id;
+
+    const { error: itemErr } = await sb.from("catalog_items").insert({
+      id: ITEM_ID,
+      kind: "material",
+      name: "E2E Maple Sheet",
+      section: "casework",
+      unit: "ea",
+      unit_price: 100,
+      active: true,
+    });
+    expect(itemErr).toBeNull();
+
+    const { data: offerRows, error: offerErr } = await sb
+      .from("catalog_offers")
+      .insert({
+        item_id: ITEM_ID,
+        supplier_id: supplierId,
+        unit_price: 100,
+        sku: SKU,
+        active: true,
+      })
+      .select("*");
+    expect(offerErr).toBeNull();
+    const offerId = offerRows![0].id;
+
+    // 2. Seed a reviewed invoice linked to that supplier with one matching line
+    //    at $130 — a +30% move, above the 15% default threshold (nudge fires).
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-slice6/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-price.pdf",
+        supplier: SUPPLIER_NAME,
+        invoice_number: "E2E-PRICE-001",
+        supplier_id: supplierId,
+        pre_tax_total: 130,
+        gst: 6.5,
+        pst: 9.1,
+        total: 145.6,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert({
+      invoice_id: inv.id,
+      line_no: 1,
+      qty: 1,
+      sku: SKU,
+      description: "E2E Maple Sheet",
+      unit: "ea",
+      unit_price: 130,
+      amount: 130,
+      tax_flag: true,
+      confidence: 0.95,
+    });
+
+    // 3. Login and open the match page (reviewed invoices route there).
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 4. The catalog price-update panel renders with the matched line.
+    await expect(page.locator('[data-testid="price-update-section"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    const row = page.locator('[data-testid="price-update-row"]').first();
+    await expect(row).toBeVisible();
+
+    // 5. A large jump (+30%) is flagged for re-quote.
+    await expect(row.locator('[data-testid="price-jump-nudge"]')).toBeVisible();
+
+    // 6. Apply the price update.
+    const applyBtn = row.locator('[data-testid="apply-price-update-btn"]');
+    await expect(applyBtn).toBeVisible();
+    await applyBtn.click();
+
+    // 7. The row confirms the update landed.
+    await expect(row.locator('[data-testid="price-update-applied"]')).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // 8. The offer's unit price is now $130 (debounced flush — poll for it).
+    await expect
+      .poll(
+        async () => {
+          const { data } = await sb
+            .from("catalog_offers")
+            .select("unit_price")
+            .eq("id", offerId)
+            .single();
+          return Number(data?.unit_price);
+        },
+        { timeout: 10_000 }
+      )
+      .toBe(130);
+
+    // 9. Price history carries an `import`-sourced row for this offer.
+    await expect
+      .poll(
+        async () => {
+          const { data } = await sb
+            .from("catalog_price_history")
+            .select("source")
+            .eq("offer_id", offerId)
+            .eq("source", "import");
+          return (data ?? []).length;
+        },
+        { timeout: 10_000 }
+      )
+      .toBeGreaterThanOrEqual(1);
+
+    // 10. Clean up (children first — FKs).
+    await sb.from("catalog_price_history").delete().eq("offer_id", offerId);
+    await sb.from("invoices").delete().eq("id", inv.id);
+    await sb.from("catalog_offers").delete().eq("id", offerId);
+    await sb.from("catalog_items").delete().eq("id", ITEM_ID);
+    await sb.from("catalog_suppliers").delete().eq("id", supplierId);
+  });
+});
+
 test.describe("invoices slice 2 — processor status + manual trigger", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 
