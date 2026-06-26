@@ -864,6 +864,93 @@ test.describe("forms P2 slice 4 — auto-file signed PDF to job on submit", () =
   });
 });
 
+test.describe("forms P3 slice 3 — prefill from job data", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  // Owner creates a template with a short_text field mapped to "address" and a
+  // date field mapped to "installDate". Attaches it to the sentinel job. The
+  // snapshot should carry the job's address and installDate. A standalone attach
+  // (via /forms) must leave the fields blank (no crash).
+  test("attached form prefills address + installDate from the seeded job; standalone leaves blank", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // 1. Create a fresh template with two prefill-mapped fields.
+    await page.goto("/forms");
+    await page.getByRole("button", { name: /new template/i }).click();
+    await page.getByPlaceholder(/pre-install/i).fill("Prefill Test Template");
+    await page.getByRole("button", { name: /create & edit fields/i }).click();
+
+    await expect(page.getByText("Edit template: Prefill Test Template")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Add a short_text field mapped to address.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Site address");
+    // Type stays short_text (default).
+    await page.getByTestId("field-prefill-source").selectOption({ value: "address" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Site address", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // Add a date field mapped to installDate.
+    await page.getByRole("button", { name: /add field/i }).click();
+    await page.getByLabel("Field label").fill("Install date");
+    await page.getByLabel("Field type").selectOption({ label: "Date" });
+    await page.getByTestId("field-prefill-source").selectOption({ value: "installDate" });
+    await page.getByRole("button", { name: /save field/i }).click();
+    await expect(
+      page.getByTestId("template-fields-list").getByText("Install date", { exact: true })
+    ).toBeVisible({ timeout: 5_000 });
+
+    // 2. Attach to the sentinel job — prefill must fire.
+    await page.goto(`/jobs/${E2E_JOB_ID}`);
+    await page.getByRole("button", { name: "Forms", exact: true }).click();
+    await page.getByRole("button", { name: /add form/i }).click();
+    await page
+      .getByRole("button", { name: new RegExp("Prefill Test Template") })
+      .first()
+      .click();
+
+    const instance = page.getByTestId("form-instance").last();
+
+    // The address field should be pre-filled with the seeded job's address.
+    // The seeded job (e2e-smoke-job) has some address; we simply verify the field
+    // is not blank — the exact value matches whatever seeds/seed-e2e.mjs sets.
+    const addressInput = instance.getByLabel("Site address");
+    await expect(addressInput).toBeVisible({ timeout: 15_000 });
+    const addressValue = await addressInput.inputValue();
+    expect(addressValue.length).toBeGreaterThan(0);
+
+    // The installDate field should also be pre-filled (non-empty).
+    const dateInput = instance.getByLabel("Install date");
+    await expect(dateInput).toBeVisible();
+    const dateValue = await dateInput.inputValue();
+    expect(dateValue.length).toBeGreaterThan(0);
+
+    // 3. Standalone attach (via /forms) must leave the fields blank (no crash).
+    await page.goto("/forms");
+    const card = page
+      .locator('[data-testid="form-template-card"]')
+      .filter({ hasText: "Prefill Test Template" })
+      .first();
+    await card.getByRole("button", { name: /fill standalone/i }).click();
+
+    // A standalone instance appears.
+    const standaloneSection = page.locator('[data-testid="standalone-instance"]').last();
+    await expect(standaloneSection).toBeVisible({ timeout: 10_000 });
+
+    // The address field in the standalone instance must be blank.
+    const standaloneAddressInput = standaloneSection.getByLabel("Site address");
+    await expect(standaloneAddressInput).toBeVisible();
+    const standaloneValue = await standaloneAddressInput.inputValue();
+    expect(standaloneValue).toBe("");
+  });
+});
+
 test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
   test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
 

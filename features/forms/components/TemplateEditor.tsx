@@ -23,6 +23,11 @@ import { useFormTemplates } from "../lib/formTemplatesStore";
 import { FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
 import { formPhaseLabel } from "../lib/phase";
 import type { ShowWhenCondition } from "../lib/conditionals";
+import {
+  PREFILL_SOURCE_GROUPS,
+  PREFILL_SOURCE_LABELS,
+  type PrefillSourceKey,
+} from "../lib/prefill";
 
 const PHASES: (FormPhase | null)[] = [
   "design",
@@ -72,6 +77,9 @@ function FieldConfigPanel({
   const [showWhenValue, setShowWhenValue] = useState<string>(
     existingCondition?.value != null ? String(existingCondition.value) : ""
   );
+
+  const existingPrefill = (config.prefillFrom as PrefillSourceKey | undefined) ?? "";
+  const [prefillFrom, setPrefillFrom] = useState<string>(existingPrefill);
 
   // Answerable fields above this one (exclude sections — they can't hold a value).
   const triggerCandidates = fieldsAbove.filter(
@@ -212,6 +220,38 @@ function FieldConfigPanel({
         </label>
       )}
 
+      {/* Prefill from job — for text, long_text, number, date fields */}
+      {(type === "short_text" || type === "long_text" || type === "number" || type === "date") && (
+        <div>
+          <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1">
+            Prefill from job
+          </label>
+          <select
+            data-testid="field-prefill-source"
+            className="w-full text-sm bg-surface border border-border rounded-md px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-accent-soft"
+            value={prefillFrom}
+            onChange={(e) => setPrefillFrom(e.target.value)}
+          >
+            <option value="">— none —</option>
+            {PREFILL_SOURCE_GROUPS.map((group) => (
+              <optgroup key={group.label} label={group.label}>
+                {group.keys.map((key) => (
+                  <option key={key} value={key}>
+                    {PREFILL_SOURCE_LABELS[key]}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          {prefillFrom && (
+            <p className="mt-1 text-xs text-text-tertiary">
+              Pre-filled when this form is attached to a job. Standalone forms
+              leave the field blank. The value is frozen at attach time.
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Visibility — only applicable to non-section fields; sections are always shown */}
       {type !== "section" && (
         <div className="space-y-2">
@@ -324,6 +364,13 @@ function FieldConfigPanel({
             } else {
               // Always show — remove any prior condition.
               const { showWhen: _removed, ...rest } = updatedConfig;
+              updatedConfig = rest;
+            }
+            // Persist the prefill source, or clear it when reset to "— none —".
+            if (prefillFrom) {
+              updatedConfig = { ...updatedConfig, prefillFrom };
+            } else {
+              const { prefillFrom: _pf, ...rest } = updatedConfig;
               updatedConfig = rest;
             }
             onSave({ label: label.trim() || field.label, type, config: updatedConfig });
