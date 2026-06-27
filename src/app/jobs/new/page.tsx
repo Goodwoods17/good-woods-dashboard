@@ -28,6 +28,9 @@ import { useFormTemplates } from "@features/forms/lib/formTemplatesStore";
 import { useFormInstances } from "@features/forms/lib/formInstancesStore";
 import { attachDefaultForms } from "@features/forms/lib/attachDefaultForms";
 import { cn } from "@shared/lib/utils";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
+import { draftScheduleFromTemplate } from "@features/scheduling/lib/templateSchedule";
+import { TemplateDraftPanel } from "@features/scheduling/components/TemplateDraftPanel";
 
 type IntakeMode = "quick" | "full";
 
@@ -230,6 +233,12 @@ export default function NewJobPage() {
     setSubmitError(null);
 
     const id = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    // S4: pre-fill the schedule from the job template when scheduling is enabled.
+    // Uses today as the start date — the job starts now by default.
+    const scheduleDraft = schedulingEnabled()
+      ? draftScheduleFromTemplate(template, new Date().toISOString().slice(0, 10))
+      : null;
+
     const job: Job = {
       id,
       code,
@@ -256,6 +265,12 @@ export default function NewJobPage() {
       siteAccess,
       source: source.trim() || null,
       estimatedRevenue: estimatedRevenue.trim() ? parseFloat(estimatedRevenue) : null,
+      // Scheduling fields: pre-filled from the template when the flag is on.
+      ...(scheduleDraft && {
+        phaseTargetDates: scheduleDraft.phaseTargetDates,
+        internalTargetDate: scheduleDraft.internalTargetDate,
+        bufferDays: scheduleDraft.bufferDays,
+      }),
       invoice: {
         number: `INV-${code.slice(3)}`,
         issuedDate: new Date().toISOString().slice(0, 10),
@@ -515,6 +530,12 @@ export default function NewJobPage() {
                     </button>
                   ))}
                 </div>
+                {/* S4: schedule preview — shows what the auto-draft will look like
+                    before the job is saved. Renders nothing when flag is off. */}
+                <TemplateDraftPanel
+                  template={template}
+                  startDate={new Date().toISOString().slice(0, 10)}
+                />
               </Card>
 
               <CollapsibleCard

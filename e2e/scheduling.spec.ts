@@ -92,6 +92,55 @@ test.describe("scheduling slice 2 — phase capacity/load model", () => {
   });
 });
 
+// Scheduling S4 — auto-draft schedule from Job template (issue #92).
+// When NEXT_PUBLIC_SCHEDULING_ENABLED=true, the /jobs/new full-mode form shows a
+// TemplateDraftPanel that previews the template-derived schedule before the user
+// creates the job. Switching templates updates the preview. No Supabase write
+// needed for this check — just the rendered form.
+test.describe("scheduling slice 4 — template draft preview on new-job form", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("full-mode new job form shows a schedule preview for the selected template", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/jobs/new");
+
+    // Switch to Full intake mode (default is Quick which hides the Template card).
+    await page.getByRole("button", { name: /^Full$/i }).click();
+
+    // The TemplateDraftPanel should appear in the Template card.
+    const panel = page.getByTestId("template-draft-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // The panel starts on "full_project" (the default template).
+    await expect(panel).toHaveAttribute("data-template", "full_project");
+
+    // All six phases are rendered; non-skipped phases show dates, not "—".
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(panel.getByTestId(`draft-phase-${phase}`)).toBeVisible();
+    }
+
+    // The "full_project" template has non-zero time for design — must show a date.
+    const designRow = panel.getByTestId("draft-phase-design");
+    await expect(designRow).not.toContainText("—");
+
+    // The internal finish date renders.
+    await expect(panel.getByTestId("draft-internal-target")).toBeVisible();
+
+    // Switch to "Install Only" template — only delivery + install have dates.
+    await page.getByRole("button", { name: /install only/i }).click();
+    await expect(panel).toHaveAttribute("data-template", "install_only");
+
+    // design/cnc/assembly/finishing are skipped (0 days) in install_only.
+    const designRowAfter = panel.getByTestId("draft-phase-design");
+    await expect(designRowAfter).toContainText("—");
+  });
+});
+
 // Scheduling S3 — capacity-aware committed date + risk-tiered buffer +
 // floating-bottleneck detection (issue #91). The seed already puts assembly
 // over capacity (6h logged vs 4h configured), so assembly must be the
