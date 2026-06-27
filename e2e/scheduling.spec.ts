@@ -477,21 +477,29 @@ test.describe("scheduling slice 9 — fever hitlist + one number to watch", () =
     await expect(board).toBeVisible();
   });
 
-  test("seeded DEMO job (green zone) shows zero commitments at risk", async ({ page }) => {
+  test("seeded DEMO job (green zone) is shown On track, not at risk", async ({ page }) => {
     await login(page);
     await page.goto("/");
 
     await page.getByRole("button", { name: /fever board/i }).click();
 
+    // The one-number banner renders (its exact value depends on the whole seed —
+    // see below for why we scope the at-risk assertion to the DEMO job instead).
     const atRisk = page.getByTestId("fever-commitments-at-risk");
     await expect(atRisk).toBeVisible({ timeout: 15_000 });
-
-    // The seeded DEMO job has internal_target_date in the future → buffer not
-    // consumed → green zone → commitmentsAtRisk = 0.
-    await expect(atRisk).toHaveText("0");
 
     // The ranked board includes the demo job.
     const board = page.getByTestId("fever-board");
     await expect(board).toContainText("Job Status Demo");
+
+    // The seeded DEMO job has internal_target_date=2026-12-01 (future) → buffer
+    // not yet consumed → green zone. Assert the DEMO job's OWN zone pill reads
+    // "On track" rather than the shop-wide at-risk counter: the combined seed
+    // intentionally contains S8's BUFFER_BURN_JOB (a red-zone, buffer-burning
+    // fixture), which legitimately raises the global "commitments at risk" count
+    // above 0. Scoping the assertion to this job keeps the test's intent —
+    // "the green-zone DEMO job is not counted at risk" — robust to seed additions.
+    const demoPill = page.getByTestId(`fever-zone-pill-${DEMO_JOB_ID}`);
+    await expect(demoPill).toHaveText(/On track/i);
   });
 });
