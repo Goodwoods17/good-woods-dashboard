@@ -30,8 +30,6 @@ import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
-import { ScheduleTimeline } from "@features/scheduling/components/ScheduleTimeline";
-import { GanttSchedule } from "@features/scheduling/components/GanttSchedule";
 import { BlockersCard } from "./BlockersCard";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
@@ -39,6 +37,8 @@ import { ActivityTab } from "./ActivityTab";
 import { TasksTab } from "./TasksTab";
 import { BudgetVsActualTab } from "@features/job-costing/components/BudgetVsActualTab";
 import { JobFormsTab } from "@features/forms/components/JobFormsTab";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
+import { ScheduleTab } from "@features/scheduling/components/ScheduleTab";
 import { cn } from "@shared/lib/utils";
 
 const PIPELINE_OPTIONS: PipelineStatus[] = [
@@ -51,9 +51,18 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-type TabKey = "overview" | "tasks" | "forms" | "files" | "costs" | "activity" | "budget";
+type TabKey =
+  | "overview"
+  | "tasks"
+  | "forms"
+  | "files"
+  | "costs"
+  | "activity"
+  | "budget"
+  | "schedule";
 
-const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
+// Base tabs — the Schedule tab is injected conditionally below when the flag is on.
+const BASE_TABS: { key: TabKey; label: string; enabled: boolean }[] = [
   { key: "overview", label: "Overview", enabled: true },
   { key: "costs", label: "Costs", enabled: true },
   { key: "budget", label: "Budget vs Actual", enabled: true },
@@ -71,6 +80,11 @@ export function JobDetail({ jobId }: { jobId: string }) {
   const [activeTab, setActiveTab] = useState<TabKey>("overview");
   const [pendingStage, setPendingStage] = useState<MilestoneStage | null>(null);
   const [gatingBlocker, setGatingBlocker] = useState<JobBlocker | null>(null);
+
+  // Inject the Schedule tab after Overview when the scheduling flag is on.
+  const TABS: { key: TabKey; label: string; enabled: boolean }[] = schedulingEnabled()
+    ? [BASE_TABS[0], { key: "schedule", label: "Schedule", enabled: true }, ...BASE_TABS.slice(1)]
+    : BASE_TABS;
 
   const contactName = (id: string) => contacts.find((c) => c.id === id)?.name;
   const stageLabel = (s: MilestoneStage) => MILESTONE_STAGES.find((m) => m.key === s)?.label ?? s;
@@ -223,11 +237,6 @@ export function JobDetail({ jobId }: { jobId: string }) {
             </button>
           </div>
         )}
-        <ScheduleTimeline job={job} />
-        <GanttSchedule
-          job={job}
-          onUpdate={(dates) => updateJob(job.id, { phaseTargetDates: dates })}
-        />
         <BlockersCard jobId={job.id} />
       </header>
 
@@ -257,6 +266,12 @@ export function JobDetail({ jobId }: { jobId: string }) {
 
       <div className="flex-1 px-8 py-6">
         {activeTab === "overview" && <OverviewTab job={job} />}
+        {activeTab === "schedule" && (
+          <ScheduleTab
+            job={job}
+            onUpdate={(dates) => updateJob(job.id, { phaseTargetDates: dates })}
+          />
+        )}
         {activeTab === "costs" && (
           <CostsTab job={job} onChange={(updated) => updateJob(job.id, () => updated)} />
         )}

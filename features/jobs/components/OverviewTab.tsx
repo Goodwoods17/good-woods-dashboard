@@ -10,6 +10,7 @@ import { useContacts } from "@features/contacts/lib/contactsStore";
 import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
 import { DocumentsCard } from "@features/documents/components/DocumentsCard";
 import { TradesCard } from "@features/partners/components/TradesCard";
+import { ScheduleHealthWidget } from "@features/scheduling/components/ScheduleHealthWidget";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 
@@ -46,9 +47,9 @@ export function OverviewTab({ job }: { job: Job }) {
   const populated = parties
     .map(({ key, id }) => ({ key, contact: id ? contacts.find((c) => c.id === id) : null }))
     .filter((p) => p.contact !== null && p.contact !== undefined) as {
-      key: SlotKey;
-      contact: NonNullable<ReturnType<typeof contacts.find>>;
-    }[];
+    key: SlotKey;
+    contact: NonNullable<ReturnType<typeof contacts.find>>;
+  }[];
 
   async function handleDelete() {
     setDeleting(true);
@@ -63,9 +64,7 @@ export function OverviewTab({ job }: { job: Job }) {
 
   // Site & access draft + debounced save. Mirrors the store value so
   // edits feel snappy; commits to Supabase 1.2s after the last change.
-  const [siteAccessDraft, setSiteAccessDraft] = useState<SiteAccess>(
-    job.siteAccess ?? {}
-  );
+  const [siteAccessDraft, setSiteAccessDraft] = useState<SiteAccess>(job.siteAccess ?? {});
   const siteAccessTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     setSiteAccessDraft(job.siteAccess ?? {});
@@ -101,6 +100,9 @@ export function OverviewTab({ job }: { job: Job }) {
 
   return (
     <div className="flex flex-col gap-4 max-w-6xl">
+      {/* Compact schedule-health summary — only renders when SCHEDULING_ENABLED. */}
+      <ScheduleHealthWidget job={job} />
+
       {/* Lead section: the reason a user clicked into this job from the Hitlist. */}
       <section className="bg-surface rounded-xl shadow-resting p-6">
         <h3 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em] mb-4">
@@ -121,7 +123,9 @@ export function OverviewTab({ job }: { job: Job }) {
             />
             <div className="text-caption text-text-tertiary mt-1">
               Empty falls back to the synthetic heuristic with a{" "}
-              <span className="inline-block rounded-sm bg-surface-sunken px-1 text-[9px] uppercase tracking-[0.04em] text-text-tertiary">demo</span>{" "}
+              <span className="inline-block rounded-sm bg-surface-sunken px-1 text-[9px] uppercase tracking-[0.04em] text-text-tertiary">
+                demo
+              </span>{" "}
               tag.
             </div>
           </label>
@@ -146,12 +150,13 @@ export function OverviewTab({ job }: { job: Job }) {
 
       {populated.length > 0 && (
         <section className="bg-surface rounded-xl shadow-resting p-6">
-          <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
-            Parties
-          </h3>
+          <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">Parties</h3>
           <ul className="divide-y divide-[rgba(26,25,22,0.05)]">
             {populated.map(({ key, contact }) => (
-              <li key={key} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+              <li
+                key={key}
+                className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+              >
                 <span className="text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium w-24 shrink-0">
                   {SLOT_LABELS[key]}
                 </span>
@@ -161,11 +166,17 @@ export function OverviewTab({ job }: { job: Job }) {
                 >
                   <span className="inline-flex items-center gap-2 min-w-0">
                     {contact.isAnchor && (
-                      <span aria-hidden className="inline-block h-1.5 w-1.5 rounded-full bg-accent shrink-0" />
+                      <span
+                        aria-hidden
+                        className="inline-block h-1.5 w-1.5 rounded-full bg-accent shrink-0"
+                      />
                     )}
                     <span className="text-sm font-medium truncate">{contact.name}</span>
                   </span>
-                  <ArrowUpRight className="h-3.5 w-3.5 text-text-tertiary shrink-0" strokeWidth={1.75} />
+                  <ArrowUpRight
+                    className="h-3.5 w-3.5 text-text-tertiary shrink-0"
+                    strokeWidth={1.75}
+                  />
                 </Link>
               </li>
             ))}
@@ -182,15 +193,14 @@ export function OverviewTab({ job }: { job: Job }) {
           Site & access
         </h3>
         <p className="text-xs text-text-tertiary mb-4">
-          Install-day intel for the crew. Saves automatically as you edit. Surfaces on the Installer screen.
+          Install-day intel for the crew. Saves automatically as you edit. Surfaces on the Installer
+          screen.
         </p>
         <SiteAccessForm value={siteAccessDraft} onChange={changeSiteAccess} />
       </section>
 
       <section className="bg-surface rounded-xl shadow-resting p-6">
-        <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
-          Job details
-        </h3>
+        <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">Job details</h3>
         <dl className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-3 text-sm">
           <Field label="Template" value={TEMPLATE_LABELS[job.template]} />
           <Field label="Address" value={job.address} />
@@ -199,10 +209,7 @@ export function OverviewTab({ job }: { job: Job }) {
           <Field label="Invoice" value={job.invoice.number} mono />
           {job.source && <Field label="Source" value={job.source} />}
           {typeof job.estimatedRevenue === "number" && job.estimatedRevenue > 0 && (
-            <Field
-              label="Estimated revenue"
-              value={formatCAD(job.estimatedRevenue)}
-            />
+            <Field label="Estimated revenue" value={formatCAD(job.estimatedRevenue)} />
           )}
         </dl>
         {job.notes && (
@@ -217,12 +224,10 @@ export function OverviewTab({ job }: { job: Job }) {
 
       {/* Danger zone — Ghost-Border Rule: no panel framing, ink-pill destructive. */}
       <section className="pt-6">
-        <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-2">
-          Danger zone
-        </h3>
+        <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-2">Danger zone</h3>
         <p className="text-sm text-text-secondary mb-4 leading-relaxed max-w-2xl">
-          Deleting this job removes it from the database and erases its costs,
-          activity log, and invoice. Cannot be undone.
+          Deleting this job removes it from the database and erases its costs, activity log, and
+          invoice. Cannot be undone.
         </p>
         {!confirming ? (
           <button
@@ -265,23 +270,11 @@ export function OverviewTab({ job }: { job: Job }) {
   );
 }
 
-function Field({
-  label,
-  value,
-  mono,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
+function Field({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
   return (
     <div>
-      <dt className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-0.5">
-        {label}
-      </dt>
-      <dd className={cn("text-text-primary", mono && "font-mono text-xs")}>
-        {value}
-      </dd>
+      <dt className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-0.5">{label}</dt>
+      <dd className={cn("text-text-primary", mono && "font-mono text-xs")}>{value}</dd>
     </div>
   );
 }
