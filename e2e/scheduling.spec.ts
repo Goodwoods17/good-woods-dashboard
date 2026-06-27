@@ -404,8 +404,10 @@ test.describe("scheduling slice 8 — buffer-aware hitlist", () => {
     await login(page);
     await page.goto("/");
 
-    // The hitlist section must be visible.
-    const hitlistHeader = page.getByText("This week's hitlist");
+    // The hitlist section must be visible. Target the stable testid rather than
+    // the header text — the rendered copy uses a typographic apostrophe (&rsquo;,
+    // U+2019), which a straight-quote getByText() can never match.
+    const hitlistHeader = page.getByTestId("hitlist-header");
     await expect(hitlistHeader).toBeVisible({ timeout: 15_000 });
 
     // The buffer-burn demo job must have a red fever chip.

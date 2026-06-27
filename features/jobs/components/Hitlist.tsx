@@ -52,7 +52,10 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
           <div className="flex items-baseline gap-3">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-accent" strokeWidth={2} />
-              <h3 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]">
+              <h3
+                data-testid="hitlist-header"
+                className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]"
+              >
                 This week&rsquo;s hitlist
               </h3>
             </div>
