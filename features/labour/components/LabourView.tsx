@@ -11,6 +11,7 @@ import { LabourSetup } from "./LabourSetup";
 import { TaskTemplatesEditor } from "@features/job-costing/components/TaskTemplatesEditor";
 import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
 import { PhaseCapacityPanel } from "@features/scheduling/components/PhaseCapacityPanel";
+import { FreeCapacityPanel } from "@features/scheduling/components/FreeCapacityPanel";
 
 type Tab = "timers" | "analytics" | "capacity" | "timecards" | "templates" | "setup";
 
@@ -80,7 +81,10 @@ export function LabourView() {
         ) : tab === "analytics" ? (
           <BottleneckAnalytics />
         ) : tab === "capacity" ? (
-          <PhaseCapacityPanel />
+          <div className="space-y-8">
+            <PhaseCapacityPanel />
+            <FreeCapacityPanel />
+          </div>
         ) : tab === "timecards" ? (
           <TimeCardsView />
         ) : tab === "templates" ? (
