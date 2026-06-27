@@ -3,15 +3,42 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, Plus, X, Check } from "lucide-react";
 import { Pill } from "@shared/components/ui/Pill";
+import type { PillTone } from "@shared/components/ui/Pill";
 import { formatError } from "@shared/lib/formatError";
 import { hasSupabase } from "@shared/lib/supabase";
 import { MILESTONE_STAGES } from "@shared/lib/types";
-import { toTrackableItems } from "../lib/adapter";
+import { stageLabel, DONE as PIECE_DONE } from "@features/drawings/lib/pipelines";
+import { toTrackableItems, piecesToTrackableItems, pieceToPhase } from "../lib/adapter";
 import { phaseProgress, jobProgress } from "../lib/progress";
 import { materialiseTemplates } from "../lib/templates";
 import { useJobProgress } from "../lib/jobProgressStore";
 import { JOB_ITEM_STATUS_LABELS, jobItemStatusTone } from "../lib/statusPill";
-import type { JobItem, Phase } from "../lib/types";
+import type { Phase, TrackableItemKind } from "../lib/types";
+
+// ─── Unified display row (job_items + Drawings pieces) ────────────────────────
+
+type StatusRow = {
+  id: string;
+  label: string;
+  kind: TrackableItemKind;
+  /** Raw status string — used in data-status attribute for tests and status pill. */
+  rawStatus: string;
+  /** Normalised done flag (true = counts toward progress). */
+  done: boolean;
+  statusLabel: string;
+  tone: PillTone;
+};
+
+/** Pill tone for a Drawings piece status. Production statuses look like in_progress;
+ *  terminal ('done') is green; not_started is muted. */
+function pieceStatusTone(status: string): PillTone {
+  if (status === PIECE_DONE)
+    return { bg: "bg-emerald-50", text: "text-emerald-700", dot: "bg-emerald-500" };
+  if (status === "not_started")
+    return { bg: "bg-surface-muted", text: "text-text-secondary", dot: "bg-text-tertiary" };
+  // Any intermediate production/delivery/install status: blue in-progress tone.
+  return { bg: "bg-accent-soft", text: "text-accent", dot: "bg-accent" };
+}
 
 // ─── Progress bar ─────────────────────────────────────────────────────────────
 
@@ -43,7 +70,7 @@ type AddForm = { label: string };
 function PhaseSection({
   phase,
   phaseLabel,
-  phaseItems,
+  rows,
   pct,
   collapsed,
   onToggle,
@@ -58,12 +85,13 @@ function PhaseSection({
 }: {
   phase: Phase;
   phaseLabel: string;
-  phaseItems: JobItem[];
+  /** Unified display rows: job_items + Drawings pieces merged and sorted. */
+  rows: StatusRow[];
   pct: number;
   collapsed: boolean;
   onToggle: () => void;
   busyId: string | null;
-  onCycle: (id: string) => Promise<void>;
+  onCycle: (id: string, kind: TrackableItemKind) => Promise<void>;
   addForm: AddForm | null;
   onAddStart: () => void;
   onAddLabelChange: (label: string) => void;
@@ -72,7 +100,7 @@ function PhaseSection({
   addingBusy: boolean;
 }) {
   const pctInt = Math.round(pct * 100);
-  const doneCount = phaseItems.filter((i) => i.status === "done").length;
+  const doneCount = rows.filter((r) => r.done).length;
 
   return (
     <div
@@ -93,7 +121,7 @@ function PhaseSection({
         <span className="flex-1 min-w-0">
           <span className="text-sm font-medium text-text-primary">{phaseLabel}</span>
           <span className="ml-2 text-xs text-text-tertiary">
-            {doneCount}/{phaseItems.length}
+            {doneCount}/{rows.length}
           </span>
         </span>
         <span
@@ -112,34 +140,32 @@ function PhaseSection({
       {/* Items + add form (hidden when collapsed) */}
       {!collapsed && (
         <div id={`phase-items-${phase}`} className="px-4 pb-3">
-          {phaseItems.length === 0 && !addForm ? (
+          {rows.length === 0 && !addForm ? (
             <p className="py-2 text-xs text-text-tertiary">No steps yet.</p>
           ) : (
             <ul className="flex flex-col gap-1.5 mt-1">
-              {phaseItems.map((item) => (
-                <li key={item.id}>
+              {rows.map((row) => (
+                <li key={row.id}>
                   <button
                     type="button"
-                    onClick={() => onCycle(item.id)}
-                    disabled={busyId === item.id}
+                    onClick={() => onCycle(row.id, row.kind)}
+                    disabled={busyId === row.id}
                     data-testid="job-status-item"
-                    data-status={item.status}
-                    data-phase={item.phase}
-                    aria-label={`${item.label} — ${JOB_ITEM_STATUS_LABELS[item.status]}, tap to advance`}
+                    data-status={row.rawStatus}
+                    data-kind={row.kind}
+                    data-phase={phase}
+                    aria-label={`${row.label} — ${row.statusLabel}, tap to advance`}
                     className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
                   >
-                    <span className="min-w-0 truncate text-sm text-text-primary">{item.label}</span>
-                    <Pill
-                      tone={jobItemStatusTone(item.status)}
-                      label={JOB_ITEM_STATUS_LABELS[item.status]}
-                    />
+                    <span className="min-w-0 truncate text-sm text-text-primary">{row.label}</span>
+                    <Pill tone={row.tone} label={row.statusLabel} />
                   </button>
                 </li>
               ))}
             </ul>
           )}
 
-          {/* Inline add form */}
+          {/* Inline add form (job_items only — pieces live in their own table). */}
           {addForm ? (
             <div className="mt-2 flex items-center gap-2">
               <input
@@ -202,7 +228,7 @@ function PhaseSection({
  * (idempotent — slice 2). Photos + notes land in slice 3.
  */
 export function JobStatusTab({ jobId }: { jobId: string }) {
-  const { items, loading, cycleItem, addItem, refresh } = useJobProgress(jobId);
+  const { items, pieces, loading, cycleItem, cyclePiece, addItem, refresh } = useJobProgress(jobId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [collapsedPhases, setCollapsedPhases] = useState<Set<Phase>>(new Set());
@@ -222,8 +248,45 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
     }
   }, [jobId, loading, refresh]);
 
-  const trackable = useMemo(() => toTrackableItems(items), [items]);
+  // Unified trackable items for progress math (job_items + pieces).
+  const trackable = useMemo(
+    () => [...toTrackableItems(items), ...piecesToTrackableItems(pieces)],
+    [items, pieces]
+  );
   const jobPct = jobProgress(trackable);
+
+  // Unified display rows per phase for the PhaseSection list.
+  const rowsByPhase = useMemo(() => {
+    const map = new Map<Phase, StatusRow[]>();
+    for (const item of items) {
+      const row: StatusRow = {
+        id: item.id,
+        label: item.label,
+        kind: "job_item",
+        rawStatus: item.status,
+        done: item.status === "done",
+        statusLabel: JOB_ITEM_STATUS_LABELS[item.status],
+        tone: jobItemStatusTone(item.status),
+      };
+      if (!map.has(item.phase)) map.set(item.phase, []);
+      map.get(item.phase)!.push(row);
+    }
+    for (const piece of pieces) {
+      const phase = pieceToPhase(piece.status);
+      const row: StatusRow = {
+        id: piece.id,
+        label: piece.label,
+        kind: "piece",
+        rawStatus: piece.status,
+        done: piece.status === PIECE_DONE,
+        statusLabel: stageLabel(piece.status),
+        tone: pieceStatusTone(piece.status),
+      };
+      if (!map.has(phase)) map.set(phase, []);
+      map.get(phase)!.push(row);
+    }
+    return map;
+  }, [items, pieces]);
 
   const togglePhase = useCallback((phase: Phase) => {
     setCollapsedPhases((prev) => {
@@ -235,18 +298,19 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
   }, []);
 
   const onCycle = useCallback(
-    async (id: string) => {
+    async (id: string, kind: TrackableItemKind) => {
       setBusyId(id);
       setError(null);
       try {
-        await cycleItem(id);
+        if (kind === "job_item") await cycleItem(id);
+        else await cyclePiece(id);
       } catch (e) {
         setError(formatError(e));
       } finally {
         setBusyId(null);
       }
     },
-    [cycleItem]
+    [cycleItem, cyclePiece]
   );
 
   const onAddStart = useCallback((phase: Phase) => {
@@ -280,17 +344,6 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
 
   return (
     <section className="px-4 pb-10" data-testid="job-status-tab">
-      {/* Job-level progress */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-medium text-text-secondary">Overall progress</span>
-          <span className="text-xs text-text-tertiary tabular-nums" data-testid="job-progress-pct">
-            {Math.round(jobPct * 100)}%
-          </span>
-        </div>
-        <ProgressBar pct={jobPct} testId="job-progress-bar" />
-      </div>
-
       {error && (
         <p className="mb-3 text-sm text-red-700" role="alert">
           {error}
@@ -300,31 +353,49 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
       {loading ? (
         <p className="text-sm text-text-tertiary">Loading…</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {MILESTONE_STAGES.map(({ key, label }) => {
-            const phaseItems = items.filter((i) => i.phase === key);
-            const pct = phaseProgress(trackable, key);
-            return (
-              <PhaseSection
-                key={key}
-                phase={key}
-                phaseLabel={label}
-                phaseItems={phaseItems}
-                pct={pct}
-                collapsed={collapsedPhases.has(key)}
-                onToggle={() => togglePhase(key)}
-                busyId={busyId}
-                onCycle={onCycle}
-                addForm={addPhase === key ? { label: addLabel } : null}
-                onAddStart={() => onAddStart(key)}
-                onAddLabelChange={setAddLabel}
-                onAddSubmit={() => onAddSubmit(key)}
-                onAddCancel={onAddCancel}
-                addingBusy={addingBusy}
-              />
-            );
-          })}
-        </div>
+        <>
+          {/* Job-level progress — rendered only once BOTH job_items and pieces
+              have loaded (combinedLoading), so the % reflects the full trackable
+              set in one paint instead of flickering items-only → +pieces. */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-text-secondary">Overall progress</span>
+              <span
+                className="text-xs text-text-tertiary tabular-nums"
+                data-testid="job-progress-pct"
+              >
+                {Math.round(jobPct * 100)}%
+              </span>
+            </div>
+            <ProgressBar pct={jobPct} testId="job-progress-bar" />
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {MILESTONE_STAGES.map(({ key, label }) => {
+              const rows = rowsByPhase.get(key) ?? [];
+              const pct = phaseProgress(trackable, key);
+              return (
+                <PhaseSection
+                  key={key}
+                  phase={key}
+                  phaseLabel={label}
+                  rows={rows}
+                  pct={pct}
+                  collapsed={collapsedPhases.has(key)}
+                  onToggle={() => togglePhase(key)}
+                  busyId={busyId}
+                  onCycle={onCycle}
+                  addForm={addPhase === key ? { label: addLabel } : null}
+                  onAddStart={() => onAddStart(key)}
+                  onAddLabelChange={setAddLabel}
+                  onAddSubmit={() => onAddSubmit(key)}
+                  onAddCancel={onAddCancel}
+                  addingBusy={addingBusy}
+                />
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );

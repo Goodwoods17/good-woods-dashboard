@@ -80,9 +80,8 @@ export type JobItemEvent = {
 
 // ─── Unified read-layer model ─────────────────────────────────────────────────
 
-// Which home table a TrackableItem came from. 'piece' is added in slice 4
-// (Drawings pieces folded into the unified view).
-export type TrackableItemKind = "job_item"; // | "piece" added in slice 4
+// Which home table a TrackableItem came from.
+export type TrackableItemKind = "job_item" | "piece";
 
 // The unified read-layer model for progress math and the live board. Produced
 // by adapter.ts at read time — never stored. Each physical home table (job_items

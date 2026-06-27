@@ -11,10 +11,16 @@ import { ItemTimeline } from "./ItemTimeline";
 export const DEMO_JOB_ID = "job-status-demo";
 
 export function StatusBoardView() {
-  const { items } = useJobProgress(DEMO_JOB_ID);
-  // Provide the timeline's item picker with the current job's items so workers
-  // can attach notes/photos without needing to know item IDs.
-  const pickerItems = useMemo(() => items.map((i) => ({ id: i.id, label: i.label })), [items]);
+  const { items, pieces } = useJobProgress(DEMO_JOB_ID);
+  // Provide the timeline's item picker with both job_items and pieces so workers
+  // can attach notes/photos to any trackable item (slice 4 adds pieces).
+  const pickerItems = useMemo(
+    () => [
+      ...items.map((i) => ({ id: i.id, label: i.label })),
+      ...pieces.map((p) => ({ id: p.id, label: p.label })),
+    ],
+    [items, pieces]
+  );
 
   return (
     <div>
