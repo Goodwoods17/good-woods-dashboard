@@ -17,6 +17,7 @@ export function QuoteSummary({
   canSave,
   submitting,
   onSave,
+  capacityWarning,
 }: {
   totals: EstimateTotals;
   overheadPct: number;
@@ -27,6 +28,12 @@ export function QuoteSummary({
   canSave: boolean;
   submitting: boolean;
   onSave: () => void;
+  /**
+   * S16 — capacity warning from the scheduling engine. Displayed as an
+   * amber advisory below the quoted price when a work-center is near/over
+   * capacity this week. Absent when scheduling is off or all phases have room.
+   */
+  capacityWarning?: string | null;
 }) {
   // Per-room rollups for any active rooms with non-zero contribution.
   const namedRooms = rooms.map((r) => ({
@@ -41,17 +48,10 @@ export function QuoteSummary({
         <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
           Quote summary
         </h3>
-        <SummaryRow
-          label="Materials"
-          value={formatCAD(totals.costs.materials)}
-        />
+        <SummaryRow label="Materials" value={formatCAD(totals.costs.materials)} />
         <SummaryRow label="Labour" value={formatCAD(totals.costs.labour)} />
         <SummaryRow label="Direct cost" value={formatCAD(totals.costs.direct)} />
-        <SummaryRow
-          label={`Overhead (${overheadPct}%)`}
-          value={formatCAD(totals.overhead)}
-          muted
-        />
+        <SummaryRow label={`Overhead (${overheadPct}%)`} value={formatCAD(totals.overhead)} muted />
         <div className="border-t border-border my-3" />
         <SummaryRow label="Total cost (quoted)" value={formatCAD(totals.totalCost)} />
         <SummaryRow
@@ -77,9 +77,7 @@ export function QuoteSummary({
           <div className="mt-3 pt-3 border-t border-border space-y-1">
             {preworkCost > 0 && (
               <div className="flex items-center justify-between text-xs">
-                <span className="text-text-tertiary">
-                  Pre-work (internal — not on quote)
-                </span>
+                <span className="text-text-tertiary">Pre-work (internal — not on quote)</span>
                 <span className="tabular-nums text-text-secondary">
                   {preworkHours.toFixed(2)}h · {formatCAD(preworkCost)}
                 </span>
@@ -98,7 +96,7 @@ export function QuoteSummary({
                   "tabular-nums font-medium",
                   totals.quoted - totals.internalCost >= 0
                     ? "text-status-on-track"
-                    : "text-status-blocked",
+                    : "text-status-blocked"
                 )}
               >
                 {formatCAD(totals.quoted - totals.internalCost)}
@@ -118,15 +116,13 @@ export function QuoteSummary({
 
       {hasRooms && (
         <div className="bg-surface border border-border rounded-lg p-4">
-          <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">
-            By room
-          </h3>
+          <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">By room</h3>
           {namedRooms.map((r) => (
             <div
               key={r.id}
               className={cn(
                 "flex items-center justify-between text-sm py-1",
-                !r.enabled && "opacity-50 line-through",
+                !r.enabled && "opacity-50 line-through"
               )}
             >
               <span className="text-text-secondary">{r.name}</span>
@@ -138,13 +134,22 @@ export function QuoteSummary({
         </div>
       )}
 
+      {capacityWarning && (
+        <div
+          data-testid="estimator-capacity-warning"
+          className="rounded-2xl border border-status-at-risk-soft bg-status-at-risk-soft/40 p-3"
+        >
+          <p className="text-xs text-status-at-risk leading-relaxed">{capacityWarning}</p>
+        </div>
+      )}
+
       <button
         onClick={onSave}
         disabled={!canSave || submitting}
         className={cn(
           "w-full inline-flex items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-medium transition-colors duration-fast",
           "bg-ink-pill text-white hover:bg-accent-active",
-          "disabled:bg-text-disabled disabled:cursor-not-allowed",
+          "disabled:bg-text-disabled disabled:cursor-not-allowed"
         )}
       >
         {submitting ? "Creating job…" : "Save as Job"}
@@ -152,9 +157,9 @@ export function QuoteSummary({
       </button>
 
       <p className="text-caption text-text-tertiary leading-relaxed px-1">
-        Saving creates a job in pipeline stage Sold with these costs and the
-        quoted price as revenue. Pre-work is stored as a separate cost bucket
-        so margin reports can show true profit.
+        Saving creates a job in pipeline stage Sold with these costs and the quoted price as
+        revenue. Pre-work is stored as a separate cost bucket so margin reports can show true
+        profit.
       </p>
     </aside>
   );
