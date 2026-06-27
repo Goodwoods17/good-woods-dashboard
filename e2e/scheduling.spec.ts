@@ -37,6 +37,9 @@ test.describe("scheduling slice 1 — read-only timeline tracer", () => {
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
+    // S7: the timeline now lives inside the Schedule tab — click it first.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
     const timeline = page.getByTestId("schedule-timeline");
     await expect(timeline).toBeVisible({ timeout: 15_000 });
 
@@ -158,6 +161,9 @@ test.describe("scheduling slice 6 — buffer burn + fever chart + recovery flag"
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
+    // S7: the timeline + fever section now live inside the Schedule tab.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
     const timeline = page.getByTestId("schedule-timeline");
     await expect(timeline).toBeVisible({ timeout: 15_000 });
 
@@ -214,6 +220,9 @@ test.describe("scheduling slice 3 — capacity-aware date + risk buffer + bottle
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
+    // S7: timeline lives inside the Schedule tab.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
     const timeline = page.getByTestId("schedule-timeline");
     await expect(timeline).toBeVisible({ timeout: 15_000 });
 
@@ -243,6 +252,9 @@ test.describe("scheduling slice 5 — editable Gantt (tracer smoke)", () => {
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
+    // S7: the Gantt now lives inside the Schedule tab — navigate there first.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
     // The Gantt section renders (feature flag on in CI).
     const gantt = page.getByTestId("gantt-schedule");
     await expect(gantt).toBeVisible({ timeout: 15_000 });
@@ -260,11 +272,12 @@ test.describe("scheduling slice 5 — editable Gantt (tracer smoke)", () => {
     await expect(page.getByTestId("gantt-undo")).not.toBeVisible();
   });
 
-  test("pinning Install triggers pull-plan backward and shows preview table", async ({
-    page,
-  }) => {
+  test("pinning Install triggers pull-plan backward and shows preview table", async ({ page }) => {
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // S7: navigate to the Schedule tab first.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
 
     const gantt = page.getByTestId("gantt-schedule");
     await expect(gantt).toBeVisible({ timeout: 15_000 });
@@ -286,5 +299,89 @@ test.describe("scheduling slice 5 — editable Gantt (tracer smoke)", () => {
     // Clicking Undo clears the preview.
     await gantt.getByTestId("gantt-undo").click();
     await expect(previewTable).not.toBeVisible();
+  });
+});
+
+// Scheduling S7 — Job-detail Schedule tab + overview widget (issue #95).
+// The Schedule tab consolidates the full schedule hub (timeline, Gantt, committed-vs-target,
+// share + Google-push entry points) and the Overview tab gains a compact schedule-health
+// widget. Both gate on NEXT_PUBLIC_SCHEDULING_ENABLED.
+test.describe("scheduling slice 7 — Schedule tab + overview widget", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("job detail shows a Schedule tab in the nav bar", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // The Schedule tab is visible in the nav when the flag is on.
+    const scheduleTab = page.getByRole("button", { name: /^Schedule$/i });
+    await expect(scheduleTab).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("clicking Schedule tab shows the schedule-tab panel with overview, timeline, and Gantt", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    // Schedule tab content is visible.
+    const tab = page.getByTestId("schedule-tab");
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+
+    // Committed-vs-target status badge renders.
+    await expect(tab.getByTestId("schedule-tab-status")).toBeVisible();
+
+    // The phase timeline renders inside the tab.
+    await expect(page.getByTestId("schedule-timeline")).toBeVisible();
+
+    // The Gantt renders inside the tab.
+    await expect(page.getByTestId("gantt-schedule")).toBeVisible();
+
+    // Share entry points render.
+    await expect(tab.getByTestId("schedule-share-ics")).toBeVisible();
+    await expect(tab.getByTestId("schedule-share-section")).toBeVisible();
+  });
+
+  test("Overview tab shows the compact schedule-health widget", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Overview is the default tab — the widget should already be visible.
+    const widget = page.getByTestId("schedule-health-widget");
+    await expect(widget).toBeVisible({ timeout: 15_000 });
+
+    // The schedule status pill is present.
+    await expect(widget.getByTestId("schedule-health-status")).toBeVisible();
+
+    // The committed install date is shown (seeded job has install_date 2026-12-15).
+    await expect(widget).toContainText(/Install/i);
+
+    // Buffer days render (seeded with 10d).
+    await expect(widget).toContainText(/10d/);
+
+    // The internal target renders (seeded with 2026-12-01).
+    await expect(widget).toContainText(/Internal target/i);
+  });
+
+  test("seeded DEMO job has behind status on the Schedule tab (cnc target is in the past)", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const tab = page.getByTestId("schedule-tab");
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+
+    // The seeded CNC target is 2020-02-01 (past) and current milestone is cnc → Behind.
+    const statusBadge = tab.getByTestId("schedule-tab-status");
+    await expect(statusBadge).toHaveAttribute("data-status", "behind");
+    await expect(statusBadge).toHaveText(/Behind/i);
   });
 });
