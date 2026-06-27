@@ -3,12 +3,20 @@
  * snake_case and mirror supabase/migrations/20260620000000_partners.sql.
  * Mirrors the pattern in features/contacts/lib/contactsRowMap.ts.
  */
-import type { JobTrade, JobTradeStatus, PartnerPerson, Subtrade, Trade } from "./types";
+import type {
+  JobTrade,
+  JobTradeStatus,
+  PartnerPerson,
+  Subtrade,
+  SubtradeReliability,
+  Trade,
+} from "./types";
 
 export const TRADES_TABLE = "trades";
 export const SUBTRADES_TABLE = "subtrades";
 export const JOB_TRADES_TABLE = "job_trades";
 export const PARTNER_PEOPLE_TABLE = "partner_people";
+export const SUBTRADE_RELIABILITY_TABLE = "subtrade_reliability";
 
 // Postgres `numeric` can arrive as a string; normalize to number | null.
 function toNumOrNull(v: number | string | null | undefined): number | null {
@@ -135,6 +143,12 @@ export type JobTradeRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  // S11 scheduling date fields (nullable; absent on pre-migration rows)
+  requested_date?: string | null;
+  sub_committed_date?: string | null;
+  confirmed_at?: string | null;
+  confirmation_token?: string | null;
+  token_expires_at?: string | null;
 };
 
 export function rowToJobTrade(r: JobTradeRow): JobTrade {
@@ -149,6 +163,11 @@ export function rowToJobTrade(r: JobTradeRow): JobTrade {
     notes: r.notes,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
+    requestedDate: r.requested_date ?? null,
+    subCommittedDate: r.sub_committed_date ?? null,
+    confirmedAt: r.confirmed_at ?? null,
+    confirmationToken: r.confirmation_token ?? null,
+    tokenExpiresAt: r.token_expires_at ?? null,
   };
 }
 
@@ -164,6 +183,49 @@ export function jobTradeToRow(j: JobTrade): JobTradeRow {
     notes: j.notes ?? null,
     created_at: j.createdAt,
     updated_at: j.updatedAt,
+    requested_date: j.requestedDate ?? null,
+    sub_committed_date: j.subCommittedDate ?? null,
+    confirmed_at: j.confirmedAt ?? null,
+    confirmation_token: j.confirmationToken ?? null,
+    token_expires_at: j.tokenExpiresAt ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// SubtradeReliability (S11)
+// ---------------------------------------------------------------------------
+
+export type SubtradeReliabilityRow = {
+  id: string;
+  subtrade_id: string;
+  job_trade_id: string;
+  committed_date: string;
+  actual_done_date: string | null;
+  missed: boolean;
+  recorded_at: string;
+};
+
+export function rowToSubtradeReliability(r: SubtradeReliabilityRow): SubtradeReliability {
+  return {
+    id: r.id,
+    subtradeId: r.subtrade_id,
+    jobTradeId: r.job_trade_id,
+    committedDate: r.committed_date,
+    actualDoneDate: r.actual_done_date,
+    missed: r.missed,
+    recordedAt: r.recorded_at,
+  };
+}
+
+export function subtradeReliabilityToRow(s: SubtradeReliability): SubtradeReliabilityRow {
+  return {
+    id: s.id,
+    subtrade_id: s.subtradeId,
+    job_trade_id: s.jobTradeId,
+    committed_date: s.committedDate,
+    actual_done_date: s.actualDoneDate ?? null,
+    missed: s.missed,
+    recorded_at: s.recordedAt,
   };
 }
 

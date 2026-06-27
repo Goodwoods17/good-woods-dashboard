@@ -9,6 +9,8 @@ import { useSubtrades } from "../lib/subtradesStore";
 import { usePartnerPeople } from "../lib/partnerPeopleStore";
 import { useJobTrades } from "../lib/jobTradesStore";
 import { TradePill } from "./TradePill";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
+import { TradeDatePanel } from "./TradeDatePanel";
 
 const STATUSES: { value: JobTradeStatus; label: string }[] = [
   { value: "needed", label: "Needed" },
@@ -46,6 +48,11 @@ export function TradesCard({ jobId }: { jobId: string }) {
       notes: null,
       createdAt: now,
       updatedAt: now,
+      requestedDate: null,
+      subCommittedDate: null,
+      confirmedAt: null,
+      confirmationToken: null,
+      tokenExpiresAt: null,
     });
   }
 
@@ -170,9 +177,7 @@ function TradeLineRow({
         <Labelled label="Company">
           <Select
             value={line.subtradeId ?? ""}
-            onChange={(v) =>
-              onUpdate({ subtradeId: v || null, personId: null })
-            }
+            onChange={(v) => onUpdate({ subtradeId: v || null, personId: null })}
             ariaLabel="Subtrade"
             placeholderTone={!line.subtradeId}
           >
@@ -215,6 +220,9 @@ function TradeLineRow({
           />
         </Labelled>
       </div>
+
+      {/* S11: date wiring, behind scheduling flag */}
+      {schedulingEnabled() && line.subtradeId && <TradeDatePanel line={line} onUpdate={onUpdate} />}
     </li>
   );
 }
