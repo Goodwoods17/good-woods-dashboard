@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { JobsList } from "@features/jobs/components/JobsList";
@@ -9,6 +9,8 @@ import { Hitlist } from "@features/jobs/components/Hitlist";
 import { Schedule } from "@features/jobs/components/Schedule";
 import { ViewToggle, type JobsView } from "@features/jobs/components/ViewToggle";
 import { BriefingCard } from "@features/briefing/components/BriefingCard";
+import { FeverHitlist } from "@features/scheduling/components/FeverHitlist";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { computeMargin } from "@shared/lib/types";
@@ -16,10 +18,15 @@ import { formatCAD, formatPct } from "@shared/lib/format";
 
 const VIEW_KEY = "gw_jobs_view_v1";
 const DEFAULT_VIEW: JobsView = "hitlist";
-const ALL_VIEWS: JobsView[] = ["hitlist", "schedule", "list", "kanban"];
+const BASE_VIEWS: JobsView[] = ["hitlist", "schedule", "list", "kanban"];
 
-function isView(v: string | null): v is JobsView {
-  return v !== null && (ALL_VIEWS as string[]).includes(v);
+function buildAvailableViews(): JobsView[] {
+  if (schedulingEnabled()) return [...BASE_VIEWS, "fever"];
+  return BASE_VIEWS;
+}
+
+function isView(v: string | null, available: JobsView[]): v is JobsView {
+  return v !== null && (available as string[]).includes(v);
 }
 
 export default function Home() {
@@ -27,11 +34,13 @@ export default function Home() {
   const [view, setView] = useState<JobsView>(DEFAULT_VIEW);
   const [hydrated, setHydrated] = useState(false);
 
+  const availableViews = useMemo(() => buildAvailableViews(), []);
+
   useEffect(() => {
     const saved = window.localStorage.getItem(VIEW_KEY);
-    if (isView(saved)) setView(saved);
+    if (isView(saved, availableViews)) setView(saved);
     setHydrated(true);
-  }, []);
+  }, [availableViews]);
 
   useEffect(() => {
     if (hydrated) window.localStorage.setItem(VIEW_KEY, view);
@@ -63,7 +72,7 @@ export default function Home() {
         }
         actions={
           <>
-            <ViewToggle view={view} onChange={setView} />
+            <ViewToggle view={view} onChange={setView} views={availableViews} />
             <Link
               href="/jobs/new"
               className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-1.5 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
@@ -80,6 +89,8 @@ export default function Home() {
       <div className="px-8 pb-6 pt-1">
         {loading ? (
           <ListSkeleton />
+        ) : view === "fever" ? (
+          <FeverHitlist jobs={activeJobs} />
         ) : view === "hitlist" ? (
           <Hitlist jobs={activeJobs} />
         ) : view === "schedule" ? (
