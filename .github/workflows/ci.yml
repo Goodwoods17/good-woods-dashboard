@@ -83,7 +83,10 @@ jobs:
       - name: Install Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned (not `latest`) — `latest` resolves via the unauthenticated
+          # GitHub releases API every run and gets rate-limited, intermittently
+          # failing the e2e job at install time. A fixed version skips that lookup.
+          version: 2.108.0
 
       - name: Start local Supabase (replays all migrations from zero)
         run: supabase start
