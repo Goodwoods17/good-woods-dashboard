@@ -5,6 +5,34 @@ import type { LineItem, CabinetSummary, Room } from "./types";
 import type { EstimateTotals } from "./totals";
 import type { EstimateTemplate } from "./templates";
 import { totalCabinetCount, totalCabinetLinearFt } from "./types";
+import {
+  seedPhaseDurationsFromHistory,
+  type PhaseCapacityRow,
+  type CapacitySession,
+} from "@features/scheduling/lib/capacity";
+import {
+  phaseVarianceNudgeDays,
+  computeCapacityAwareSchedule,
+  computeRiskTieredBuffer,
+  capacityAwareCommittedDate,
+} from "@features/scheduling/lib/committedDate";
+
+/**
+ * Optional S16 capacity input. When provided (and SCHEDULING_ENABLED is on),
+ * the committed install date is derived from the shop's real capacity + load
+ * instead of the flat '+45 days' fallback.
+ */
+export type SchedulingInput = {
+  /** Phase capacity rows for the current week (from buildCapacityModel). */
+  phaseRows: PhaseCapacityRow[];
+  /** Completed labour sessions used to seed phase durations from history. */
+  sessions: CapacitySession[];
+  /**
+   * Earliest bookable start date (ISO YYYY-MM-DD) from findEarliestBookableStart.
+   * Falls back to today when the capacity finder finds nothing.
+   */
+  startDate: string;
+};
 
 type Input = {
   client: string;
@@ -16,6 +44,8 @@ type Input = {
   cabinetSummary: CabinetSummary;
   rooms?: Room[];
   template?: EstimateTemplate;
+  /** When provided, computes a capacity-aware committed install date (S16). */
+  scheduling?: SchedulingInput;
 };
 
 export function createJobFromEstimate(input: Input): Job {
@@ -82,8 +112,26 @@ export function createJobFromEstimate(input: Input): Job {
     });
   }
 
-  const installDate = new Date();
-  installDate.setDate(installDate.getDate() + 45);
+  // S16: capacity-aware committed install date when scheduling context is
+  // provided; falls back to the original flat '+45 days' heuristic so the
+  // estimator stays functional when the flag is off or data is unavailable.
+  let installDateStr: string;
+  if (input.scheduling && input.scheduling.phaseRows.length > 0) {
+    const { phaseRows, sessions, startDate } = input.scheduling;
+    const durations = seedPhaseDurationsFromHistory(sessions);
+    const schedule = computeCapacityAwareSchedule(startDate, durations, phaseRows);
+    const varianceNudge = phaseVarianceNudgeDays(sessions);
+    const buffer = computeRiskTieredBuffer({
+      totalInternalDays: schedule.totalWorkDays,
+      subDependencyCount: 0,
+      varianceNudgeDays: varianceNudge,
+    });
+    installDateStr = capacityAwareCommittedDate(schedule.internalTargetDate, buffer.totalDays);
+  } else {
+    const fallback = new Date();
+    fallback.setDate(fallback.getDate() + 45);
+    installDateStr = fallback.toISOString().slice(0, 10);
+  }
 
   const issued = new Date();
   const due = new Date();
@@ -91,16 +139,13 @@ export function createJobFromEstimate(input: Input): Job {
 
   const cabCount = totalCabinetCount(cabinetSummary);
   const cabLf = totalCabinetLinearFt(cabinetSummary);
-  const cabNote =
-    cabCount > 0 ? ` · ${cabCount} cabinets, ${cabLf.toFixed(2)} lf` : "";
+  const cabNote = cabCount > 0 ? ` · ${cabCount} cabinets, ${cabLf.toFixed(2)} lf` : "";
 
   // Filter out disabled rooms' lines + excluded-from-quote (pre-work)
   // lines so the invoice only carries billable rows. Build invoice lines
   // FIRST, then append overhead + contingency at the bottom so
   // Σ(qty × unitPrice) reconciles to job.revenue.
-  const disabledRoomIds = new Set(
-    (rooms ?? []).filter((r) => !r.enabled).map((r) => r.id),
-  );
+  const disabledRoomIds = new Set((rooms ?? []).filter((r) => !r.enabled).map((r) => r.id));
 
   type IndexedLine = { line: LineItem; sub: EstimateTotals["lineSubtotals"][number] };
   const billable: IndexedLine[] = [];
@@ -121,10 +166,7 @@ export function createJobFromEstimate(input: Input): Job {
     const safeQty = line.qty > 0 ? line.qty : 1;
     const lineUnitPrice = sub.price / safeQty;
     return {
-      description: [
-        line.item || line.description || "Line item",
-        maybeRoomLabel(line, rooms),
-      ]
+      description: [line.item || line.description || "Line item", maybeRoomLabel(line, rooms)]
         .filter(Boolean)
         .join(" — "),
       qty: safeQty,
@@ -171,7 +213,7 @@ export function createJobFromEstimate(input: Input): Job {
     pipelineStatus: "sold",
     healthStatus: "on_track",
     currentMilestone: "design",
-    installDate: installDate.toISOString().slice(0, 10),
+    installDate: installDateStr,
     revenue: round2(totals.quoted),
     costs,
     notes:
@@ -180,10 +222,7 @@ export function createJobFromEstimate(input: Input): Job {
       roomsNote +
       tplNote,
     activity: [
-      newActivity(
-        "note",
-        `Job created from estimator at price ${formatCAD(totals.quoted)}.`,
-      ),
+      newActivity("note", `Job created from estimator at price ${formatCAD(totals.quoted)}.`),
     ],
     invoice: {
       number: `INV-${code.slice(3)}`,

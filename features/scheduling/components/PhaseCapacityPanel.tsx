@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useLabour } from "@features/labour/lib/labourStore";
-import { hasSupabase, getSupabase } from "@shared/lib/supabase";
 import { cn } from "@shared/lib/utils";
-import type { MilestoneStage } from "@shared/lib/types";
 import {
   buildCapacityModel,
   seedPhaseDurationsFromHistory,
   phaseTargetDatesFromDurations,
-  DEFAULT_WEEKLY_CAPACITY_HOURS,
   DEFAULT_PHASE_DURATION_DAYS,
   type CapacitySession,
-  type PhaseHours,
   type UtilizationStatus,
 } from "@features/scheduling/lib/capacity";
 import {
@@ -22,6 +18,7 @@ import {
   capacityAwareCommittedDate,
   phaseVarianceNudgeDays,
 } from "@features/scheduling/lib/committedDate";
+import { usePhaseCapacity } from "@features/scheduling/lib/usePhaseCapacity";
 
 const WINDOW_DAYS = 7;
 
@@ -45,32 +42,6 @@ const STATUS_STYLES: Record<UtilizationStatus, { bar: string; pill: string; labe
 
 function fmtHours(h: number): string {
   return `${Math.round(h * 10) / 10}h`;
-}
-
-/** Load per-phase weekly capacity from the table; fall back to defaults. */
-function usePhaseCapacity(): PhaseHours {
-  const [capacity, setCapacity] = useState<PhaseHours>(DEFAULT_WEEKLY_CAPACITY_HOURS);
-  useEffect(() => {
-    if (!hasSupabase()) return;
-    let cancelled = false;
-    getSupabase()
-      .from("scheduling_phase_capacity")
-      .select("phase, weekly_capacity_hours")
-      .then(({ data, error }) => {
-        if (cancelled || error || !data || data.length === 0) return;
-        const next: PhaseHours = { ...DEFAULT_WEEKLY_CAPACITY_HOURS };
-        for (const row of data as { phase: string; weekly_capacity_hours: number | string }[]) {
-          if (row.phase in next) {
-            next[row.phase as MilestoneStage] = Number(row.weekly_capacity_hours);
-          }
-        }
-        setCapacity(next);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return capacity;
 }
 
 export function PhaseCapacityPanel() {
@@ -137,8 +108,8 @@ export function PhaseCapacityPanel() {
               Floating bottleneck: {bottleneck.label}
             </span>{" "}
             <span className="text-text-secondary">
-              is the most-loaded work-center this week (
-              {Math.round(bottleneck.ratio * 100)}% of capacity).
+              is the most-loaded work-center this week ({Math.round(bottleneck.ratio * 100)}% of
+              capacity).
             </span>
           </div>
         </div>
@@ -246,13 +217,11 @@ export function PhaseCapacityPanel() {
             <dt className="text-text-secondary">
               Risk buffer
               <span className="ml-1 text-xs text-text-tertiary">
-                {riskBuffer.baseDays}d base + {riskBuffer.subDays}d subs +{" "}
-                {riskBuffer.varianceDays}d variance
+                {riskBuffer.baseDays}d base + {riskBuffer.subDays}d subs + {riskBuffer.varianceDays}
+                d variance
               </span>
             </dt>
-            <dd className="font-mono tabular-nums text-text-primary">
-              +{riskBuffer.totalDays}d
-            </dd>
+            <dd className="font-mono tabular-nums text-text-primary">+{riskBuffer.totalDays}d</dd>
           </div>
           <div className="flex items-baseline justify-between gap-3 py-2">
             <dt className="font-medium text-text-primary">Recommended committed date</dt>

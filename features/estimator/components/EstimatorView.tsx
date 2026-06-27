@@ -36,6 +36,24 @@ import { useCatalog, type CatalogCabinetType } from "@features/catalog/lib/catal
 import { useLabour } from "@features/labour/lib/labourStore";
 import { buildCostCodeRegistry } from "@features/job-costing/lib/costCodes";
 import { createJobFromEstimate } from "@features/estimator/lib/createJobFromEstimate";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
+import { usePhaseCapacity } from "@features/scheduling/lib/usePhaseCapacity";
+import {
+  buildCapacityModel,
+  seedPhaseDurationsFromHistory,
+  type CapacitySession,
+} from "@features/scheduling/lib/capacity";
+import {
+  computeCapacityAwareSchedule,
+  computeRiskTieredBuffer,
+  capacityAwareCommittedDate,
+  phaseVarianceNudgeDays,
+} from "@features/scheduling/lib/committedDate";
+import {
+  buildWeeklyWindows,
+  findEarliestBookableStart,
+} from "@features/scheduling/lib/freeCapacity";
+import { capacityQuoteWarning } from "@features/estimator/lib/estimatorScheduling";
 import {
   deriveCostCodeBudget,
   reconcileBudgetVsQuote,
@@ -108,8 +126,73 @@ export function EstimatorView() {
   const { createJob, jobs } = useJobs();
   const { settings } = useWorkspaceSettings();
   const { cabinetTypes, itemsWithOffers } = useCatalog();
-  const { operations } = useLabour();
+  const { operations, sessions } = useLabour();
   const codeRegistry = useMemo(() => buildCostCodeRegistry(operations), [operations]);
+
+  // ── S16: capacity-aware quote date (only when SCHEDULING_ENABLED) ────
+  // Hooks must always be called (React rules), so usePhaseCapacity is called
+  // unconditionally; everything that computes from it is gated via useMemo.
+  const capacityByPhase = usePhaseCapacity();
+  const [nowMs] = useState(() => Date.now());
+
+  // ISO strings anchored at mount so the model stays stable during editing.
+  const weekWindowStart = useMemo(
+    () => new Date(nowMs - 7 * 24 * 3_600_000).toISOString(),
+    [nowMs]
+  );
+  const weekWindowEnd = useMemo(() => new Date(nowMs).toISOString(), [nowMs]);
+  const todayStr = useMemo(() => new Date(nowMs).toISOString().slice(0, 10), [nowMs]);
+
+  // LabourSession is structurally compatible with CapacitySession (superset of fields).
+  const capacitySessions = sessions as unknown as CapacitySession[];
+
+  // Current-week phase capacity rows — the same model shown in the Capacity tab.
+  const phaseRows = useMemo(
+    () =>
+      schedulingEnabled()
+        ? buildCapacityModel(capacitySessions, capacityByPhase, weekWindowStart, weekWindowEnd)
+        : [],
+    [capacitySessions, capacityByPhase, weekWindowStart, weekWindowEnd]
+  );
+
+  // Earliest bookable start (S15): the first week where all phases have ≥ 8h free.
+  // Falls back to today when no slot is found (future scheduling remains valid).
+  const earliestStart = useMemo(() => {
+    if (!schedulingEnabled()) return todayStr;
+    const windows = buildWeeklyWindows(capacitySessions, capacityByPhase, todayStr);
+    return findEarliestBookableStart(windows)?.weekStart ?? todayStr;
+  }, [capacitySessions, capacityByPhase, todayStr]);
+
+  // Capacity-aware preview install date for the QuoteSummary warning. Computed
+  // using the same formula as createJobFromEstimate will use at save time.
+  const previewInstallDate = useMemo(() => {
+    if (!schedulingEnabled() || phaseRows.length === 0) return null;
+    const durations = seedPhaseDurationsFromHistory(capacitySessions);
+    const schedule = computeCapacityAwareSchedule(earliestStart, durations, phaseRows);
+    const varianceNudge = phaseVarianceNudgeDays(capacitySessions);
+    const buffer = computeRiskTieredBuffer({
+      totalInternalDays: schedule.totalWorkDays,
+      subDependencyCount: 0,
+      varianceNudgeDays: varianceNudge,
+    });
+    return capacityAwareCommittedDate(schedule.internalTargetDate, buffer.totalDays);
+  }, [phaseRows, capacitySessions, earliestStart]);
+
+  // One-line warning naming the bottleneck work-center + the realistic date.
+  // null when scheduling is off or all phases are under capacity.
+  const capacityWarning = useMemo(
+    () => (previewInstallDate ? capacityQuoteWarning(phaseRows, previewInstallDate) : null),
+    [phaseRows, previewInstallDate]
+  );
+
+  // Scheduling input for createJobFromEstimate (undefined when flag is off).
+  const schedulingInput = useMemo(
+    () =>
+      schedulingEnabled() && phaseRows.length > 0
+        ? { phaseRows, sessions: capacitySessions, startDate: earliestStart }
+        : undefined,
+    [phaseRows, capacitySessions, earliestStart]
+  );
 
   // Flattened catalog for Mozaik BOM matching (name → surfaced price + supplier).
   const catalogLite = useMemo<CatalogLite[]>(
@@ -470,9 +553,7 @@ export function EstimatorView() {
     if (draft.roomNames.length > 0) {
       setRooms(draft.roomNames.map((n) => newRoom(n)));
     }
-    const matchByKey = new Map(
-      matches.map((m) => [m.line.name + "__" + m.line.unit, m])
-    );
+    const matchByKey = new Map(matches.map((m) => [m.line.name + "__" + m.line.unit, m]));
     const bomLines: LineItem[] = [];
     for (const b of draft.bom) {
       const unit = mapMozaikUnit(b.unit);
@@ -515,6 +596,7 @@ export function EstimatorView() {
       cabinetSummary,
       rooms,
       template: activeTemplate,
+      scheduling: schedulingInput,
     });
     await createJob(job);
     // Freeze the labour cost-code budget (ADR 0012 Slice 1) as the job's
@@ -631,9 +713,7 @@ export function EstimatorView() {
             reconciliation={budgetReconciliation}
             qtyByCode={budgetQtyByCode}
             minutesByCode={budgetMinutesByCode}
-            onQty={(code, qty) =>
-              setBudgetQtyByCode((prev) => ({ ...prev, [code]: qty }))
-            }
+            onQty={(code, qty) => setBudgetQtyByCode((prev) => ({ ...prev, [code]: qty }))}
             onMinutes={(code, minutes) =>
               setBudgetMinutesByCode((prev) => ({ ...prev, [code]: minutes }))
             }
@@ -652,6 +732,7 @@ export function EstimatorView() {
           canSave={Boolean(client.trim() && project.trim())}
           submitting={submitting}
           onSave={saveAsJob}
+          capacityWarning={capacityWarning}
         />
       </div>
 

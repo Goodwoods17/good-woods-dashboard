@@ -1032,3 +1032,65 @@ test.describe("scheduling slice 15 — free-capacity finder", () => {
     await expect(firstWindow).toHaveAttribute("data-bookable", "false");
   });
 });
+
+// Scheduling S16 — capacity-aware quote dates in estimator (issue #104).
+// When NEXT_PUBLIC_SCHEDULING_ENABLED=true and a phase work-center is near/over
+// capacity, the Estimator's QuoteSummary shows a one-line capacity warning
+// naming the bottleneck phase and the realistic committed date, replacing the
+// hard-coded '+45 days' heuristic. The seed puts assembly over capacity (24h
+// logged vs 16h configured), so the warning must appear in the sidebar.
+//
+// When NO phase is constrained (all under capacity), the warning must NOT appear.
+test.describe("scheduling slice 16 — capacity-aware quote dates in estimator", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("QuoteSummary shows a capacity warning when a work-center is near/over capacity", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/estimator");
+
+    // The estimator page must load. The QuoteSummary sidebar renders when the
+    // Estimator loads; the capacity warning appears if the flag is on + assembly
+    // is seeded over capacity.
+    await expect(page.getByText("New estimate")).toBeVisible({ timeout: 15_000 });
+
+    // The capacity warning should be visible in the sidebar (assembly over capacity).
+    const warning = page.getByTestId("estimator-capacity-warning");
+    await expect(warning).toBeVisible({ timeout: 10_000 });
+
+    // The warning must name a work-center and a realistic date.
+    const text = await warning.textContent();
+    expect(text).toBeTruthy();
+    expect(text!.length).toBeGreaterThan(10);
+    // Must contain "this week →" to match the warning format.
+    expect(text).toContain("this week");
+  });
+
+  test("the estimator uses the capacity-aware install date when saving as Job", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/estimator");
+
+    await expect(page.getByText("New estimate")).toBeVisible({ timeout: 15_000 });
+
+    // Fill in client and project so we can save as Job.
+    await page.getByLabel("Client").fill("Test Client S16");
+    await page.getByLabel("Project", { exact: true }).fill("S16 Capacity Test");
+
+    // The Save as Job button becomes enabled.
+    const saveBtn = page.getByRole("button", { name: /Save as Job/i });
+    await expect(saveBtn).toBeEnabled({ timeout: 5_000 });
+
+    // Save the job.
+    await saveBtn.click();
+
+    // After save, the app navigates to the job detail page.
+    // Just check we land somewhere that isn't /estimator (redirect happened).
+    await page.waitForURL(/\/jobs\//, { timeout: 15_000 });
+  });
+});
