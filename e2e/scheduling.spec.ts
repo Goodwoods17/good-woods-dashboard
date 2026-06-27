@@ -852,6 +852,108 @@ test.describe("scheduling slice 13 — commitment ledger + two-level ownership +
   });
 });
 
+// Scheduling S14 — re-commit flow + revision history + reason codes +
+// change-order handling (issue #102). The Schedule tab gains a RecommitPanel:
+//   – current committed install + fever zone pill,
+//   – a recovery-first advisory when re-committing outside the RED window,
+//   – a reason-code + new-date + fresh-buffer form that drafts a client email,
+//   – a change-order mode (added scope → impact; never dings reliability),
+//   – a versioned revision history list.
+// The seed adds one prior re-commit on the DEMO_JOB (sub-trade delay, dings
+// reliability). The DEMO job's internal target (2026-12-01) is in the future →
+// buffer not consumed → GREEN zone, so the recovery-first note must show.
+test.describe("scheduling slice 14 — re-commit flow + revision history + change orders", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Schedule tab shows the re-commit panel with current committed date + zone", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("recommit-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The fever zone pill renders. DEMO job's internal target is in the future →
+    // buffer not consumed → green zone.
+    const zonePill = panel.getByTestId("recommit-zone-pill");
+    await expect(zonePill).toBeVisible();
+    await expect(zonePill).toHaveAttribute("data-zone", "green");
+
+    // Recovery-first: re-commit (default kind) outside the RED window shows the
+    // advisory note (recover within buffer first).
+    await expect(panel.getByTestId("recommit-recovery-note")).toBeVisible();
+  });
+
+  test("seeded revision history renders the prior re-commit as a versioned entry", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("recommit-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The seeded revision row is present, marked as a re-commit that dings reliability.
+    const row = panel.getByTestId("recommit-revision-51140000-0000-4000-8000-000000000001");
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await expect(row).toHaveAttribute("data-kind", "recommit");
+    await expect(row).toHaveAttribute("data-dings", "true");
+    // It captures the new committed date (Dec 15, 2026) and the reason.
+    await expect(row).toContainText("Dec 15, 2026");
+    await expect(row).toContainText("Sub-trade delay");
+  });
+
+  test("a re-commit drafts a concrete client email naming the new date", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("recommit-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The live email draft names the job + the (current) committed date.
+    const subject = panel.getByTestId("recommit-email-subject");
+    await expect(subject).toBeVisible();
+    await expect(subject).toContainText("Job Status Demo");
+
+    // Default kind is re-commit → its draft asks the client to confirm.
+    await expect(panel.getByTestId("recommit-email-body")).toContainText("confirm");
+  });
+
+  test("change-order mode never dings reliability and frames the email around scope", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("recommit-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Switch to change-order mode.
+    await panel.getByTestId("recommit-kind-change-order").click();
+
+    // The change-order impact section renders (absorbs / pushes the date).
+    await expect(panel.getByTestId("recommit-change-order-impact")).toBeVisible();
+
+    // A change order never dings reliability.
+    await expect(panel.getByTestId("recommit-dings-badge")).toHaveAttribute("data-dings", "false");
+
+    // The drafted email frames it around the added scope / change order.
+    await expect(panel.getByTestId("recommit-email-body")).toContainText("added scope");
+  });
+});
+
 // Scheduling S15 — free-capacity finder (issue #103).
 // The Capacity tab on /labour gains a FreeCapacityPanel below the existing
 // PhaseCapacityPanel. It scans upcoming weeks for windows where all phase

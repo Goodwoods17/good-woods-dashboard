@@ -10,6 +10,7 @@ import { ScheduleTimeline } from "./ScheduleTimeline";
 import { GanttSchedule } from "./GanttSchedule";
 import { MakeReadyChecklistPanel } from "./MakeReadyChecklistPanel";
 import { CommitmentLedgerPanel } from "./CommitmentLedgerPanel";
+import { RecommitPanel } from "./RecommitPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
@@ -29,9 +30,11 @@ import type { MakeReadySignals } from "../lib/makeReady";
 export function ScheduleTab({
   job,
   onUpdate,
+  onRecommit,
 }: {
   job: Job;
   onUpdate?: (dates: Partial<Record<MilestoneStage, string>>) => Promise<void> | void;
+  onRecommit?: (patch: { installDate: string; bufferDays: number }) => Promise<void> | void;
 }) {
   const overview = buildScheduleOverview(job, new Date());
 
@@ -106,6 +109,9 @@ export function ScheduleTab({
 
       {/* ── Commitment ledger + two-level ownership + per-owner reliability (S13) ── */}
       <CommitmentLedgerPanel job={job} />
+
+      {/* ── Re-commit flow + revision history + change orders (S14) ── */}
+      <RecommitPanel job={job} onRecommit={onRecommit} />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section
