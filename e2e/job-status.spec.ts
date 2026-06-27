@@ -377,8 +377,11 @@ test.describe("job status slice 2 — template materialisation + full field view
     });
 
     // Ensure templates are materialised (previous test may have done it, but
-    // isolate: clear and let the page materialise fresh).
+    // isolate: clear and let the page materialise fresh). Clear pieces too —
+    // slice 4 folds Drawings pieces into job progress, so a leftover done piece
+    // from the slice-4 test would make this test's "0%" baseline non-zero.
     await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
 
     await login(page);
     await page.goto("/status");

@@ -344,17 +344,6 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
 
   return (
     <section className="px-4 pb-10" data-testid="job-status-tab">
-      {/* Job-level progress */}
-      <div className="mb-5">
-        <div className="flex items-center justify-between mb-1.5">
-          <span className="text-xs font-medium text-text-secondary">Overall progress</span>
-          <span className="text-xs text-text-tertiary tabular-nums" data-testid="job-progress-pct">
-            {Math.round(jobPct * 100)}%
-          </span>
-        </div>
-        <ProgressBar pct={jobPct} testId="job-progress-bar" />
-      </div>
-
       {error && (
         <p className="mb-3 text-sm text-red-700" role="alert">
           {error}
@@ -364,31 +353,49 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
       {loading ? (
         <p className="text-sm text-text-tertiary">Loading…</p>
       ) : (
-        <div className="flex flex-col gap-3">
-          {MILESTONE_STAGES.map(({ key, label }) => {
-            const rows = rowsByPhase.get(key) ?? [];
-            const pct = phaseProgress(trackable, key);
-            return (
-              <PhaseSection
-                key={key}
-                phase={key}
-                phaseLabel={label}
-                rows={rows}
-                pct={pct}
-                collapsed={collapsedPhases.has(key)}
-                onToggle={() => togglePhase(key)}
-                busyId={busyId}
-                onCycle={onCycle}
-                addForm={addPhase === key ? { label: addLabel } : null}
-                onAddStart={() => onAddStart(key)}
-                onAddLabelChange={setAddLabel}
-                onAddSubmit={() => onAddSubmit(key)}
-                onAddCancel={onAddCancel}
-                addingBusy={addingBusy}
-              />
-            );
-          })}
-        </div>
+        <>
+          {/* Job-level progress — rendered only once BOTH job_items and pieces
+              have loaded (combinedLoading), so the % reflects the full trackable
+              set in one paint instead of flickering items-only → +pieces. */}
+          <div className="mb-5">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-xs font-medium text-text-secondary">Overall progress</span>
+              <span
+                className="text-xs text-text-tertiary tabular-nums"
+                data-testid="job-progress-pct"
+              >
+                {Math.round(jobPct * 100)}%
+              </span>
+            </div>
+            <ProgressBar pct={jobPct} testId="job-progress-bar" />
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {MILESTONE_STAGES.map(({ key, label }) => {
+              const rows = rowsByPhase.get(key) ?? [];
+              const pct = phaseProgress(trackable, key);
+              return (
+                <PhaseSection
+                  key={key}
+                  phase={key}
+                  phaseLabel={label}
+                  rows={rows}
+                  pct={pct}
+                  collapsed={collapsedPhases.has(key)}
+                  onToggle={() => togglePhase(key)}
+                  busyId={busyId}
+                  onCycle={onCycle}
+                  addForm={addPhase === key ? { label: addLabel } : null}
+                  onAddStart={() => onAddStart(key)}
+                  onAddLabelChange={setAddLabel}
+                  onAddSubmit={() => onAddSubmit(key)}
+                  onAddCancel={onAddCancel}
+                  addingBusy={addingBusy}
+                />
+              );
+            })}
+          </div>
+        </>
       )}
     </section>
   );
