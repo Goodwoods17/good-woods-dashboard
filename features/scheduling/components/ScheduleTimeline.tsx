@@ -1,6 +1,6 @@
 "use client";
 
-import { CalendarClock } from "lucide-react";
+import { AlertTriangle, CalendarClock } from "lucide-react";
 import { MILESTONE_STAGES, type Job, type MilestoneStage } from "@shared/lib/types";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
@@ -13,6 +13,13 @@ import {
 } from "../lib/schedule";
 import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/capacity";
 import { computeRiskTieredBuffer } from "../lib/committedDate";
+import {
+  computeBufferBurn,
+  chainCompletionPct,
+  feverZone,
+  computeRecoveryFlag,
+} from "../lib/bufferBurn";
+import { FeverChart } from "./FeverChart";
 
 /**
  * Read-only 6-phase schedule timeline for a job. S1 added the basic on-track /
@@ -23,9 +30,10 @@ import { computeRiskTieredBuffer } from "../lib/committedDate";
 export function ScheduleTimeline({ job }: { job: Job }) {
   if (!schedulingEnabled()) return null;
 
+  const today = new Date();
   const currentIdx = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
   const targets = job.phaseTargetDates ?? null;
-  const status = scheduleStatus(job.currentMilestone, targets, new Date());
+  const status = scheduleStatus(job.currentMilestone, targets, today);
   const buffer = bufferDaysFor(job);
   const committed = committedDate(job);
 
@@ -41,6 +49,19 @@ export function ScheduleTimeline({ job }: { job: Job }) {
     subDependencyCount: 0,
     overrideBufferDays: job.bufferDays ?? null,
   });
+
+  // S6: buffer burn + fever chart + recovery flag.
+  // Only meaningful when the job has both an internal target and a committed date.
+  const hasScheduleData = !!job.internalTargetDate && !!job.installDate;
+  const burn = hasScheduleData
+    ? computeBufferBurn(job.internalTargetDate!, job.installDate, today)
+    : null;
+  const chainPct = chainCompletionPct({
+    currentMilestoneIndex: currentIdx >= 0 ? currentIdx : 0,
+    totalPhases: MILESTONE_STAGES.length,
+  });
+  const zone = burn ? feverZone(burn.bufferConsumedPct, chainPct) : null;
+  const recoveryFlag = zone ? computeRecoveryFlag(zone) : null;
 
   const targetFor = (key: MilestoneStage) => targets?.[key] ?? null;
 
@@ -139,6 +160,63 @@ export function ScheduleTimeline({ job }: { job: Job }) {
           <span className="text-text-tertiary">(overridden → {riskBuffer.totalDays}d)</span>
         )}
       </div>
+
+      {/* S6: fever chart + buffer burn + recovery flag */}
+      {burn && zone && recoveryFlag && (
+        <div
+          data-testid="fever-section"
+          className="mt-4 border-t border-border pt-4 space-y-3"
+        >
+          {/* Recovery flag — owner-only, visible only in RED zone */}
+          {recoveryFlag.active && (
+            <div
+              data-testid="recovery-flag"
+              role="alert"
+              className="flex items-start gap-2 rounded-lg border border-status-blocked-soft bg-status-blocked-soft/50 px-3 py-2 text-sm"
+            >
+              <AlertTriangle
+                className="mt-0.5 h-4 w-4 shrink-0 text-status-blocked"
+                strokeWidth={1.75}
+              />
+              <span className="font-medium text-status-blocked">{recoveryFlag.message}</span>
+            </div>
+          )}
+
+          {/* Buffer consumption summary */}
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-text-secondary tabular-nums">
+            <span className="font-medium text-text-primary">
+              Buffer burn
+            </span>
+            <span>
+              <span className="font-medium text-text-primary">
+                {burn.consumedBufferDays}d
+              </span>{" "}
+              consumed of {burn.totalBufferDays}d
+            </span>
+            <span
+              className={cn(
+                "font-medium",
+                zone === "green" && "text-emerald-600",
+                zone === "yellow" && "text-amber-600",
+                zone === "red" && "text-status-blocked"
+              )}
+            >
+              {Math.round(burn.bufferConsumedPct)}% of buffer
+            </span>
+            <span className="text-text-tertiary">
+              {Math.round(chainPct)}% chain complete
+            </span>
+          </div>
+
+          {/* Fever chart — buffer% vs chain% */}
+          <FeverChart
+            chainCompletionPct={chainPct}
+            bufferConsumedPct={burn.bufferConsumedPct}
+            zone={zone}
+            className="max-w-xs"
+          />
+        </div>
+      )}
     </section>
   );
 }
