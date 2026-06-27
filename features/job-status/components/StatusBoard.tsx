@@ -11,6 +11,7 @@ import { useStatusBoard, isActiveJob } from "../lib/boardStore";
 import { phaseProgress, jobProgress } from "../lib/progress";
 import { JobStatusTab } from "./JobStatusTab";
 import { ItemTimeline } from "./ItemTimeline";
+import { BoardAdvisoryBanner } from "@features/scheduling/components/BoardAdvisoryBanner";
 import type { TrackableItem } from "../lib/types";
 
 // ─── Mini phase progress bar (board card) ─────────────────────────────────────
@@ -126,7 +127,7 @@ function JobDrillIn({ job, onBack }: { job: Job; onBack: () => void }) {
 
       <PageHeader eyebrow={job.code} title={job.name} subtitle="Live job status" />
 
-      <JobStatusTab jobId={job.id} />
+      <JobStatusTab jobId={job.id} phaseTargetDates={job.phaseTargetDates} />
       <ItemTimeline jobId={job.id} items={pickerItems} />
     </div>
   );
@@ -146,6 +147,23 @@ export function StatusBoard() {
 
   const activeJobs = useMemo(() => jobs.filter(isActiveJob), [jobs]);
   const activeJobIds = useMemo(() => activeJobs.map((j) => j.id), [activeJobs]);
+
+  // S10: build job summaries for the advisory banner (scheduling, advisory only).
+  const milestoneLabels = useMemo(
+    () => new Map(MILESTONE_STAGES.map(({ key, label }) => [key, label])),
+    []
+  );
+  const jobSummaries = useMemo(
+    () =>
+      activeJobs.map((j) => ({
+        id: j.id,
+        name: j.name,
+        currentMilestone: j.currentMilestone,
+        currentMilestoneLabel: milestoneLabels.get(j.currentMilestone) ?? j.currentMilestone,
+        phaseTargetDates: j.phaseTargetDates,
+      })),
+    [activeJobs, milestoneLabels]
+  );
 
   const { byJobId, loading: boardLoading } = useStatusBoard(activeJobIds);
 
@@ -182,19 +200,23 @@ export function StatusBoard() {
           <p className="text-sm text-text-tertiary">No active jobs right now.</p>
         </div>
       ) : (
-        <div
-          data-testid="status-board"
-          className="px-4 pb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-        >
-          {activeJobs.map((job) => (
-            <JobCard
-              key={job.id}
-              job={job}
-              items={byJobId.get(job.id) ?? []}
-              onClick={() => setSelectedJobId(job.id)}
-            />
-          ))}
-        </div>
+        <>
+          {/* S10: advisory banner — shows the most-behind job/phase. Never blocks. */}
+          <BoardAdvisoryBanner jobs={jobSummaries} />
+          <div
+            data-testid="status-board"
+            className="px-4 pb-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+          >
+            {activeJobs.map((job) => (
+              <JobCard
+                key={job.id}
+                job={job}
+                items={byJobId.get(job.id) ?? []}
+                onClick={() => setSelectedJobId(job.id)}
+              />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

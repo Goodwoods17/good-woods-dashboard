@@ -136,7 +136,32 @@ No new schema migration — `jobs.phase_target_dates` already exists from S1.
 Ripple stays in the Gantt (not the month-calendar drag, per the pre-mortem
 decision in the issue).
 
-## Non-goals (S1–S5)
+## What's here (S10 shop-floor targets + advisory banner, issue #98)
+
+```
+features/scheduling/
+├── lib/
+│   └── shopFloor.ts   pure: daysUntil / phaseTargetPaceStatus /
+│                       phaseTargetLabel / phaseBottleneckAdvisory (+ test)
+└── components/
+    ├── PhaseTargetBadge.tsx     inline "by Mon · 3d left · on pace" badge
+    │                            rendered in each JobStatusTab phase header
+    └── BoardAdvisoryBanner.tsx  advisory-only banner on the /status board
+                                 when the most-behind active job is flagged
+```
+
+`JobStatusTab` (job-status feature) now accepts an optional `phaseTargetDates`
+prop. `StatusBoard` passes `job.phaseTargetDates` down and renders
+`BoardAdvisoryBanner` above the job grid. Both render nothing when the flag is
+off or no target is set — fully additive.
+
+Per-phase paceStatus (`on_pace | due_today | behind`) drives badge colour:
+green / amber / red. The advisory message is purely informational; it never
+blocks any crew action.
+
+No schema migration — `jobs.phase_target_dates` already exists from S1.
+
+## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write
 of derived durations into new-job creation, no buffer-burn fever chart, no
