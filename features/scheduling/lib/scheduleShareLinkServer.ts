@@ -41,6 +41,8 @@ type JobScheduleRow = {
   current_milestone: MilestoneStage;
   install_date: string;
   phase_target_dates: PhaseTargetDates | null;
+  /** S19: free-text blocker, passed through as a client action item. */
+  blocker: string | null;
 };
 
 export type ClientScheduleBundle = {
@@ -75,7 +77,7 @@ export async function loadScheduleShareLink(token: string): Promise<ClientSchedu
 
   const { data: jobRow, error: jobErr } = await sb
     .from(JOBS_TABLE)
-    .select("name, current_milestone, install_date, phase_target_dates")
+    .select("name, current_milestone, install_date, phase_target_dates, blocker")
     .eq("id", link.jobId)
     .maybeSingle();
   if (jobErr) throw jobErr;
@@ -96,6 +98,7 @@ export async function loadScheduleShareLink(token: string): Promise<ClientSchedu
     installDate: job.install_date,
     committedDateSnapshot: link.committedDateSnapshot,
     phaseTargetDates: job.phase_target_dates,
+    blocker: job.blocker,
   });
 
   return {

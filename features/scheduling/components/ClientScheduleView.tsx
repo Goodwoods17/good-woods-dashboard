@@ -1,4 +1,4 @@
-import { Check, CalendarCheck2 } from "lucide-react";
+import { Check, CalendarCheck2, ArrowRight, AlertCircle } from "lucide-react";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import type { ClientScheduleView as ClientScheduleViewModel } from "../lib/clientPortal";
@@ -92,6 +92,60 @@ export function ClientScheduleView({
             </div>
           </dl>
         </section>
+
+        {/* ── S19: What's next nudge ────────────────────────────────────────── */}
+        {view.nextMilestoneNudge !== null ? (
+          <section
+            className="mt-4 rounded-2xl border border-border bg-surface p-6 shadow-resting"
+            data-testid="client-next-milestone-nudge"
+          >
+            <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary">What&apos;s next</p>
+            <div className="mt-2 flex items-center gap-2">
+              <ArrowRight className="h-4 w-4 flex-none text-status-on-track" strokeWidth={1.75} />
+              <p className="text-base font-medium text-text-primary">
+                {view.nextMilestoneNudge.label}
+              </p>
+            </div>
+            {view.nextMilestoneNudge.window !== null ? (
+              <p className="mt-1 text-sm text-text-secondary" data-testid="client-nudge-window">
+                Week of {formatDate(view.nextMilestoneNudge.window.start)}
+              </p>
+            ) : (
+              <p className="mt-1 text-sm text-text-tertiary" data-testid="client-nudge-window">
+                To be scheduled
+              </p>
+            )}
+          </section>
+        ) : null}
+
+        {/* ── S19: What we need from you ────────────────────────────────────── */}
+        {view.clientActions.length > 0 ? (
+          <section
+            className="mt-4 rounded-2xl border border-status-blocked-soft bg-status-blocked-soft p-6 shadow-resting"
+            data-testid="client-actions"
+          >
+            <div className="flex items-center gap-2">
+              <AlertCircle
+                className="h-4 w-4 flex-none text-status-blocked"
+                strokeWidth={1.75}
+              />
+              <p className="text-xs uppercase tracking-[0.06em] text-status-blocked">
+                What we need from you
+              </p>
+            </div>
+            <ul className="mt-3 flex flex-col gap-2">
+              {view.clientActions.map((item, i) => (
+                <li
+                  key={i}
+                  data-testid={`client-action-item-${i}`}
+                  className="text-sm text-text-primary"
+                >
+                  {item.text}
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
 
         {/* ── Install day (the one firm promise) ────────────────────────────── */}
         <section

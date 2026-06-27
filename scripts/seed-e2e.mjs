@@ -107,6 +107,9 @@ const DEMO_JOB = {
   // PriorityBumpPanel renders in its "priority on" state, and the fever board
   // shows the VIP badge + the job floats first within its zone.
   is_priority: true,
+  // Scheduling S19 (issue #107): a client-facing blocker so the "What we need
+  // from you" nudge renders deterministically on the client portal page.
+  blocker: "We need your handle selection before we can finalise the cabinet order.",
 };
 
 // ─── Scheduling S8 (issue #96) — buffer-burn hitlist job ─────────────────

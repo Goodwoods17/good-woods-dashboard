@@ -20,6 +20,26 @@ import type { PhaseTargetDates } from "./schedule";
 
 export type ClientScheduleStatus = "on_track" | "date_updated";
 
+/**
+ * A single client-facing action item derived from the job's blocker text
+ * (S19, issue #107). The shop controls what reaches the portal by what they
+ * write in the free-text blocker field.
+ */
+export type ClientActionItem = {
+  text: string;
+};
+
+/**
+ * The single upcoming next milestone and its optional soft week window (S19).
+ * Used to drive the "What's next" nudge card on the client portal — one clear
+ * answer to "what happens after the current phase?".
+ */
+export type ClientNextMilestoneNudge = {
+  label: string;
+  /** Mon–Fri week window when an internal target exists; null = to be scheduled. */
+  window: { start: string; end: string } | null;
+};
+
 export const CLIENT_STATUS_LABELS: Record<ClientScheduleStatus, string> = {
   on_track: "On track",
   date_updated: "Date updated",
@@ -76,6 +96,37 @@ export function clientNextStepLabel(currentMilestone: MilestoneStage): string {
 }
 
 /**
+ * Derive the "What's next" nudge: the single upcoming milestone + its soft
+ * week window (S19, issue #107). Returns null when the job is already at the
+ * install phase (nothing further to show). The window is null when no internal
+ * target exists for the upcoming phase — the client sees "to be scheduled".
+ */
+export function clientNextMilestoneNudge(
+  currentMilestone: MilestoneStage,
+  phaseTargetDates?: Partial<Record<MilestoneStage, string>> | null
+): ClientNextMilestoneNudge | null {
+  const idx = milestoneIndex(currentMilestone);
+  const nextKey = PHASE_KEYS[idx + 1] as MilestoneStage | undefined;
+  if (!nextKey) return null;
+  const target = phaseTargetDates?.[nextKey];
+  return {
+    label: CLIENT_PHASE_LABELS[nextKey],
+    window: target ? businessWeekWindow(target) : null,
+  };
+}
+
+/**
+ * Extract client-facing action items from the job's blocker text (S19).
+ * The shop writes the blocker; what they write is what the client sees.
+ * Returns an empty array when there is nothing outstanding.
+ */
+export function buildClientActionItems(blocker: string | null | undefined): ClientActionItem[] {
+  const trimmed = blocker?.trim();
+  if (!trimmed) return [];
+  return [{ text: trimmed }];
+}
+
+/**
  * The Mon–Fri work-week window containing an ISO date. Used to present a
  * mid-phase as a soft RANGE rather than the precise internal target day — the
  * client gets a sense of timing without the shop over-committing to a date.
@@ -117,6 +168,12 @@ export type ClientScheduleInput = {
   committedDateSnapshot: string;
   /** INTERNAL per-phase targets — only ever fuzzed into ranges, never shown raw. */
   phaseTargetDates?: PhaseTargetDates | null;
+  /**
+   * S19 (issue #107): free-text blocker written by the shop. Surfaced as
+   * "What we need from you" on the client portal. The shop controls what reaches
+   * the portal by what they write here — this is intentionally direct.
+   */
+  blocker?: string | null;
 };
 
 export type ClientScheduleView = {
@@ -128,6 +185,10 @@ export type ClientScheduleView = {
   /** The firm committed install day (always the LIVE date — the honest promise). */
   committedInstall: string;
   phases: ClientPhaseEntry[];
+  /** S19: the single next milestone + its soft window (null at install). */
+  nextMilestoneNudge: ClientNextMilestoneNudge | null;
+  /** S19: outstanding items the client needs to act on (from the blocker field). */
+  clientActions: ClientActionItem[];
 };
 
 /**
@@ -168,5 +229,7 @@ export function buildClientScheduleView(input: ClientScheduleInput): ClientSched
     nextStepLabel: clientNextStepLabel(input.currentMilestone),
     committedInstall: input.installDate,
     phases,
+    nextMilestoneNudge: clientNextMilestoneNudge(input.currentMilestone, input.phaseTargetDates),
+    clientActions: buildClientActionItems(input.blocker),
   };
 }
