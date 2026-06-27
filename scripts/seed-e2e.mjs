@@ -352,6 +352,34 @@ async function seedS13Ledger(token) {
   console.log("OK seeded S13 commitment-ledger reliability fixtures");
 }
 
+// ─── Scheduling S14 (issue #102) — commitment-revision history fixture ───────
+// One prior re-commit on the DEMO_JOB so the revision history renders
+// deterministically: a sub-trade delay that moved the committed date and DINGS
+// reliability. Fixed hex id → idempotent upsert.
+const S14_REVISIONS = [
+  {
+    id: "51140000-0000-4000-8000-000000000001",
+    job_id: "job-status-demo",
+    kind: "recommit",
+    reason_code: "sub_delay",
+    old_committed_date: "2026-11-30",
+    new_committed_date: "2026-12-15",
+    old_buffer_days: 8,
+    new_buffer_days: 10,
+    dings_reliability: true,
+    note: "Spray sub pushed a week",
+    revised_by: "claude-smoke-test@spacecraftjoinery.local",
+    revised_at: "2026-05-01T12:00:00.000Z",
+  },
+];
+
+async function seedS14Revisions(token) {
+  for (const row of S14_REVISIONS) {
+    await upsert(token, "commitment_revisions", row);
+  }
+  console.log("OK seeded S14 commitment-revision history fixture");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -361,6 +389,7 @@ async function seedJob() {
   await upsert(token, "jobs", BUFFER_BURN_JOB);
   await seedS11Trades(token);
   await seedS13Ledger(token);
+  await seedS14Revisions(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

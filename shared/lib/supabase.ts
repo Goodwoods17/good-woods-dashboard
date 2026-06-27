@@ -40,3 +40,4 @@ export const JOB_ITEM_EVENTS_TABLE = "job_item_events";
 export const PHASE_STEP_TEMPLATES_TABLE = "phase_step_templates";
 export const SCHEDULING_MAKE_READY_ITEMS_TABLE = "scheduling_make_ready_items";
 export const COMMITMENT_LEDGER_TABLE = "commitment_ledger";
+export const COMMITMENT_REVISIONS_TABLE = "commitment_revisions";
