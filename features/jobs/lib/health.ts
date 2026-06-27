@@ -1,4 +1,5 @@
 import type { HealthStatus, Job, JobBlocker, PipelineStatus } from "@shared/lib/types";
+import type { FeverZone } from "@features/scheduling/lib/bufferBurn";
 
 // Expected days-to-install that a job should still have when it enters each
 // pipeline stage. If the actual days-to-install is less than the stage's lead
@@ -6,6 +7,8 @@ import type { HealthStatus, Job, JobBlocker, PipelineStatus } from "@shared/lib/
 //
 // These are the same numbers VariantB_Schedule used; lifted from the prototype
 // to a real lib so the dashboard's status dots derive from one rule.
+// S6: when `feverZone` is passed to `deriveHealth`, this heuristic is bypassed
+// and the buffer-aware signal drives health instead (ADR 0020).
 const STAGE_LEAD_DAYS: Record<PipelineStatus, number> = {
   new: 60,
   sold: 45,
@@ -38,14 +41,35 @@ export function daysToInstall(installDate: string, today: Date = new Date()): nu
 // Otherwise: if the job has less time-to-install than the stage expects,
 // it's at_risk; if it has less than half the stage's lead time (or is overdue
 // for a non-installing stage), it's blocked.
+//
+// S6 (ADR 0020): when the caller passes a `feverZone` (from
+// `features/scheduling/lib/bufferBurn`), that signal replaces the crude
+// STAGE_LEAD_DAYS heuristic. Callers that have computed the fever data
+// (JobDetail, Hitlist, etc.) should pass it; callers without it fall back
+// to the legacy logic automatically.
 export function deriveHealth(
   job: Job,
   today: Date = new Date(),
-  activeBlockers: JobBlocker[] = []
+  activeBlockers: JobBlocker[] = [],
+  feverZoneOverride?: FeverZone | null
 ): HealthStatus {
   if (job.pipelineStatus === "complete") return "complete";
   if (job.healthStatus === "paused") return "paused";
   if (activeBlockers.length > 0) return "blocked";
+
+  // When the scheduling engine has produced a fever signal, use it instead of
+  // the STAGE_LEAD_DAYS heuristic. This is the S6 "powers the unified health
+  // band" requirement — buffer-aware, not just calendar-proximity-aware.
+  if (feverZoneOverride != null) {
+    switch (feverZoneOverride) {
+      case "green":
+        return "on_track";
+      case "yellow":
+        return "at_risk";
+      case "red":
+        return "blocked";
+    }
+  }
 
   const expected = STAGE_LEAD_DAYS[job.pipelineStatus];
   const actual = daysToInstall(job.installDate, today);
