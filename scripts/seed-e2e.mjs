@@ -436,6 +436,44 @@ async function seedS17Bumps(token) {
   console.log("OK seeded S17 priority-bump fixture");
 }
 
+// ─── Scheduling S18 (issue #106) — client schedule portal share links ────────
+// Two no-login tokenized links to the DEMO_JOB (install_date 2026-12-15). The
+// ON_TRACK link's snapshot matches the live install date → "On track"; the
+// UPDATED link's snapshot is an earlier date → the client view flips to
+// "Date updated". Fixed hex ids + fixed >=32-char url-safe tokens → idempotent
+// upserts the public-page e2e can visit deterministically.
+const S18_ONTRACK_TOKEN = "e2eschedontrack00000000000000000000ab";
+const S18_UPDATED_TOKEN = "e2escheddateupdated0000000000000000cd";
+const S18_LINKS = [
+  {
+    id: "51180000-0000-4000-8000-000000000001",
+    job_id: "job-status-demo",
+    token: S18_ONTRACK_TOKEN,
+    recipient_name: "E2E Test Client",
+    committed_date_snapshot: "2026-12-15", // == DEMO_JOB install_date → On track
+    viewed_at: null,
+    revoked_at: null,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+  },
+  {
+    id: "51180000-0000-4000-8000-000000000002",
+    job_id: "job-status-demo",
+    token: S18_UPDATED_TOKEN,
+    recipient_name: null,
+    committed_date_snapshot: "2026-11-30", // != install_date → Date updated
+    viewed_at: null,
+    revoked_at: null,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+  },
+];
+
+async function seedS18ShareLinks(token) {
+  for (const row of S18_LINKS) {
+    await upsert(token, "schedule_share_links", row);
+  }
+  console.log("OK seeded S18 client schedule portal share links");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -447,6 +485,7 @@ async function seedJob() {
   await seedS13Ledger(token);
   await seedS14Revisions(token);
   await seedS17Bumps(token);
+  await seedS18ShareLinks(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 
