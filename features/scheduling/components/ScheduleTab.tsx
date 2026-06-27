@@ -13,6 +13,7 @@ import { CommitmentLedgerPanel } from "./CommitmentLedgerPanel";
 import { RecommitPanel } from "./RecommitPanel";
 import { PriorityBumpPanel } from "./PriorityBumpPanel";
 import { ClientPortalPanel } from "./ClientPortalPanel";
+import { KickoffArtifactPanel } from "./KickoffArtifactPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
@@ -131,6 +132,9 @@ export function ScheduleTab({
 
       {/* ── Read-only client schedule portal link (S18) ── */}
       <ClientPortalPanel job={job} />
+
+      {/* ── Kickoff expectation-setting artifact (S20) ── */}
+      <KickoffArtifactPanel job={job} />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section
