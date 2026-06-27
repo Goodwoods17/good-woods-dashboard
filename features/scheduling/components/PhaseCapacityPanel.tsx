@@ -10,10 +10,18 @@ import {
   seedPhaseDurationsFromHistory,
   phaseTargetDatesFromDurations,
   DEFAULT_WEEKLY_CAPACITY_HOURS,
+  DEFAULT_PHASE_DURATION_DAYS,
   type CapacitySession,
   type PhaseHours,
   type UtilizationStatus,
 } from "@features/scheduling/lib/capacity";
+import {
+  detectFloatingBottleneck,
+  computeCapacityAwareSchedule,
+  computeRiskTieredBuffer,
+  capacityAwareCommittedDate,
+  phaseVarianceNudgeDays,
+} from "@features/scheduling/lib/committedDate";
 
 const WINDOW_DAYS = 7;
 
@@ -91,8 +99,51 @@ export function PhaseCapacityPanel() {
     [now, durations]
   );
 
+  // S3: capacity-aware committed date recommendation for a hypothetical new job.
+  const todayStr = useMemo(() => new Date(now).toISOString().slice(0, 10), [now]);
+  const capacitySchedule = useMemo(
+    () => computeCapacityAwareSchedule(todayStr, durations, model),
+    [todayStr, durations, model]
+  );
+  const varianceNudge = useMemo(() => phaseVarianceNudgeDays(history), [history]);
+  const riskBuffer = useMemo(
+    () =>
+      computeRiskTieredBuffer({
+        totalInternalDays: capacitySchedule.totalWorkDays,
+        subDependencyCount: 0,
+        varianceNudgeDays: varianceNudge,
+      }),
+    [capacitySchedule.totalWorkDays, varianceNudge]
+  );
+  const recommendedCommitDate = useMemo(
+    () => capacityAwareCommittedDate(capacitySchedule.internalTargetDate, riskBuffer.totalDays),
+    [capacitySchedule.internalTargetDate, riskBuffer.totalDays]
+  );
+
+  // S3: floating bottleneck — the most-overloaded phase this week.
+  const bottleneck = useMemo(() => detectFloatingBottleneck(model), [model]);
+
   return (
     <div className="space-y-6" data-testid="phase-capacity-panel">
+      {bottleneck && (
+        <div
+          data-testid="floating-bottleneck"
+          data-phase={bottleneck.phase}
+          className="flex items-start gap-3 rounded-2xl border border-status-blocked-soft bg-status-blocked-soft/40 p-4"
+        >
+          <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-status-blocked" />
+          <div className="text-sm">
+            <span className="font-medium text-text-primary">
+              Floating bottleneck: {bottleneck.label}
+            </span>{" "}
+            <span className="text-text-secondary">
+              is the most-loaded work-center this week (
+              {Math.round(bottleneck.ratio * 100)}% of capacity).
+            </span>
+          </div>
+        </div>
+      )}
+
       <section className="rounded-2xl bg-surface p-5 shadow-resting">
         <header className="mb-4">
           <h2 className="text-base font-semibold text-text-primary">Phase capacity this week</h2>
@@ -166,6 +217,53 @@ export function PhaseCapacityPanel() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section
+        className="rounded-2xl bg-surface p-5 shadow-resting"
+        data-testid="capacity-aware-date-section"
+      >
+        <header className="mb-4">
+          <h2 className="text-base font-semibold text-text-primary">
+            Capacity-aware committed date (new job, today)
+          </h2>
+          <p className="text-sm text-text-secondary">
+            Internal target stretched by current load, plus a risk-tiered buffer. Honest contingency
+            sized from the schedule, not a flat guess.
+          </p>
+        </header>
+        <dl className="divide-y divide-border-faint text-sm">
+          <div className="flex items-baseline justify-between gap-3 py-2">
+            <dt className="text-text-secondary">Internal target</dt>
+            <dd className="font-mono tabular-nums text-text-primary">
+              {capacitySchedule.internalTargetDate}
+              <span className="ml-1 text-xs text-text-tertiary">
+                ({capacitySchedule.totalWorkDays}d)
+              </span>
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 py-2">
+            <dt className="text-text-secondary">
+              Risk buffer
+              <span className="ml-1 text-xs text-text-tertiary">
+                {riskBuffer.baseDays}d base + {riskBuffer.subDays}d subs +{" "}
+                {riskBuffer.varianceDays}d variance
+              </span>
+            </dt>
+            <dd className="font-mono tabular-nums text-text-primary">
+              +{riskBuffer.totalDays}d
+            </dd>
+          </div>
+          <div className="flex items-baseline justify-between gap-3 py-2">
+            <dt className="font-medium text-text-primary">Recommended committed date</dt>
+            <dd
+              className="font-mono font-medium tabular-nums text-text-primary"
+              data-testid="recommended-commit-date"
+            >
+              {recommendedCommitDate}
+            </dd>
+          </div>
+        </dl>
       </section>
     </div>
   );

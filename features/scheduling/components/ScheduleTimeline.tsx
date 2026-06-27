@@ -11,13 +11,14 @@ import {
   bufferDaysFor,
   SCHEDULE_STATUS_LABELS,
 } from "../lib/schedule";
+import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/capacity";
+import { computeRiskTieredBuffer } from "../lib/committedDate";
 
 /**
- * S1 tracer — a READ-ONLY 6-phase schedule timeline for a job. Shows each
- * phase's internal target date (when set), the frozen client-committed install
- * date, the pooled buffer, and a basic on-track / behind badge derived from the
- * current-milestone pointer. Editing, capacity-aware computation and buffer-burn
- * land in later slices. Renders nothing unless SCHEDULING_ENABLED is on.
+ * Read-only 6-phase schedule timeline for a job. S1 added the basic on-track /
+ * behind badge; S3 adds a risk-buffer breakdown. Editing, capacity-aware
+ * computation and buffer-burn land in later slices. Renders nothing unless
+ * SCHEDULING_ENABLED is on.
  */
 export function ScheduleTimeline({ job }: { job: Job }) {
   if (!schedulingEnabled()) return null;
@@ -27,6 +28,19 @@ export function ScheduleTimeline({ job }: { job: Job }) {
   const status = scheduleStatus(job.currentMilestone, targets, new Date());
   const buffer = bufferDaysFor(job);
   const committed = committedDate(job);
+
+  // S3: risk-tiered buffer breakdown. Use the job's stored buffer_days as the
+  // override if set; otherwise compute from the default phase durations (a new
+  // job's total = sum of DEFAULT_PHASE_DURATION_DAYS = 19 work days).
+  const defaultTotalDays = Object.values(DEFAULT_PHASE_DURATION_DAYS).reduce(
+    (s, d) => s + d,
+    0
+  );
+  const riskBuffer = computeRiskTieredBuffer({
+    totalInternalDays: defaultTotalDays,
+    subDependencyCount: 0,
+    overrideBufferDays: job.bufferDays ?? null,
+  });
 
   const targetFor = (key: MilestoneStage) => targets?.[key] ?? null;
 
@@ -109,6 +123,22 @@ export function ScheduleTimeline({ job }: { job: Job }) {
           );
         })}
       </ol>
+
+      {/* S3: risk-tiered buffer breakdown */}
+      <div
+        data-testid="risk-buffer-breakdown"
+        className="mt-4 border-t border-border pt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-text-secondary tabular-nums"
+      >
+        <span className="text-text-tertiary font-medium">Buffer breakdown</span>
+        <span>
+          {riskBuffer.baseDays}d base
+        </span>
+        <span>+{riskBuffer.subDays}d subs</span>
+        <span>+{riskBuffer.varianceDays}d variance</span>
+        {riskBuffer.isOverridden && (
+          <span className="text-text-tertiary">(overridden → {riskBuffer.totalDays}d)</span>
+        )}
+      </div>
     </section>
   );
 }

@@ -63,11 +63,50 @@ Capacity persists in `public.scheduling_phase_capacity` (one row per phase,
 `20260630000000_scheduling_phase_capacity.sql`). The panel reads it (fallback to
 `DEFAULT_WEEKLY_CAPACITY_HOURS`) and reads sessions via the labour store.
 
-## Non-goals (S1–S2)
+## What's here (S3 committed date + buffer + bottleneck, issue #91)
+
+```
+features/scheduling/
+└── lib/
+    └── committedDate.ts   pure: capacity-aware schedule + risk-tiered buffer
+                           + variance nudge + floating bottleneck (+ test)
+```
+
+`committedDate.ts` adds five pure functions (28 unit tests):
+
+- `capacityAdjustedDuration(baseDays, ratio)` — stretches a phase's base duration
+  by the load ratio (capped at `MAX_CAPACITY_STRETCH = 3×`) so an over-loaded
+  work-center is reflected in the schedule rather than ignored.
+- `computeCapacityAwareSchedule(startDate, phaseDurations, phaseRows)` — forward-
+  schedules a job by chaining the capacity-adjusted durations (weekends skipped),
+  returning `phaseTargetDates`, `internalTargetDate`, and `totalWorkDays`.
+- `computeRiskTieredBuffer({ totalInternalDays, subDependencyCount, varianceNudgeDays, overrideBufferDays })` — three auditable buffer terms:
+  - base = `ceil(totalInternalDays × 15%)` — scales with job size
+  - subs = `subCount × 3d` — external sub-trade lead-time contingency
+  - variance = derived from `phaseVarianceNudgeDays`
+  - Overridable per job via `jobs.buffer_days` (already in the schema from S1).
+- `phaseVarianceNudgeDays(sessions)` — per-phase stdDev of historical per-job hours
+  → work days, summed and capped at 5d; phases with < 2 jobs contribute nothing.
+- `capacityAwareCommittedDate(internalTargetDate, bufferDays)` — adds the buffer
+  (work days, weekends skipped) to land the client-committed install date.
+- `detectFloatingBottleneck(phaseRows)` — the most-overloaded (`over` or `near`)
+  phase from the S2 capacity model; null when all phases have room; floats weekly.
+
+UI surfaces:
+
+- `PhaseCapacityPanel` — gains a bottleneck banner (`data-testid="floating-bottleneck"`)
+  and a "Capacity-aware committed date" section with the risk-buffer breakdown and
+  `data-testid="recommended-commit-date"`.
+- `ScheduleTimeline` — gains a `data-testid="risk-buffer-breakdown"` row below the
+  phase timeline, showing the three buffer components from the job's stored data.
+
+No new schema migration — the `jobs.buffer_days` override was added in S1.
+
+## Non-goals (S1–S3)
 
 No editing of dates **or capacity values** in the UI yet, no per-machine /
 per-person capacity (phase-level only in v1), no auto-write of the derived
 durations into new-job creation (the panel *previews* them — wiring into the
-`/jobs/new` form is a later slice), no capacity-aware committed-date computation,
-no buffer-burn, no per-sub reliability, no Gantt, no client portal/ICS, no Google
-push. Those are later slices in Milestone #7. `health.ts` stays untouched.
+`/jobs/new` form is a later slice), no buffer-burn fever chart, no per-sub
+reliability, no Gantt, no client portal/ICS, no Google push. Those are later
+slices in Milestone #7. `health.ts` stays untouched.
