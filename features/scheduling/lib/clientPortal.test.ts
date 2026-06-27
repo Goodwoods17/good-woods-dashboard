@@ -5,6 +5,8 @@ import {
   clientNextStepLabel,
   businessWeekWindow,
   buildClientScheduleView,
+  clientNextMilestoneNudge,
+  buildClientActionItems,
   CLIENT_PHASE_LABELS,
   CLIENT_STATUS_LABELS,
   type ClientScheduleInput,
@@ -76,6 +78,60 @@ const BASE_INPUT: ClientScheduleInput = {
   },
 };
 
+describe("clientNextMilestoneNudge", () => {
+  it("returns the next upcoming phase with its week window when a target exists", () => {
+    const nudge = clientNextMilestoneNudge("assembly", {
+      design: "2026-09-02",
+      cnc: "2026-10-07",
+      assembly: "2026-11-04",
+      finishing: "2026-11-18",
+    });
+    expect(nudge).not.toBeNull();
+    expect(nudge!.label).toBe(CLIENT_PHASE_LABELS.finishing);
+    // 2026-11-18 is a Wednesday → week Mon 16 – Fri 20.
+    expect(nudge!.window).toEqual({ start: "2026-11-16", end: "2026-11-20" });
+  });
+
+  it("returns null window when the next phase has no internal target", () => {
+    const nudge = clientNextMilestoneNudge("assembly", { design: "2026-09-02" });
+    expect(nudge).not.toBeNull();
+    expect(nudge!.label).toBe(CLIENT_PHASE_LABELS.finishing);
+    expect(nudge!.window).toBeNull();
+  });
+
+  it("returns null at the install phase (no next milestone)", () => {
+    const nudge = clientNextMilestoneNudge("install", {});
+    expect(nudge).toBeNull();
+  });
+
+  it("never leaks the CNC shop term in the nudge label", () => {
+    const nudge = clientNextMilestoneNudge("design", {});
+    expect(nudge).not.toBeNull();
+    expect(nudge!.label).not.toMatch(/cnc/i);
+  });
+});
+
+describe("buildClientActionItems", () => {
+  it("returns empty when there is no blocker", () => {
+    expect(buildClientActionItems(null)).toHaveLength(0);
+    expect(buildClientActionItems(undefined)).toHaveLength(0);
+    expect(buildClientActionItems("")).toHaveLength(0);
+    expect(buildClientActionItems("   ")).toHaveLength(0);
+  });
+
+  it("surfaces the blocker text as a client action item", () => {
+    const items = buildClientActionItems("We need your handle selection by Friday.");
+    expect(items).toHaveLength(1);
+    expect(items[0].text).toBe("We need your handle selection by Friday.");
+  });
+
+  it("trims whitespace from the blocker text", () => {
+    const items = buildClientActionItems("  Make a selection  ");
+    expect(items).toHaveLength(1);
+    expect(items[0].text).toBe("Make a selection");
+  });
+});
+
 describe("buildClientScheduleView", () => {
   it("computes status, percent, current + next labels", () => {
     const view = buildClientScheduleView(BASE_INPUT);
@@ -137,5 +193,35 @@ describe("buildClientScheduleView", () => {
     expect(view.committedInstall).toBe("2026-12-08");
     const install = view.phases.find((p) => p.phase === "install")!;
     expect(install.display).toEqual({ kind: "firm", date: "2026-12-08" });
+  });
+
+  // ─── S19 nudge fields ───────────────────────────────────────────────────────
+
+  it("includes a nextMilestoneNudge for the next upcoming phase", () => {
+    const view = buildClientScheduleView(BASE_INPUT);
+    // BASE_INPUT: currentMilestone=assembly → next=finishing (has a target)
+    expect(view.nextMilestoneNudge).not.toBeNull();
+    expect(view.nextMilestoneNudge!.label).toBe(CLIENT_PHASE_LABELS.finishing);
+    // 2026-11-18 is a Wednesday → week Mon 16 – Fri 20.
+    expect(view.nextMilestoneNudge!.window).toEqual({ start: "2026-11-16", end: "2026-11-20" });
+  });
+
+  it("nextMilestoneNudge is null at the install phase (nothing further)", () => {
+    const view = buildClientScheduleView({ ...BASE_INPUT, currentMilestone: "install" });
+    expect(view.nextMilestoneNudge).toBeNull();
+  });
+
+  it("surfaces a blocker as a client action item", () => {
+    const view = buildClientScheduleView({
+      ...BASE_INPUT,
+      blocker: "We need your handle selection by Friday.",
+    });
+    expect(view.clientActions).toHaveLength(1);
+    expect(view.clientActions[0].text).toBe("We need your handle selection by Friday.");
+  });
+
+  it("has no client actions when there is no blocker", () => {
+    const view = buildClientScheduleView(BASE_INPUT);
+    expect(view.clientActions).toHaveLength(0);
   });
 });
