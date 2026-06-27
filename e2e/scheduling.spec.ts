@@ -188,3 +188,68 @@ test.describe("scheduling slice 3 — capacity-aware date + risk buffer + bottle
     await expect(breakdown).toContainText(/base/i);
   });
 });
+
+// Scheduling S5 — editable Gantt + auto-ripple + pinnable anchors (issue #93).
+// The GanttSchedule component renders on the job detail page behind the feature
+// flag. It contains: phase pin controls, the Frappe Gantt container, an undo
+// button when there's a pending preview, and a proposed-changes table.
+// This smoke confirms the section renders and the pin buttons are present.
+// Drag-to-reschedule requires real user gestures and is covered by the unit
+// tests for rippleForward / pullPlanBackward in gantt.test.ts.
+test.describe("scheduling slice 5 — editable Gantt (tracer smoke)", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("job detail page renders the editable Gantt section with phase pin controls", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // The Gantt section renders (feature flag on in CI).
+    const gantt = page.getByTestId("gantt-schedule");
+    await expect(gantt).toBeVisible({ timeout: 15_000 });
+
+    // The Gantt container div is present (Frappe Gantt renders inside it).
+    await expect(gantt.getByTestId("gantt-container")).toBeVisible();
+
+    // All six phase pin buttons are present.
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(gantt.getByTestId(`gantt-pin-${phase}`)).toBeVisible();
+    }
+
+    // No pending ripple on first load → apply/undo buttons are hidden.
+    await expect(page.getByTestId("gantt-apply")).not.toBeVisible();
+    await expect(page.getByTestId("gantt-undo")).not.toBeVisible();
+  });
+
+  test("pinning Install triggers pull-plan backward and shows preview table", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const gantt = page.getByTestId("gantt-schedule");
+    await expect(gantt).toBeVisible({ timeout: 15_000 });
+
+    // Pin Install — triggers pull-plan backward from install date.
+    const installPin = gantt.getByTestId("gantt-pin-install");
+    await installPin.click();
+
+    // After pinning, the install pin shows as pressed.
+    await expect(installPin).toHaveAttribute("aria-pressed", "true");
+
+    // The preview table should now be visible (pull-plan computed new dates).
+    const previewTable = gantt.getByTestId("gantt-preview-table");
+    await expect(previewTable).toBeVisible({ timeout: 5_000 });
+
+    // Undo button appears when there's a pending preview.
+    await expect(gantt.getByTestId("gantt-undo")).toBeVisible();
+
+    // Clicking Undo clears the preview.
+    await gantt.getByTestId("gantt-undo").click();
+    await expect(previewTable).not.toBeVisible();
+  });
+});

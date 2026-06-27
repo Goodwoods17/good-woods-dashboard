@@ -29,6 +29,7 @@
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "framer-motion": "^12.40.0",
+    "frappe-gantt": "^1.2.2",
     "lucide-react": "^0.460.0",
     "next": "14.2.35",
     "pdfjs-dist": "^4.10.38",
