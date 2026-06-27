@@ -5,7 +5,9 @@
 > **Maintain it:** whenever a slice ships, a PR merges, or scope changes during a session,
 > update this file in the same session. Verify claims against code/git, not memory.
 >
-> **Last verified:** 2026-06-23 (against `main` @ #18 — PRs #9, #14, #17, #18 all merged; 0 open PRs).
+> **Last verified:** 2026-06-26 (against `main` @ `8db94a3` — Live Job Status milestone #5 shipped,
+> §2c; 0 open PRs / 0 open issues in #5). Forms #2/#3 + Invoices #4 also shipped since #18 — their
+> own sections still need a fuller reconcile.
 
 ---
 
@@ -118,6 +120,42 @@ PDF/image drawings per job, with piece tracking + live status. Spec:
 ```
 🗂️ later     Mozaik CSV seeding + pin-an-existing-piece ................. not built
 ```
+
+---
+
+## 2c. Live Job Status (internal MVP) — shipped frontier 🆕
+
+Field/shop crew tap granular per-phase items from their phones; the owner sees a **live board**
+of all jobs with per-phase progress. Internal-first foundation for a future client portal.
+Spec: `docs/superpowers/specs/2026-06-25-live-job-status-design.md`; ADR 0019. Architecture A★
+(each trackable item in one home table; a read-layer adapter unifies `job_items` + Drawings
+`job_pieces`; append-only `job_item_events` timeline).
+
+### Shipped ✅ (2026-06-26, milestone #5 — PRs #83/#84/#85/#86/#87/#88 merged to `main` @ `8db94a3`)
+
+- **Slice 1 (#57)** schema + live status-cycle tracer (`job_items`/`phase_step_templates`/
+  `job_item_events` + RLS + `pieces.visibility` + private `job-progress` bucket; realtime cycle)
+- **Slice 2 (#58)** template materialisation (27 SOP steps) + full mobile field view (6 collapsible
+  phase sections, tap-to-cycle, per-phase + job progress, inline add-step)
+- **Slice 3 (#59)** photos + notes event timeline (capture form, signed-URL thumbnails, realtime)
+- **Slice 4 (#60)** Drawings `pieces` folded into unified delivery/install progress
+- **Slice 5 (#61)** owner live board — all active jobs as cards, drill into any job's field view
+- **Slice 6 (#62)** visibility tagging UI (owner/client/both per item)
+
+**Build:** autonomous `/cook` run (ADR 0018), full-unattended; 5 of 6 slices needed a hands-on
+debug (channel-collision blank page, progress race, board-drill test refactor — all in the
+`cook-recurring-pitfalls` log).
+
+### Go-live status ⏳ (behind `NEXT_PUBLIC_JOB_STATUS_ENABLED`, OFF in prod)
+
+Both additive migrations **applied to prod 2026-06-26** (tables + RLS + `pieces.visibility` +
+`job-progress` bucket + 27 templates seeded) — feature **dormant** until the flag is flipped.
+**Remaining:** flip `NEXT_PUBLIC_JOB_STATUS_ENABLED=true` in Vercel prod (build-time → redeploy)
++ live smoke. **Non-goals (later milestones):** client portal (`/j/<token>`), installer daily
+log, scheduling/ETA, notifications.
+
+> Note: **Forms (milestones #2/#3)** and **Invoice capture (#4)** also shipped since this file's
+> prior verify date — their sections here still need a fuller reconcile.
 
 ---
 
