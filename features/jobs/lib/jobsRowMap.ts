@@ -29,6 +29,10 @@ export type JobRow = {
   site_access: SiteAccess;
   source: string | null;
   estimated_revenue: number | null;
+  // Scheduling & Client-Commitment Engine (ADR 0020). Additive, nullable.
+  phase_target_dates: Job["phaseTargetDates"];
+  internal_target_date: string | null;
+  buffer_days: number | null;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -58,6 +62,9 @@ export function rowToJob(row: JobRow): Job {
     siteAccess: row.site_access ?? {},
     source: row.source,
     estimatedRevenue: row.estimated_revenue != null ? Number(row.estimated_revenue) : null,
+    phaseTargetDates: row.phase_target_dates ?? null,
+    internalTargetDate: row.internal_target_date ?? null,
+    bufferDays: row.buffer_days != null ? Number(row.buffer_days) : null,
   };
 }
 
@@ -88,5 +95,8 @@ export function jobToRow(job: Job): JobRow {
     site_access: job.siteAccess ?? {},
     source: job.source ?? null,
     estimated_revenue: job.estimatedRevenue ?? null,
+    phase_target_dates: job.phaseTargetDates ?? null,
+    internal_target_date: job.internalTargetDate ?? null,
+    buffer_days: job.bufferDays ?? null,
   };
 }

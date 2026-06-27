@@ -30,6 +30,7 @@ import { HealthPill } from "@shared/components/ui/HealthPill";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
+import { ScheduleTimeline } from "@features/scheduling/components/ScheduleTimeline";
 import { BlockersCard } from "./BlockersCard";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
@@ -49,14 +50,7 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
   "complete",
 ];
 
-type TabKey =
-  | "overview"
-  | "tasks"
-  | "forms"
-  | "files"
-  | "costs"
-  | "activity"
-  | "budget";
+type TabKey = "overview" | "tasks" | "forms" | "files" | "costs" | "activity" | "budget";
 
 const TABS: { key: TabKey; label: string; enabled: boolean }[] = [
   { key: "overview", label: "Overview", enabled: true },
@@ -228,6 +222,7 @@ export function JobDetail({ jobId }: { jobId: string }) {
             </button>
           </div>
         )}
+        <ScheduleTimeline job={job} />
         <BlockersCard jobId={job.id} />
       </header>
 

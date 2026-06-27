@@ -64,6 +64,9 @@ jobs:
       # Job Status (milestone #5) is likewise flag-gated OFF in prod; turn it ON
       # for the e2e job so the live-status-cycle smoke can reach /status.
       NEXT_PUBLIC_JOB_STATUS_ENABLED: "true"
+      # Scheduling (milestone #7) is likewise flag-gated OFF in prod; turn it ON
+      # for the e2e job so the read-only schedule-timeline smoke renders.
+      NEXT_PUBLIC_SCHEDULING_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

@@ -83,6 +83,15 @@ const DEMO_JOB = {
   activity: [],
   site_access: {},
   payer_id: E2E_CONTACT.id,
+  // Scheduling S1 (ADR 0020): the current phase (cnc) target is in the past, so
+  // the read-only schedule timeline must render a "Behind" badge deterministically.
+  phase_target_dates: {
+    design: "2026-01-15",
+    cnc: "2020-02-01",
+    assembly: "2026-09-01",
+  },
+  internal_target_date: "2026-12-01",
+  buffer_days: 10,
 };
 
 async function findUser() {

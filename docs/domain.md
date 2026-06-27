@@ -123,6 +123,30 @@ does the record that holds them.
   marks a phase complete (Design = signed drawings/contract/estimate;
   Delivery = all parts on site). Still distinct from `PipelineStatus`, the
   sales pipeline.
+
+### Scheduling & client commitment (ADR 0020)
+
+- **Committed (install) date** — the **frozen, client-facing promise** of when
+  the job installs. Stays `jobs.install_date`, unchanged. It only moves on a
+  deliberate, reasoned **re-commit** — never silently. This is what the client
+  hears and what calendar/ICS export uses.
+- **Internal target** — the shop's **honest internal finish**, sat _ahead of_ the
+  committed date. Two grains: a **per-phase target date** (when each of the six
+  phases should be done — `jobs.phase_target_dates`, keyed by phase) and a single
+  **job-level internal target** (`jobs.internal_target_date`). Additive to the
+  Phase axis; the client never sees these.
+- **Buffer** — the pooled gap (in days, `jobs.buffer_days`) between the internal
+  target and the committed date. The honest contingency you watch **burn** as
+  phases slip; sized small. (Risk-tiered sizing + burn tracking land in later
+  slices; S1 just stores and shows it.)
+- **Dual schedule (CCPM)** — the model: a live, moving set of internal targets
+  (re-planned as reality shifts) against one frozen committed date, with the
+  buffer absorbing the difference. "Don't over-promise → keep the date with an
+  honest buffer you watch burn → communicate like no one else."
+- **On-track / behind** — the S1 schedule badge, derived from the
+  current-milestone pointer vs. the current phase's internal target: _behind_ once
+  today passes the date the current phase was owed by. **Folded into the existing
+  `health` axis** in later slices (NOT a permanent second badge — pre-mortem fix).
 - **Cost code** — an Operation (a named unit of shop work) that carries a
   short, unique `code` (e.g. `ASM-BASE`). The shared key that lets budgeted
   vs. actual labour be compared across the estimate, the live timers, and
@@ -277,13 +301,13 @@ projected job cost`, where projected cost locks completed phases to their
   cabinet, or a standalone finish piece. The shop says "cabs" or names the piece (toekick,
   end panel); "piece" is the canonical collective term. Code/table: `job_pieces`.
 - **Cabinet** — a piece that is a box/carcass (base · wall · tall · island). See also
-  *Cabinets and millwork* above.
+  _Cabinets and millwork_ above.
 - **Finish piece** — a non-cabinet tracked piece: **end panel**, **toe kick**, **scribe**,
   **filler**. Has its own stage pipeline (edgebanded/sanded/sprayed) distinct from a cabinet's
   (assembled/finished).
-- **Component** (a.k.a. *cutlist part*) — a sub-part of a cabinet from the Mozaik cutlist
+- **Component** (a.k.a. _cutlist part_) — a sub-part of a cabinet from the Mozaik cutlist
   (door, drawer front, shelf, back, bottom, end). **Reference data, NOT individually tracked**
-  on the check-off. Distinct from a *Finish piece*. Avoid the bare word "part" for a tracked
+  on the check-off. Distinct from a _Finish piece_. Avoid the bare word "part" for a tracked
   piece — it collides with these components.
 - **R#C# code** — Mozaik's per-cabinet code, e.g. `R1C7` = Room 1 (Kitchen), Cabinet 7. It is
   **printed on the shop drawing** and is the **join key** tying a pin on the drawing ↔ its
@@ -295,11 +319,11 @@ projected job cost`, where projected cost locks completed phases to their
 - **Status / lifecycle** — a piece's position through its stages, **as completed milestones**.
   Every pipeline is bracketed by two universal bookends: **`not_started`** (a new piece, 0%)
   and **`done`** (terminal, past the last stage). Advancing ticks the next milestone complete;
-  progress reads *position / total*. The status is page-independent (you can advance a piece
+  progress reads _position / total_. The status is page-independent (you can advance a piece
   from any open drawing).
 - **Cut method** — recorded when a piece's `cut` milestone is ticked: **`inhouse`** (table saw)
   or **`cnc_sub`** (Toolpath subbed). The per-piece as-built half of the make-vs-buy decision
-  (the *pricing* decision is per-job; see ADR 0012).
+  (the _pricing_ decision is per-job; see ADR 0012).
 - **Pin** — a piece's marker placed on a drawing at a normalized (0–1) point on a specific
   `(document, page)`; carries the piece's `R#C#` code and a status badge. The drawing-side half
   of the pin↔checklist pair. A piece may have **no pin** (e.g. Mozaik-seeded before placement).
@@ -308,7 +332,7 @@ projected job cost`, where projected cost locks completed phases to their
 - **Document** — any per-project file or link reference (uploaded PDF, uploaded image,
   external link, or in-app sketch). The storage concept; `documents` table.
 - **Drawing** — the user-facing name for documents opened in the Drawings viewer. Colloquial:
-  staff say "drawings" for shop/designer/architectural drawings *and* appliance packages /
+  staff say "drawings" for shop/designer/architectural drawings _and_ appliance packages /
   permits alike, so the **viewer + button are labelled "Drawings"** even though some documents
   aren't literally drawings.
 - **Sketch** — a document with no uploaded source file: a blank-canvas drawing made in-app on
