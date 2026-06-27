@@ -55,12 +55,27 @@ export type ClientScheduleLoadResult =
   | { ok: true; bundle: ClientScheduleBundle }
   | { ok: false; reason: "not_found" | "revoked" | "unconfigured" };
 
+export type LoadScheduleShareLinkOptions = {
+  /**
+   * Stamp `viewed_at` on first open. The human portal page passes true (a real
+   * visit). The ICS feed (S21) passes FALSE — a subscribed calendar polls the
+   * feed on its own schedule, and those background polls must NOT masquerade as
+   * the client opening the portal.
+   */
+  stampView?: boolean;
+};
+
 /**
  * Load the client-safe schedule view behind a token. Rejects a revoked link with
  * a distinct reason (the page shows "no longer active", never data). Side effect:
- * stamps viewed_at on first open (best-effort; never fails the load).
+ * stamps viewed_at on first open (best-effort; never fails the load) unless
+ * `stampView` is false.
  */
-export async function loadScheduleShareLink(token: string): Promise<ClientScheduleLoadResult> {
+export async function loadScheduleShareLink(
+  token: string,
+  options: LoadScheduleShareLinkOptions = {}
+): Promise<ClientScheduleLoadResult> {
+  const { stampView = true } = options;
   const sb = getServiceClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
@@ -86,7 +101,7 @@ export async function loadScheduleShareLink(token: string): Promise<ClientSchedu
   const job = jobRow as JobScheduleRow;
 
   // First view stamps viewed_at (best-effort; don't fail the load on a write error).
-  if (link.viewedAt === null) {
+  if (stampView && link.viewedAt === null) {
     await sb
       .from(SCHEDULE_SHARE_LINKS_TABLE)
       .update({ viewed_at: new Date().toISOString() })

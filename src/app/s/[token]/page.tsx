@@ -23,5 +23,12 @@ export default async function ClientSchedulePage({ params }: { params: { token: 
   }
 
   const { jobName, recipientName, view } = result.bundle;
-  return <ClientScheduleView jobName={jobName} recipientName={recipientName} view={view} />;
+  return (
+    <ClientScheduleView
+      jobName={jobName}
+      recipientName={recipientName}
+      view={view}
+      token={params.token}
+    />
+  );
 }
