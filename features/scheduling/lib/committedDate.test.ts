@@ -33,7 +33,14 @@ function row(
 }
 
 function allRows(overrides: Partial<Record<MilestoneStage, number>> = {}): PhaseCapacityRow[] {
-  const phases: MilestoneStage[] = ["design", "cnc", "assembly", "finishing", "delivery", "install"];
+  const phases: MilestoneStage[] = [
+    "design",
+    "cnc",
+    "assembly",
+    "finishing",
+    "delivery",
+    "install",
+  ];
   return phases.map((p) => row(p, overrides[p] ?? 0));
 }
 
@@ -46,11 +53,7 @@ const flatDurations: Record<MilestoneStage, number> = {
   install: 2,
 };
 
-const done = (
-  categoryId: string | null,
-  hours: number,
-  jobId = "job-1"
-): CapacitySession => ({
+const done = (categoryId: string | null, hours: number, jobId = "job-1"): CapacitySession => ({
   categoryId,
   jobId,
   startedAt: "2026-06-15T09:00:00.000Z",
@@ -161,6 +164,26 @@ describe("computeRiskTieredBuffer", () => {
     expect(b.totalDays).toBe(b.baseDays + b.subDays + 3);
   });
 
+  it("adds the per-owner reliability nudge on top of base + subs + variance (S13)", () => {
+    const b = computeRiskTieredBuffer({
+      totalInternalDays: 20,
+      subDependencyCount: 1,
+      varianceNudgeDays: 3,
+      ownerReliabilityDays: 2,
+    });
+    expect(b.ownerReliabilityDays).toBe(2);
+    expect(b.totalDays).toBe(b.baseDays + b.subDays + b.varianceDays + 2);
+  });
+
+  it("clamps a negative owner-reliability nudge to zero", () => {
+    const b = computeRiskTieredBuffer({
+      totalInternalDays: 10,
+      subDependencyCount: 0,
+      ownerReliabilityDays: -4,
+    });
+    expect(b.ownerReliabilityDays).toBe(0);
+  });
+
   it("respects the per-job override and flags isOverridden", () => {
     const b = computeRiskTieredBuffer({
       totalInternalDays: 20,
@@ -240,10 +263,7 @@ describe("phaseVarianceNudgeDays", () => {
   });
 
   it("ignores unknown/null phase tags", () => {
-    const sessions: CapacitySession[] = [
-      done(null, 10, "job-1"),
-      done("not-a-phase", 10, "job-2"),
-    ];
+    const sessions: CapacitySession[] = [done(null, 10, "job-1"), done("not-a-phase", 10, "job-2")];
     expect(phaseVarianceNudgeDays(sessions)).toBe(0);
   });
 });
@@ -281,9 +301,7 @@ describe("detectFloatingBottleneck", () => {
       row("cnc", 1.3),
       row("assembly", 1.5),
       row("finishing", 1.1),
-    ].concat(
-      (["design", "delivery", "install"] as MilestoneStage[]).map((p) => row(p, 0))
-    );
+    ].concat((["design", "delivery", "install"] as MilestoneStage[]).map((p) => row(p, 0)));
     expect(detectFloatingBottleneck(rows)!.phase).toBe("assembly");
   });
 });

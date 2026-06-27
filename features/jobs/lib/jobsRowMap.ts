@@ -33,6 +33,7 @@ export type JobRow = {
   phase_target_dates: Job["phaseTargetDates"];
   internal_target_date: string | null;
   buffer_days: number | null;
+  phase_owners: Job["phaseOwners"];
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -65,6 +66,7 @@ export function rowToJob(row: JobRow): Job {
     phaseTargetDates: row.phase_target_dates ?? null,
     internalTargetDate: row.internal_target_date ?? null,
     bufferDays: row.buffer_days != null ? Number(row.buffer_days) : null,
+    phaseOwners: row.phase_owners ?? null,
   };
 }
 
@@ -98,5 +100,6 @@ export function jobToRow(job: Job): JobRow {
     phase_target_dates: job.phaseTargetDates ?? null,
     internal_target_date: job.internalTargetDate ?? null,
     buffer_days: job.bufferDays ?? null,
+    phase_owners: job.phaseOwners ?? null,
   };
 }

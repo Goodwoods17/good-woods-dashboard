@@ -92,6 +92,17 @@ const DEMO_JOB = {
   },
   internal_target_date: "2026-12-01",
   buffer_days: 10,
+  // Scheduling S13 (issue #101): two-level ownership. CNC is owned by the demo
+  // subtrade (same id as the S11 subtrade fixture), assembly by a named person.
+  // Design has no explicit owner → the commitment ledger defaults it to the shop.
+  phase_owners: {
+    cnc: { kind: "subtrade", id: "51110000-0000-4000-8000-000000000002", name: "Demo Sub Co." },
+    assembly: {
+      kind: "person",
+      id: "51130000-0000-4000-8000-000000000010",
+      name: "Andrew Chilton",
+    },
+  },
 };
 
 // ─── Scheduling S8 (issue #96) — buffer-burn hitlist job ─────────────────
@@ -287,6 +298,60 @@ async function seedS11Trades(token) {
   console.log("OK seeded S11 trade fixtures (trade + subtrade + job_trades)");
 }
 
+// ─── Scheduling S13 (issue #101) — commitment-ledger reliability fixtures ────
+// Per-owner date-keeping history so the Commitment Ledger panel's reliability
+// roll-up is deterministic. The demo subtrade missed 1 of 2 committed dates
+// (50% → earns ceil(0.5 × 3) = 2 buffer days); the shop kept its one promise.
+// Fixed hex ids → idempotent upserts.
+const S13_LEDGER = [
+  {
+    id: "51130000-0000-4000-8000-000000000001",
+    job_id: "job-status-demo",
+    level: "phase",
+    phase: "cnc",
+    owner_kind: "subtrade",
+    owner_id: "51110000-0000-4000-8000-000000000002",
+    owner_name: "Demo Sub Co.",
+    committed_date: "2026-03-01",
+    actual_date: "2026-03-08",
+    status: "missed",
+    missed: true,
+  },
+  {
+    id: "51130000-0000-4000-8000-000000000002",
+    job_id: "job-status-demo",
+    level: "phase",
+    phase: "cnc",
+    owner_kind: "subtrade",
+    owner_id: "51110000-0000-4000-8000-000000000002",
+    owner_name: "Demo Sub Co.",
+    committed_date: "2026-04-01",
+    actual_date: "2026-04-01",
+    status: "kept",
+    missed: false,
+  },
+  {
+    id: "51130000-0000-4000-8000-000000000003",
+    job_id: "job-status-demo",
+    level: "client",
+    phase: null,
+    owner_kind: "shop",
+    owner_id: null,
+    owner_name: "Good Woods",
+    committed_date: "2026-02-01",
+    actual_date: "2026-02-01",
+    status: "kept",
+    missed: false,
+  },
+];
+
+async function seedS13Ledger(token) {
+  for (const row of S13_LEDGER) {
+    await upsert(token, "commitment_ledger", row);
+  }
+  console.log("OK seeded S13 commitment-ledger reliability fixtures");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -295,6 +360,7 @@ async function seedJob() {
   await upsert(token, "jobs", DEMO_JOB);
   await upsert(token, "jobs", BUFFER_BURN_JOB);
   await seedS11Trades(token);
+  await seedS13Ledger(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

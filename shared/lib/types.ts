@@ -1,11 +1,5 @@
 export type PipelineStatus =
-  | "new"
-  | "sold"
-  | "in_design"
-  | "in_production"
-  | "in_finishing"
-  | "installing"
-  | "complete";
+  "new" | "sold" | "in_design" | "in_production" | "in_finishing" | "installing" | "complete";
 
 export type HealthStatus = "on_track" | "at_risk" | "blocked" | "complete" | "paused";
 
@@ -166,14 +160,7 @@ export type Activity = {
 };
 
 export type DocumentKind =
-  | "designer"
-  | "toolpath_cnc"
-  | "shop"
-  | "architect"
-  | "appliance"
-  | "permit"
-  | "photo"
-  | "other";
+  "designer" | "toolpath_cnc" | "shop" | "architect" | "appliance" | "permit" | "photo" | "other";
 
 export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
   designer: "Designer",
@@ -453,6 +440,24 @@ export type Job = {
   internalTargetDate?: string | null;
   /** Pooled buffer in days between the internal target and the committed install. */
   bufferDays?: number | null;
+  /**
+   * Named owner per phase (S13 — two-level ownership). Each phase's internal
+   * commitment is owned by a person or subtrade; absent/null = the shop owns it
+   * by default. The client-committed install (`installDate`) is always shop-owned.
+   */
+  phaseOwners?: Partial<Record<MilestoneStage, CommitmentOwner>> | null;
+};
+
+/**
+ * Who owns a date-promise (S13, commitment ledger). The shop owns the client
+ * install commitment; each phase's internal commitment is owned by a person or
+ * subtrade. `id` references the subtrade/person row when known (null for the shop
+ * or an ad-hoc named owner).
+ */
+export type CommitmentOwner = {
+  kind: "shop" | "person" | "subtrade";
+  id: string | null;
+  name: string;
 };
 
 export type JobBlocker = {
