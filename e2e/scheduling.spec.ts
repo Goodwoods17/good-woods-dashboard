@@ -144,6 +144,41 @@ test.describe("scheduling slice 4 — template draft preview on new-job form", (
   });
 });
 
+// Scheduling S6 — buffer burn + fever chart + recovery flag (issue #94).
+// The demo job has internal_target_date = "2026-12-01" (future) and
+// install_date already seeded. Since internal target is in the future, buffer
+// consumed = 0 → zone = green → no recovery flag. The fever section and
+// chart should still render.
+test.describe("scheduling slice 6 — buffer burn + fever chart + recovery flag", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("job detail shows the fever section with chart, no recovery flag when safe", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const timeline = page.getByTestId("schedule-timeline");
+    await expect(timeline).toBeVisible({ timeout: 15_000 });
+
+    // Fever section renders.
+    const feverSection = page.getByTestId("fever-section");
+    await expect(feverSection).toBeVisible();
+
+    // The SVG fever chart renders.
+    const chart = page.getByTestId("fever-chart");
+    await expect(chart).toBeVisible();
+
+    // The demo job's internal target (2026-12-01) is in the future, so
+    // buffer is not consumed → zone should be green or yellow (not red),
+    // and the recovery flag must NOT appear.
+    await expect(page.getByTestId("recovery-flag")).not.toBeVisible();
+  });
+});
+
 // Scheduling S3 — capacity-aware committed date + risk-tiered buffer +
 // floating-bottleneck detection (issue #91). The seed already puts assembly
 // over capacity (6h logged vs 4h configured), so assembly must be the
