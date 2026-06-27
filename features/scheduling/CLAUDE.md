@@ -286,6 +286,53 @@ who/when; `job_id text` FK to `jobs.id`; RLS authenticated-only + anon-none).
 (`-subject` / `-body`), `recommit-submit`, `recommit-revision-history`,
 `recommit-revision-<id>`.
 
+## What's here (S18 client schedule portal — read-only, on-track, issue #106)
+
+```
+features/scheduling/
+├── lib/
+│   ├── clientPortal.ts            pure: client-safe schedule view (status / % done /
+│   │                              next step / firm install + soft mid-phase ranges) (+ test)
+│   ├── scheduleShareLinksRowMap.ts row ↔ ScheduleShareLink
+│   └── scheduleShareLinkServer.ts  server-only: loadScheduleShareLink(token) (service role)
+└── components/
+    ├── ClientScheduleView.tsx      the public read-only portal page body
+    ├── ClientScheduleInactive.tsx  clean inactive state (revoked / unknown / unconfigured)
+    └── ClientPortalPanel.tsx       owner mint/copy/revoke panel in ScheduleTab
+src/app/s/[token]/page.tsx          public no-login route (flag-gated; 404s when off)
+supabase/migrations/
+└── 20260706000000_scheduling_share_links.sql   schedule_share_links table
+```
+
+A tokenized, READ-ONLY, no-login client view of ONE job's schedule, reusing the
+Forms P2 share-link pattern (opaque token = capability, service-role read,
+`*_anon_none` RLS, `/s` added to the middleware public-routes allowlist). The
+client sees a friendly milestone stepper, % done, next step, a soft **week
+RANGE** per mid-phase, and ONE **firm** install day — the frozen client promise.
+**Buffer / internal targets / fever chart NEVER reach the page**: the route is a
+server component that computes `buildClientScheduleView` server-side and passes
+only the safe result to the browser (raw `phase_target_dates` never serialize).
+
+- `clientPortal.ts` (pure, 16 unit tests): `clientScheduleStatus` (on_track →
+  date_updated ONLY when the live committed date diverges from the link's
+  snapshot), `clientPercentDone` (completed-phase share — install reads 83%),
+  `clientNextStepLabel` + `CLIENT_PHASE_LABELS` (client-friendly names; hide the
+  "CNC" shop term), `businessWeekWindow` (Mon–Fri fuzz of an internal target →
+  range), `buildClientScheduleView` (assembles the whole safe view).
+- `schedule_share_links` (additive): `job_id text` FK → `jobs.id`, opaque `token`,
+  `committed_date_snapshot date` (frozen install at mint time), `viewed_at`,
+  `revoked_at`; RLS authenticated_all + anon_none. `committedDateSnapshot` is the
+  honest-promise anchor — the client view flips to "Date updated" only when the
+  firm install date actually moves away from it. Owner mints the link as the
+  authenticated user; the public page reads it via the service role.
+- Testids: `client-schedule-view`, `client-status-pill` (`data-status`),
+  `client-percent-done`, `client-current-stage`, `client-next-step`,
+  `client-install-date`, `client-date-updated-note`, `client-step-<phase>`
+  (`data-state`), `client-step-window-<phase>`, `client-schedule-inactive`;
+  owner panel: `client-portal-panel`, `client-portal-create`,
+  `client-portal-link-row`, `client-portal-url`, `client-portal-copy`,
+  `client-portal-revoke`.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write

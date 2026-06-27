@@ -126,6 +126,25 @@ export type FormShareLink = {
   createdBy: string | null;
 };
 
+// Scheduling S18 (issue #106) — a no-login token link to ONE job's client
+// schedule portal (read-only, on-track). The token is the only key; reusable
+// until manually revoked (revokedAt). `committedDateSnapshot` records the
+// committed install date as it stood when the link was minted — the client view
+// flips to "Date updated" only when the live install date diverges from it
+// (an honest promise: the firm date never silently changes under the client).
+// Buffer / internal targets / fever chart are NEVER carried to the public page.
+export type ScheduleShareLink = {
+  id: string;
+  jobId: string;
+  token: string;
+  recipientName: string | null;
+  committedDateSnapshot: string;
+  viewedAt: string | null;
+  revokedAt: string | null;
+  createdAt: string;
+  createdBy: string | null;
+};
+
 export const MILESTONE_STAGES: { key: MilestoneStage; label: string }[] = [
   { key: "design", label: "Design" },
   { key: "cnc", label: "CNC / Cut" },

@@ -12,6 +12,7 @@ import { MakeReadyChecklistPanel } from "./MakeReadyChecklistPanel";
 import { CommitmentLedgerPanel } from "./CommitmentLedgerPanel";
 import { RecommitPanel } from "./RecommitPanel";
 import { PriorityBumpPanel } from "./PriorityBumpPanel";
+import { ClientPortalPanel } from "./ClientPortalPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
@@ -126,11 +127,10 @@ export function ScheduleTab({
       <RecommitPanel job={job} onRecommit={onRecommit} />
 
       {/* ── Priority/VIP flag + manual bump-with-impact (S17) ── */}
-      <PriorityBumpPanel
-        job={job}
-        onTogglePriority={onTogglePriority}
-        onBump={onBump}
-      />
+      <PriorityBumpPanel job={job} onTogglePriority={onTogglePriority} onBump={onBump} />
+
+      {/* ── Read-only client schedule portal link (S18) ── */}
+      <ClientPortalPanel job={job} />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section

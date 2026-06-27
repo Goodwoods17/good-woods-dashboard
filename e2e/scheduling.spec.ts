@@ -1125,9 +1125,7 @@ test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", ()
     await expect(panel).toBeVisible({ timeout: 10_000 });
   });
 
-  test("priority badge is shown because the DEMO_JOB is seeded as priority", async ({
-    page,
-  }) => {
+  test("priority badge is shown because the DEMO_JOB is seeded as priority", async ({ page }) => {
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
@@ -1146,9 +1144,7 @@ test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", ()
     await expect(toggle).toHaveAttribute("aria-pressed", "true");
   });
 
-  test("selecting a job to bump + entering days shows an impact preview", async ({
-    page,
-  }) => {
+  test("selecting a job to bump + entering days shows an impact preview", async ({ page }) => {
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
@@ -1190,9 +1186,7 @@ test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", ()
     await expect(preview).toContainText("Job Status Demo");
   });
 
-  test("fever board shows a VIP badge on the DEMO_JOB (seeded as priority)", async ({
-    page,
-  }) => {
+  test("fever board shows a VIP badge on the DEMO_JOB (seeded as priority)", async ({ page }) => {
     await login(page);
     await page.goto("/");
 
@@ -1207,9 +1201,7 @@ test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", ()
     await expect(vipBadge).toContainText("VIP");
   });
 
-  test("priority job surfaces first within its zone on the fever board", async ({
-    page,
-  }) => {
+  test("priority job surfaces first within its zone on the fever board", async ({ page }) => {
     await login(page);
     await page.goto("/");
 
@@ -1233,5 +1225,104 @@ test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", ()
     if (e2eIdx >= 0) {
       expect(demoIdx).toBeLessThan(e2eIdx);
     }
+  });
+});
+
+// Scheduling S18 — read-only client schedule portal (issue #106). The public
+// no-login /s/<token> page renders the milestone stepper, % done, next step,
+// soft mid-phase ranges + the FIRM install day, and "On track". Buffer /
+// internal targets / fever NEVER appear. Status flips to "Date updated" only
+// when the committed install date moves away from the snapshot taken at mint
+// time. Both links are seeded against the DEMO_JOB (install 2026-12-15, cnc
+// phase) by scripts/seed-e2e.mjs. The route is flag-gated (404s when off).
+const S18_ONTRACK_TOKEN = "e2eschedontrack00000000000000000000ab";
+const S18_UPDATED_TOKEN = "e2escheddateupdated0000000000000000cd";
+
+test.describe("scheduling slice 18 — client schedule portal", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the public on-track link shows the stepper, %, next step + a firm install day", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/s/${S18_ONTRACK_TOKEN}`);
+
+      const view = guestPage.getByTestId("client-schedule-view");
+      await expect(view).toBeVisible({ timeout: 15_000 });
+
+      // All six milestone steps render.
+      for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+        await expect(guestPage.getByTestId(`client-step-${phase}`)).toBeVisible();
+      }
+
+      // cnc phase → 17% complete (index 1 of 6).
+      await expect(guestPage.getByTestId("client-percent-done")).toHaveText("17%");
+
+      // Status pill is "On track" (snapshot matches the live committed date).
+      const pill = guestPage.getByTestId("client-status-pill");
+      await expect(pill).toHaveAttribute("data-status", "on_track");
+
+      // The firm install day shows the exact committed date.
+      await expect(guestPage.getByTestId("client-install-date")).toContainText("2026");
+
+      // Next step is the upcoming phase, client-friendly named (never "CNC").
+      await expect(guestPage.getByTestId("client-next-step")).toBeVisible();
+
+      // THE privacy gate: buffer / internal targets / fever NEVER appear.
+      await expect(guestPage.getByText(/buffer/i)).toHaveCount(0);
+      await expect(guestPage.getByText(/internal target/i)).toHaveCount(0);
+      await expect(guestPage.getByText(/fever/i)).toHaveCount(0);
+      await expect(guestPage.getByText(/\bCNC\b/)).toHaveCount(0);
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("the public link flips to 'Date updated' when the committed date has moved", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/s/${S18_UPDATED_TOKEN}`);
+
+      await expect(guestPage.getByTestId("client-schedule-view")).toBeVisible({ timeout: 15_000 });
+
+      const pill = guestPage.getByTestId("client-status-pill");
+      await expect(pill).toHaveAttribute("data-status", "date_updated");
+      await expect(guestPage.getByTestId("client-date-updated-note")).toBeVisible();
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("an unknown schedule token shows a clean inactive state, not data", async ({ browser }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto("/s/this-token-does-not-exist-000000000000000000");
+      await expect(guestPage.getByTestId("client-schedule-inactive")).toBeVisible({
+        timeout: 15_000,
+      });
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("the owner Schedule tab exposes the client-link panel", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("client-portal-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+    await expect(panel.getByTestId("client-portal-create")).toBeVisible();
+    // A seeded link row is already present for the DEMO_JOB.
+    await expect(panel.getByTestId("client-portal-link-row").first()).toBeVisible();
   });
 });

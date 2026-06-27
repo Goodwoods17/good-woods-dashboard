@@ -2,8 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // Routes that don't require auth. `/f` = the public tokenized form-fill portal
-// (Forms P2); the token is the capability, served by a service-role route.
-const PUBLIC_ROUTES = ["/login", "/f"];
+// (Forms P2); `/s` = the public tokenized client schedule portal (Scheduling
+// S18). In both, the token is the capability, served by a service-role route.
+const PUBLIC_ROUTES = ["/login", "/f", "/s"];
 
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

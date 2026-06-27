@@ -42,3 +42,4 @@ export const SCHEDULING_MAKE_READY_ITEMS_TABLE = "scheduling_make_ready_items";
 export const COMMITMENT_LEDGER_TABLE = "commitment_ledger";
 export const COMMITMENT_REVISIONS_TABLE = "commitment_revisions";
 export const PRIORITY_BUMPS_TABLE = "priority_bumps";
+export const SCHEDULE_SHARE_LINKS_TABLE = "schedule_share_links";
