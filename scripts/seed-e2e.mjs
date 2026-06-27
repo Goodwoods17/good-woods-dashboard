@@ -57,6 +57,34 @@ const E2E_JOB = {
   payer_id: E2E_CONTACT.id,
 };
 
+// The Job Status demo job. Its id is the DEMO_JOB_ID the job-status e2e seeds
+// items/pieces against; slice 5's owner board only drills into jobs that exist
+// in the `jobs` table, so the demo job MUST be a real active job for the
+// per-job field-view tests to reach it. Fixed id → idempotent upsert.
+const DEMO_JOB = {
+  id: "job-status-demo",
+  code: "GW-DEMO",
+  name: "Job Status Demo",
+  client: "E2E Test Client",
+  address: "2 Demo Rd, Victoria BC",
+  template: "full_project",
+  pipeline_status: "in_production",
+  health_status: "on_track",
+  current_milestone: "cnc",
+  install_date: "2026-12-15",
+  revenue: 0,
+  costs: [],
+  invoice: {
+    number: "INV-DEMO-001",
+    issuedDate: "2026-01-01",
+    dueDate: "2026-01-15",
+    lineItems: [],
+  },
+  activity: [],
+  site_access: {},
+  payer_id: E2E_CONTACT.id,
+};
+
 async function findUser() {
   const res = await fetch(`${url}/auth/v1/admin/users?per_page=200`, { headers });
   if (!res.ok) throw new Error(`list users ${res.status}: ${await res.text()}`);
@@ -126,7 +154,8 @@ async function seedJob() {
   const token = await signIn();
   await upsert(token, "contacts", E2E_CONTACT);
   await upsert(token, "jobs", E2E_JOB);
-  console.log(`OK seeded e2e job ${E2E_JOB.code} (${E2E_JOB.name})`);
+  await upsert(token, "jobs", DEMO_JOB);
+  console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}`);
 }
 
 async function main() {
