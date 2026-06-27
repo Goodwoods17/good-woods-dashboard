@@ -2,6 +2,7 @@ import { Check, CalendarCheck2, ArrowRight, AlertCircle } from "lucide-react";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import type { ClientScheduleView as ClientScheduleViewModel } from "../lib/clientPortal";
+import { AddToCalendar } from "./AddToCalendar";
 
 /**
  * The public, no-login client schedule portal (S18, issue #106). Purely
@@ -17,10 +18,13 @@ export function ClientScheduleView({
   jobName,
   recipientName,
   view,
+  token,
 }: {
   jobName: string;
   recipientName: string | null;
   view: ClientScheduleViewModel;
+  /** The share token (S21) — powers the add-to-calendar / subscribe links. */
+  token?: string;
 }) {
   const updated = view.status === "date_updated";
 
@@ -99,7 +103,9 @@ export function ClientScheduleView({
             className="mt-4 rounded-2xl border border-border bg-surface p-6 shadow-resting"
             data-testid="client-next-milestone-nudge"
           >
-            <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary">What&apos;s next</p>
+            <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary">
+              What&apos;s next
+            </p>
             <div className="mt-2 flex items-center gap-2">
               <ArrowRight className="h-4 w-4 flex-none text-status-on-track" strokeWidth={1.75} />
               <p className="text-base font-medium text-text-primary">
@@ -125,10 +131,7 @@ export function ClientScheduleView({
             data-testid="client-actions"
           >
             <div className="flex items-center gap-2">
-              <AlertCircle
-                className="h-4 w-4 flex-none text-status-blocked"
-                strokeWidth={1.75}
-              />
+              <AlertCircle className="h-4 w-4 flex-none text-status-blocked" strokeWidth={1.75} />
               <p className="text-xs uppercase tracking-[0.06em] text-status-blocked">
                 What we need from you
               </p>
@@ -177,6 +180,9 @@ export function ClientScheduleView({
             )}
           </div>
         </section>
+
+        {/* ── S21: Add to calendar (subscribable ICS feed) ──────────────────── */}
+        {token ? <AddToCalendar token={token} /> : null}
 
         {/* ── Milestone stepper ─────────────────────────────────────────────── */}
         <section className="mt-4 rounded-2xl border border-border bg-surface p-6 shadow-resting">

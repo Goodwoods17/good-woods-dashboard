@@ -333,6 +333,43 @@ only the safe result to the browser (raw `phase_target_dates` never serialize).
   `client-portal-link-row`, `client-portal-url`, `client-portal-copy`,
   `client-portal-revoke`.
 
+## What's here (S21 client add-to-calendar — subscribable ICS feed, issue #109)
+
+```
+features/scheduling/
+├── lib/
+│   └── clientCalendar.ts   pure: buildClientCalendar → RFC 5545 ICS string (+ test)
+└── components/
+    └── AddToCalendar.tsx    client island: subscribe (webcal) / Google / download buttons
+src/app/s/[token]/feed.ics/route.ts   public no-login tokenized ICS feed (service role)
+```
+
+A tokenized, subscribable ICS feed per client at `/s/<token>/feed.ics`, reusing
+the S18 `schedule_share_links` token (no new schema). The feed mirrors EXACTLY
+the client-safe portal view: the ONE **firm install day** + each upcoming
+mid-phase **week RANGE** as all-day VEVENTs — the buffer, the raw internal
+targets, and the fever data never reach it (`buildClientCalendar` only consumes
+the already-safe `ClientScheduleView`). Completed and to-be-scheduled phases emit
+no event.
+
+- **Auto-updates in place**: each event has a STABLE per-token UID
+  (`<token>-<phase>@schedule.goodwoods.app`); a shifted date re-emits the same UID
+  with a new DTSTART, so a subscribed calendar updates the event rather than
+  duplicating. `X-PUBLISHED-TTL` / `REFRESH-INTERVAL` hint a 6h re-poll. The
+  portal stays the source of truth and the feed lags by design — every
+  committed-date change is paired with an immediate email (the S14 re-commit
+  flow).
+- **Route** is `runtime=nodejs`, `force-dynamic`, flag-gated (404 when
+  `NEXT_PUBLIC_SCHEDULING_ENABLED` is off), and a flat 404 on any token miss
+  (never leaks existence). Calendar polls pass `stampView: false` to
+  `loadScheduleShareLink` so background re-polls don't masquerade as the client
+  opening the portal. `Content-Type: text/calendar`, short cache.
+- **Add-to-calendar buttons** on the portal (`AddToCalendar`, a client island for
+  `window.location`): Subscribe (`webcal://…/feed.ics`, the auto-updating star
+  option), Add to Google Calendar, and Download `.ics`. Testids:
+  `client-add-to-calendar`, `client-calendar-subscribe`, `client-calendar-google`,
+  `client-calendar-download`.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write

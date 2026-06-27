@@ -1489,3 +1489,69 @@ test.describe("scheduling slice 20 — kickoff expectation-setting artifact", ()
     await expect(body.getByText(/fever/i)).toHaveCount(0);
   });
 });
+
+// Scheduling S21 — client add-to-calendar (subscribable ICS feed, issue #109).
+// A tokenized, no-login ICS feed at /s/<token>/feed.ics that mirrors the portal:
+// the ONE firm install day + upcoming mid-phase week ranges, never the buffer /
+// internal targets / fever. The portal page gains add-to-calendar buttons.
+// Reuses the S18 share-link seed (DEMO_JOB, install_date 2026-12-15). Flag-gated.
+const S21_FEED_TOKEN = "e2eschedontrack00000000000000000000ab"; // == S18 on-track link
+
+test.describe("scheduling slice 21 — client add-to-calendar ICS feed", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the tokenized ICS feed serves a valid calendar with the firm install event", async ({
+    request,
+  }) => {
+    const res = await request.get(`/s/${S21_FEED_TOKEN}/feed.ics`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("text/calendar");
+
+    const body = await res.text();
+    expect(body).toContain("BEGIN:VCALENDAR");
+    expect(body).toContain("END:VCALENDAR");
+    // The firm install day (DEMO_JOB install_date 2026-12-15) is an all-day event.
+    expect(body).toContain("DTSTART;VALUE=DATE:20261215");
+    // Stable per-token UID → the event updates in place when the date shifts.
+    expect(body).toContain(`UID:${S21_FEED_TOKEN}-install@`);
+
+    // Privacy gate: shop-internal vocabulary never reaches the feed.
+    const lower = body.toLowerCase();
+    expect(lower).not.toContain("buffer");
+    expect(lower).not.toContain("internal target");
+    expect(lower).not.toContain("fever");
+  });
+
+  test("an unknown token's feed is a flat 404 (never leaks existence)", async ({ request }) => {
+    const res = await request.get("/s/this-token-does-not-exist-000000000000000000/feed.ics");
+    expect(res.status()).toBe(404);
+  });
+
+  test("the public portal page shows subscribe + download calendar buttons", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/s/${S21_FEED_TOKEN}`);
+
+      await expect(guestPage.getByTestId("client-schedule-view")).toBeVisible({ timeout: 15_000 });
+
+      const calBox = guestPage.getByTestId("client-add-to-calendar");
+      await expect(calBox).toBeVisible();
+
+      // Subscribe link points at the tokenized feed via webcal:// (auto-updates).
+      const subscribe = guestPage.getByTestId("client-calendar-subscribe");
+      await expect(subscribe).toBeVisible();
+      await expect(subscribe).toHaveAttribute("href", new RegExp(`feed\\.ics$`));
+
+      // Download link is present too.
+      await expect(guestPage.getByTestId("client-calendar-download")).toBeVisible();
+    } finally {
+      await guest.close();
+    }
+  });
+});
