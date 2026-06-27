@@ -570,3 +570,268 @@ test.describe("job status slice 2 — template materialisation + full field view
     await expect(newItem).toHaveAttribute("data-status", "not_started");
   });
 });
+
+// ─── Slice 6 (issue #62) — visibility tagging UI ─────────────────────────────
+
+test.describe("job status slice 6 — visibility tagging UI", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY + a seeded Supabase"
+  );
+
+  test("each item row has a visibility badge defaulting to owner", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Seed one item with the default visibility (owner).
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+    await sb.from("job_items").insert({
+      job_id: DEMO_JOB_ID,
+      phase: "assembly",
+      label: "E2E visibility item",
+      source: "adhoc",
+      status: "not_started",
+      visibility: "owner",
+      sort_order: 0,
+    });
+
+    await login(page);
+    await openDemoJob(page);
+
+    // The item row should be visible.
+    const item = page.getByTestId("job-status-item").filter({ hasText: "E2E visibility item" });
+    await expect(item).toBeVisible({ timeout: 15_000 });
+
+    // The sibling visibility badge should show 'owner' (the default).
+    // The badge is a sibling button in the same <li>, so we scope to the li.
+    const li = page.locator("li", { has: item });
+    const badge = li.locator('[data-testid="visibility-toggle"]');
+    await expect(badge).toBeVisible({ timeout: 5_000 });
+    await expect(badge).toHaveAttribute("data-visibility", "owner");
+  });
+
+  test("tapping the visibility badge cycles owner → client → both → owner", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+    await sb.from("job_items").insert({
+      job_id: DEMO_JOB_ID,
+      phase: "assembly",
+      label: "E2E visibility cycle",
+      source: "adhoc",
+      status: "not_started",
+      visibility: "owner",
+      sort_order: 0,
+    });
+
+    await login(page);
+    await openDemoJob(page);
+
+    const item = page.getByTestId("job-status-item").filter({ hasText: "E2E visibility cycle" });
+    await expect(item).toBeVisible({ timeout: 15_000 });
+    const li = page.locator("li", { has: item });
+    const badge = li.locator('[data-testid="visibility-toggle"]');
+    await expect(badge).toHaveAttribute("data-visibility", "owner");
+
+    // Tap 1: owner → client
+    await badge.click();
+    await expect(badge).toHaveAttribute("data-visibility", "client", { timeout: 5_000 });
+
+    // Tap 2: client → both
+    await badge.click();
+    await expect(badge).toHaveAttribute("data-visibility", "both", { timeout: 5_000 });
+
+    // Tap 3: both → owner (wraps around)
+    await badge.click();
+    await expect(badge).toHaveAttribute("data-visibility", "owner", { timeout: 5_000 });
+  });
+
+  test("visibility change persists to the DB and survives reload", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+    const { data: seedData, error: seedErr } = await sb
+      .from("job_items")
+      .insert({
+        job_id: DEMO_JOB_ID,
+        phase: "assembly",
+        label: "E2E visibility persist",
+        source: "adhoc",
+        status: "not_started",
+        visibility: "owner",
+        sort_order: 0,
+      })
+      .select()
+      .single();
+    expect(seedErr).toBeNull();
+    const itemId = (seedData as { id: string }).id;
+
+    await login(page);
+    await openDemoJob(page);
+
+    const item = page.getByTestId("job-status-item").filter({ hasText: "E2E visibility persist" });
+    await expect(item).toBeVisible({ timeout: 15_000 });
+    const li = page.locator("li", { has: item });
+    const badge = li.locator('[data-testid="visibility-toggle"]');
+
+    // Advance from owner → client.
+    await badge.click();
+    await expect(badge).toHaveAttribute("data-visibility", "client", { timeout: 5_000 });
+
+    // Reload and confirm the value survived.
+    await openDemoJob(page);
+    const reloaded = page
+      .getByTestId("job-status-item")
+      .filter({ hasText: "E2E visibility persist" });
+    await expect(reloaded).toBeVisible({ timeout: 15_000 });
+    const reloadedLi = page.locator("li", { has: reloaded });
+    const reloadedBadge = reloadedLi.locator('[data-testid="visibility-toggle"]');
+    await expect(reloadedBadge).toHaveAttribute("data-visibility", "client", { timeout: 10_000 });
+
+    // Confirm the DB row matches.
+    const { data: dbRow, error: dbErr } = await sb
+      .from("job_items")
+      .select("visibility")
+      .eq("id", itemId)
+      .single();
+    expect(dbErr).toBeNull();
+    expect((dbRow as { visibility: string }).visibility).toBe("client");
+  });
+
+  test("capture form has a visibility toggle that cycles and persists to the event", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_item_events").delete().eq("job_id", DEMO_JOB_ID);
+    const { data: seedData, error: seedErr } = await sb
+      .from("job_items")
+      .insert({
+        job_id: DEMO_JOB_ID,
+        phase: "assembly",
+        label: "E2E event visibility",
+        source: "adhoc",
+        status: "not_started",
+        visibility: "owner",
+        sort_order: 0,
+      })
+      .select()
+      .single();
+    expect(seedErr).toBeNull();
+    const itemId = (seedData as { id: string }).id;
+
+    await login(page);
+    await openDemoJob(page);
+
+    // Open the capture form for the seeded item.
+    const pickerBtn = page.getByRole("button", {
+      name: /Add note or photo to E2E event visibility/i,
+    });
+    await expect(pickerBtn).toBeVisible({ timeout: 15_000 });
+    await pickerBtn.click();
+    await expect(page.getByTestId("capture-form")).toBeVisible();
+
+    // The capture form's visibility toggle should start at 'owner'.
+    const captureVis = page.getByTestId("capture-visibility-toggle");
+    await expect(captureVis).toBeVisible();
+    await expect(captureVis).toHaveAttribute("data-visibility", "owner");
+
+    // Cycle to 'client'.
+    await captureVis.click();
+    await expect(captureVis).toHaveAttribute("data-visibility", "client");
+
+    // Submit a note — the event should carry visibility = 'client'.
+    await page.getByLabel("Note text").fill("Client-facing note");
+    await page.getByTestId("capture-submit-btn").click();
+    await expect(page.getByTestId("capture-form")).not.toBeVisible({ timeout: 5_000 });
+
+    // The timeline event should show the 'client' visibility chip.
+    await expect(page.getByTestId("timeline-event")).toBeVisible({ timeout: 10_000 });
+    const chip = page.getByTestId("event-visibility-chip").first();
+    await expect(chip).toHaveAttribute("data-visibility", "client");
+
+    // DB confirms the visibility stored on the event row.
+    const { data: evtData, error: evtErr } = await sb
+      .from("job_item_events")
+      .select("*")
+      .eq("job_id", DEMO_JOB_ID)
+      .eq("item_id", itemId)
+      .single();
+    expect(evtErr).toBeNull();
+    expect((evtData as { visibility: string }).visibility).toBe("client");
+    expect((evtData as { note: string }).note).toBe("Client-facing note");
+  });
+
+  test("client-facing items have a distinct visual indicator (badge differs from owner)", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+
+    // Seed one owner item and one client item side by side.
+    await sb.from("job_items").insert([
+      {
+        job_id: DEMO_JOB_ID,
+        phase: "assembly",
+        label: "E2E owner item",
+        source: "adhoc",
+        status: "not_started",
+        visibility: "owner",
+        sort_order: 0,
+      },
+      {
+        job_id: DEMO_JOB_ID,
+        phase: "assembly",
+        label: "E2E client item",
+        source: "adhoc",
+        status: "not_started",
+        visibility: "client",
+        sort_order: 1,
+      },
+    ]);
+
+    await login(page);
+    await openDemoJob(page);
+
+    // Find both badges.
+    const ownerItem = page.getByTestId("job-status-item").filter({ hasText: "E2E owner item" });
+    const clientItem = page.getByTestId("job-status-item").filter({ hasText: "E2E client item" });
+
+    await expect(ownerItem).toBeVisible({ timeout: 15_000 });
+    await expect(clientItem).toBeVisible({ timeout: 10_000 });
+
+    const ownerLi = page.locator("li", { has: ownerItem });
+    const clientLi = page.locator("li", { has: clientItem });
+
+    const ownerBadge = ownerLi.locator('[data-testid="visibility-toggle"]');
+    const clientBadge = clientLi.locator('[data-testid="visibility-toggle"]');
+
+    // Both badges are visible.
+    await expect(ownerBadge).toBeVisible();
+    await expect(clientBadge).toBeVisible();
+
+    // They carry the right data-visibility attribute — easy for a portal filter.
+    await expect(ownerBadge).toHaveAttribute("data-visibility", "owner");
+    await expect(clientBadge).toHaveAttribute("data-visibility", "client");
+
+    // The badges have different aria-labels (visual diff is asserted via attribute).
+    const ownerLabel = await ownerBadge.getAttribute("aria-label");
+    const clientLabel = await clientBadge.getAttribute("aria-label");
+    expect(ownerLabel).not.toBe(clientLabel);
+  });
+});
