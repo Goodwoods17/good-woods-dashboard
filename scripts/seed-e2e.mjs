@@ -140,29 +140,37 @@ const BUFFER_BURN_JOB = {
 // ─── Scheduling S2 (issue #90) — phase capacity/load fixtures ─────────────
 // The capacity panel reads completed labour_sessions over a trailing 7-day
 // window and derives per-phase load. To make the over/under statuses
-// deterministic we (a) shrink the `assembly` work-center's weekly capacity to a
-// tiny value, then (b) log a few hours of assembly time → over capacity; a
-// little design time stays well under its 40h default. Fixed ids → idempotent.
+// deterministic we (a) set the `assembly` work-center's weekly capacity to 16h,
+// then (b) log 24h of assembly time → over capacity; a little design time stays
+// well under its 40h default. Fixed ids → idempotent. (Capacity is kept at/above
+// the S15 free-capacity finder's 8h bookable threshold — see the note below.)
 const HOUR_MS = 3_600_000;
 const NOW = Date.now();
 const oneHourAgo = new Date(NOW - HOUR_MS).toISOString();
 const twoHoursAgo = new Date(NOW - 2 * HOUR_MS).toISOString();
 
-const E2E_ASSEMBLY_CAPACITY = { phase: "assembly", weekly_capacity_hours: 4 };
+// Assembly capacity is 16h (2 work-days), deliberately ABOVE the S15 finder's
+// MIN_BOOKABLE_HOURS (8h = one work-day). This matters for the free-capacity
+// finder: a week is "bookable" only when every phase has ≥ 8h free, so the
+// work-center must have ≥ 8h total capacity for any empty future week to ever
+// qualify. We then log 24h of assembly THIS week (below) → over capacity now,
+// but empty future weeks stay fully bookable (16h free ≥ 8h).
+const E2E_ASSEMBLY_CAPACITY = { phase: "assembly", weekly_capacity_hours: 16 };
 
 const SCHED_JOB_A = "5ce51000-0000-4000-8000-0000000000aa";
 const SCHED_JOB_B = "5ce51000-0000-4000-8000-0000000000bb";
 
 const E2E_SESSIONS = [
-  // assembly: 6h logged this window vs 4h capacity → OVER. Two jobs so the
-  // derived "default duration" averages per job, not per session.
+  // assembly: 24h logged this window vs 16h capacity → OVER (ratio 1.5). Two
+  // jobs so the derived "default duration" averages per job, not per session.
+  // Load is read from accumulated_ms (banked active time), not the wall span.
   {
     id: "5ce51011-0000-4000-8000-000000000001",
     category_id: "assembly",
     job_id: SCHED_JOB_A,
     started_at: twoHoursAgo,
     ended_at: oneHourAgo,
-    accumulated_ms: 4 * HOUR_MS,
+    accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
   {
@@ -171,7 +179,7 @@ const E2E_SESSIONS = [
     job_id: SCHED_JOB_B,
     started_at: twoHoursAgo,
     ended_at: oneHourAgo,
-    accumulated_ms: 2 * HOUR_MS,
+    accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
   // design: 1h logged vs 40h default capacity → UNDER.

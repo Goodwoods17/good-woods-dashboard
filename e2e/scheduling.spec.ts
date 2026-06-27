@@ -61,7 +61,7 @@ test.describe("scheduling slice 1 — read-only timeline tracer", () => {
 
 // Scheduling S2 — phase-level capacity/load model (issue #90). The Capacity tab
 // on /labour only appears when NEXT_PUBLIC_SCHEDULING_ENABLED=true. The seed
-// shrinks the `assembly` work-center to 4h capacity and logs 6h of assembly
+// sets the `assembly` work-center to 16h capacity and logs 24h of assembly
 // time this window → "over capacity"; 1h of design time stays under its 40h
 // default → "has room". Derived default phase durations also render.
 test.describe("scheduling slice 2 — phase capacity/load model", () => {
@@ -184,7 +184,7 @@ test.describe("scheduling slice 6 — buffer burn + fever chart + recovery flag"
 
 // Scheduling S3 — capacity-aware committed date + risk-tiered buffer +
 // floating-bottleneck detection (issue #91). The seed already puts assembly
-// over capacity (6h logged vs 4h configured), so assembly must be the
+// over capacity (24h logged vs 16h configured), so assembly must be the
 // floating bottleneck. The capacity-aware date section and risk buffer
 // breakdown both render on the Capacity tab.
 test.describe("scheduling slice 3 — capacity-aware date + risk buffer + bottleneck", () => {
@@ -959,10 +959,11 @@ test.describe("scheduling slice 14 — re-commit flow + revision history + chang
 // PhaseCapacityPanel. It scans upcoming weeks for windows where all phase
 // work-centers have free hours, then surfaces the earliest bookable start.
 //
-// Seed state: assembly is over capacity this week (6h logged vs 4h capacity).
+// Seed state: assembly is over capacity this week (24h logged vs 16h capacity).
 // Because the seed sessions are from THIS week, the current week will NOT be
-// fully bookable (assembly 0h free). The NEXT week has no logged sessions
-// → all phases fully free → the earliest bookable start lands next week.
+// fully bookable (assembly 0h free). The NEXT week has no logged sessions →
+// all phases fully free (assembly 16h ≥ the 8h bookable threshold) → the
+// earliest bookable start lands next week.
 test.describe("scheduling slice 15 — free-capacity finder", () => {
   test.skip(
     !email || !password || !supabaseUrl,
@@ -999,7 +1000,7 @@ test.describe("scheduling slice 15 — free-capacity finder", () => {
     const panel = page.getByTestId("free-capacity-panel");
     await expect(panel).toBeVisible({ timeout: 15_000 });
 
-    // The assembly work-center is over capacity this week (seeded 6h vs 4h) →
+    // The assembly work-center is over capacity this week (seeded 24h vs 16h) →
     // this week is NOT fully bookable. The earliest bookable start must be
     // a future week where all phases have room.
     const bookableStart = page.getByTestId("earliest-bookable-start");
