@@ -146,8 +146,28 @@ const BUFFER_BURN_JOB = {
 // the S15 free-capacity finder's 8h bookable threshold — see the note below.)
 const HOUR_MS = 3_600_000;
 const NOW = Date.now();
-const oneHourAgo = new Date(NOW - HOUR_MS).toISOString();
-const twoHoursAgo = new Date(NOW - 2 * HOUR_MS).toISOString();
+
+// Anchor the seeded labour sessions INSIDE the current ISO week's Mon–Fri span,
+// derived from "now" so it never rots. This timestamp must satisfy TWO readers
+// at once:
+//   • S2/S3 PhaseCapacityPanel — trailing 7-day window [now-7d, now].
+//   • S15 free-capacity finder — current-week bucket [Mon 00:00, Sat 00:00) UTC.
+// A naive "now - 2h" breaks the finder whenever the suite runs on a weekend
+// (now-2h falls on Sat/Sun, outside the Mon–Fri bucket → current-week load
+// reads 0 → the week is wrongly "bookable"). Anchoring to this week's Monday
+// (clamped to stay in the past) keeps assembly's 24h load in both windows
+// regardless of which day the suite runs.
+function currentWeekSessionStartMs() {
+  const now = new Date(NOW);
+  const toMonday = (now.getUTCDay() + 6) % 7; // 0 = Sun → days back to Monday
+  const mondayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - toMonday);
+  // Monday 09:00 UTC, but never in the future (early-Monday runs) and never
+  // before Monday 00:00 (so it stays inside the finder's Mon–Sat bucket).
+  return Math.max(mondayMs, Math.min(mondayMs + 9 * HOUR_MS, NOW - HOUR_MS));
+}
+const sessionStartMs = currentWeekSessionStartMs();
+const sessionStart = new Date(sessionStartMs).toISOString();
+const sessionEnd = new Date(sessionStartMs + HOUR_MS).toISOString();
 
 // Assembly capacity is 16h (2 work-days), deliberately ABOVE the S15 finder's
 // MIN_BOOKABLE_HOURS (8h = one work-day). This matters for the free-capacity
@@ -168,8 +188,8 @@ const E2E_SESSIONS = [
     id: "5ce51011-0000-4000-8000-000000000001",
     category_id: "assembly",
     job_id: SCHED_JOB_A,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
     accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
@@ -177,8 +197,8 @@ const E2E_SESSIONS = [
     id: "5ce51011-0000-4000-8000-000000000002",
     category_id: "assembly",
     job_id: SCHED_JOB_B,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
     accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
@@ -187,8 +207,8 @@ const E2E_SESSIONS = [
     id: "5ce51011-0000-4000-8000-000000000003",
     category_id: "design",
     job_id: SCHED_JOB_A,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
     accumulated_ms: 1 * HOUR_MS,
     resumed_at: null,
   },
