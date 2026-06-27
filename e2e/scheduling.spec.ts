@@ -161,6 +161,9 @@ test.describe("scheduling slice 6 — buffer burn + fever chart + recovery flag"
     await login(page);
     await page.goto(`/jobs/${DEMO_JOB_ID}`);
 
+    // S7: the timeline + fever section now live inside the Schedule tab.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
     const timeline = page.getByTestId("schedule-timeline");
     await expect(timeline).toBeVisible({ timeout: 15_000 });
 
