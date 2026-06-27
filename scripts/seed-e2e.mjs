@@ -140,38 +140,66 @@ const BUFFER_BURN_JOB = {
 // ─── Scheduling S2 (issue #90) — phase capacity/load fixtures ─────────────
 // The capacity panel reads completed labour_sessions over a trailing 7-day
 // window and derives per-phase load. To make the over/under statuses
-// deterministic we (a) shrink the `assembly` work-center's weekly capacity to a
-// tiny value, then (b) log a few hours of assembly time → over capacity; a
-// little design time stays well under its 40h default. Fixed ids → idempotent.
+// deterministic we (a) set the `assembly` work-center's weekly capacity to 16h,
+// then (b) log 24h of assembly time → over capacity; a little design time stays
+// well under its 40h default. Fixed ids → idempotent. (Capacity is kept at/above
+// the S15 free-capacity finder's 8h bookable threshold — see the note below.)
 const HOUR_MS = 3_600_000;
 const NOW = Date.now();
-const oneHourAgo = new Date(NOW - HOUR_MS).toISOString();
-const twoHoursAgo = new Date(NOW - 2 * HOUR_MS).toISOString();
 
-const E2E_ASSEMBLY_CAPACITY = { phase: "assembly", weekly_capacity_hours: 4 };
+// Anchor the seeded labour sessions INSIDE the current ISO week's Mon–Fri span,
+// derived from "now" so it never rots. This timestamp must satisfy TWO readers
+// at once:
+//   • S2/S3 PhaseCapacityPanel — trailing 7-day window [now-7d, now].
+//   • S15 free-capacity finder — current-week bucket [Mon 00:00, Sat 00:00) UTC.
+// A naive "now - 2h" breaks the finder whenever the suite runs on a weekend
+// (now-2h falls on Sat/Sun, outside the Mon–Fri bucket → current-week load
+// reads 0 → the week is wrongly "bookable"). Anchoring to this week's Monday
+// (clamped to stay in the past) keeps assembly's 24h load in both windows
+// regardless of which day the suite runs.
+function currentWeekSessionStartMs() {
+  const now = new Date(NOW);
+  const toMonday = (now.getUTCDay() + 6) % 7; // 0 = Sun → days back to Monday
+  const mondayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - toMonday);
+  // Monday 09:00 UTC, but never in the future (early-Monday runs) and never
+  // before Monday 00:00 (so it stays inside the finder's Mon–Sat bucket).
+  return Math.max(mondayMs, Math.min(mondayMs + 9 * HOUR_MS, NOW - HOUR_MS));
+}
+const sessionStartMs = currentWeekSessionStartMs();
+const sessionStart = new Date(sessionStartMs).toISOString();
+const sessionEnd = new Date(sessionStartMs + HOUR_MS).toISOString();
+
+// Assembly capacity is 16h (2 work-days), deliberately ABOVE the S15 finder's
+// MIN_BOOKABLE_HOURS (8h = one work-day). This matters for the free-capacity
+// finder: a week is "bookable" only when every phase has ≥ 8h free, so the
+// work-center must have ≥ 8h total capacity for any empty future week to ever
+// qualify. We then log 24h of assembly THIS week (below) → over capacity now,
+// but empty future weeks stay fully bookable (16h free ≥ 8h).
+const E2E_ASSEMBLY_CAPACITY = { phase: "assembly", weekly_capacity_hours: 16 };
 
 const SCHED_JOB_A = "5ce51000-0000-4000-8000-0000000000aa";
 const SCHED_JOB_B = "5ce51000-0000-4000-8000-0000000000bb";
 
 const E2E_SESSIONS = [
-  // assembly: 6h logged this window vs 4h capacity → OVER. Two jobs so the
-  // derived "default duration" averages per job, not per session.
+  // assembly: 24h logged this window vs 16h capacity → OVER (ratio 1.5). Two
+  // jobs so the derived "default duration" averages per job, not per session.
+  // Load is read from accumulated_ms (banked active time), not the wall span.
   {
     id: "5ce51011-0000-4000-8000-000000000001",
     category_id: "assembly",
     job_id: SCHED_JOB_A,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
-    accumulated_ms: 4 * HOUR_MS,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
+    accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
   {
     id: "5ce51011-0000-4000-8000-000000000002",
     category_id: "assembly",
     job_id: SCHED_JOB_B,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
-    accumulated_ms: 2 * HOUR_MS,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
+    accumulated_ms: 12 * HOUR_MS,
     resumed_at: null,
   },
   // design: 1h logged vs 40h default capacity → UNDER.
@@ -179,8 +207,8 @@ const E2E_SESSIONS = [
     id: "5ce51011-0000-4000-8000-000000000003",
     category_id: "design",
     job_id: SCHED_JOB_A,
-    started_at: twoHoursAgo,
-    ended_at: oneHourAgo,
+    started_at: sessionStart,
+    ended_at: sessionEnd,
     accumulated_ms: 1 * HOUR_MS,
     resumed_at: null,
   },

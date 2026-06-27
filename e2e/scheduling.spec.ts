@@ -61,7 +61,7 @@ test.describe("scheduling slice 1 — read-only timeline tracer", () => {
 
 // Scheduling S2 — phase-level capacity/load model (issue #90). The Capacity tab
 // on /labour only appears when NEXT_PUBLIC_SCHEDULING_ENABLED=true. The seed
-// shrinks the `assembly` work-center to 4h capacity and logs 6h of assembly
+// sets the `assembly` work-center to 16h capacity and logs 24h of assembly
 // time this window → "over capacity"; 1h of design time stays under its 40h
 // default → "has room". Derived default phase durations also render.
 test.describe("scheduling slice 2 — phase capacity/load model", () => {
@@ -184,7 +184,7 @@ test.describe("scheduling slice 6 — buffer burn + fever chart + recovery flag"
 
 // Scheduling S3 — capacity-aware committed date + risk-tiered buffer +
 // floating-bottleneck detection (issue #91). The seed already puts assembly
-// over capacity (6h logged vs 4h configured), so assembly must be the
+// over capacity (24h logged vs 16h configured), so assembly must be the
 // floating bottleneck. The capacity-aware date section and risk buffer
 // breakdown both render on the Capacity tab.
 test.describe("scheduling slice 3 — capacity-aware date + risk buffer + bottleneck", () => {
@@ -951,5 +951,84 @@ test.describe("scheduling slice 14 — re-commit flow + revision history + chang
 
     // The drafted email frames it around the added scope / change order.
     await expect(panel.getByTestId("recommit-email-body")).toContainText("added scope");
+  });
+});
+
+// Scheduling S15 — free-capacity finder (issue #103).
+// The Capacity tab on /labour gains a FreeCapacityPanel below the existing
+// PhaseCapacityPanel. It scans upcoming weeks for windows where all phase
+// work-centers have free hours, then surfaces the earliest bookable start.
+//
+// Seed state: assembly is over capacity this week (24h logged vs 16h capacity).
+// Because the seed sessions are from THIS week, the current week will NOT be
+// fully bookable (assembly 0h free). The NEXT week has no logged sessions →
+// all phases fully free (assembly 16h ≥ the 8h bookable threshold) → the
+// earliest bookable start lands next week.
+test.describe("scheduling slice 15 — free-capacity finder", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Capacity tab shows the free-capacity panel with per-week breakdowns", async ({ page }) => {
+    await login(page);
+    await page.goto("/labour");
+
+    await page.getByRole("button", { name: "Capacity" }).click();
+
+    const panel = page.getByTestId("free-capacity-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // All six phase free-hours rows render in at least one window.
+    // The first window row is the current week.
+    const firstWindow = page.locator('[data-testid^="free-window-"]').first();
+    await expect(firstWindow).toBeVisible({ timeout: 10_000 });
+
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(firstWindow.getByTestId(`free-hours-row-${phase}`)).toBeVisible();
+    }
+  });
+
+  test("earliest bookable start renders and points to a future week when current week is constrained", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/labour");
+
+    await page.getByRole("button", { name: "Capacity" }).click();
+
+    const panel = page.getByTestId("free-capacity-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The assembly work-center is over capacity this week (seeded 24h vs 16h) →
+    // this week is NOT fully bookable. The earliest bookable start must be
+    // a future week where all phases have room.
+    const bookableStart = page.getByTestId("earliest-bookable-start");
+    await expect(bookableStart).toBeVisible({ timeout: 10_000 });
+
+    // The start is in a different week than the constrained current week.
+    // We verify the data-week-start attribute is set (pointing to a Monday).
+    const weekStart = await bookableStart.getAttribute("data-week-start");
+    expect(weekStart).toBeTruthy();
+    // It must be a Monday (we'll check it's a valid ISO date).
+    expect(weekStart).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+
+    // The bookable banner contains a human-readable label.
+    await expect(bookableStart).toContainText(/Week of/i);
+  });
+
+  test("current week shows assembly as 0h free when over capacity", async ({ page }) => {
+    await login(page);
+    await page.goto("/labour");
+
+    await page.getByRole("button", { name: "Capacity" }).click();
+
+    const panel = page.getByTestId("free-capacity-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The first window (current week) has assembly over capacity → 0h free.
+    const firstWindow = page.locator('[data-testid^="free-window-"]').first();
+    await expect(firstWindow).toBeVisible({ timeout: 10_000 });
+    await expect(firstWindow).toHaveAttribute("data-bookable", "false");
   });
 });
