@@ -243,6 +243,49 @@ column. `CommitmentLedgerPanel` renders in `ScheduleTab`:
 `ledger-entry-phase-<phase>` (with `data-status` + `data-owner-kind`),
 `owner-reliability`, `owner-reliability-<ownerKey>`, `owner-reliability-buffer-days`.
 
+## What's here (S14 re-commit flow + revision history + change orders, issue #102)
+
+```
+features/scheduling/
+├── lib/
+│   └── recommit.ts   pure: RECOMMIT_REASON_CODES / reasonCodeMeta / dingsReliability /
+│                      recommitRecoveryGate / changeOrderImpact / pushCommittedDate /
+│                      buildCommitmentRevision / draftRecommitEmail (+ test)
+└── components/
+    └── RecommitPanel.tsx   re-commit + change-order form + revision history in the Schedule tab
+supabase/migrations/
+└── 20260704000000_scheduling_commitment_revisions.sql   commitment_revisions table
+```
+
+The client-committed install date is a **versioned promise** — never silently
+overwritten. `recommit.ts` (pure, 12 unit tests):
+
+- `RECOMMIT_REASON_CODES` / `reasonCodeMeta(code)` — the reason-code catalogue;
+  each carries `attributable` (shop's fault → feeds the PPC scorecard, S25).
+- `dingsReliability(kind, reasonCode)` — a **change order never dings** (deliberate
+  scope decision); a plain re-commit dings only on a shop-attributable reason.
+- `recommitRecoveryGate(zone)` — **recovery-first**: a re-commit is only
+  recommended once the buffer is truly blown (RED). Change orders bypass it.
+- `changeOrderImpact(addedWorkDays, remainingBufferDays)` — small change orders
+  **absorb into buffer** (no date move); larger ones push the date by the overflow.
+- `pushCommittedDate(date, deltaWorkDays)` — work-day arithmetic (reuses S3).
+- `buildCommitmentRevision(input)` — assembles a versioned revision (old/new date,
+  fresh buffer, reason, who/when) with the derived ding flag.
+- `draftRecommitEmail(input)` — early + concrete client email draft for approval;
+  different copy for re-commit vs. change order.
+
+Schema (additive): `public.commitment_revisions` — one immutable row per deliberate
+committed-date change (kind, reason, old/new date, fresh buffer, dings_reliability,
+who/when; `job_id text` FK to `jobs.id`; RLS authenticated-only + anon-none).
+`RecommitPanel` renders in `ScheduleTab` and persists via `onRecommit` (wired to
+`updateJob(installDate, bufferDays)` in JobDetail). Testids:
+`recommit-panel`, `recommit-zone-pill`, `recommit-recovery-note`,
+`recommit-kind-recommit` / `recommit-kind-change-order`, `recommit-reason-select`,
+`recommit-added-days-input`, `recommit-change-order-impact`, `recommit-new-date-input`,
+`recommit-new-buffer-input`, `recommit-dings-badge`, `recommit-email-draft`
+(`-subject` / `-body`), `recommit-submit`, `recommit-revision-history`,
+`recommit-revision-<id>`.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write

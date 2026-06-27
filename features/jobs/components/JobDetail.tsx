@@ -52,14 +52,7 @@ const PIPELINE_OPTIONS: PipelineStatus[] = [
 ];
 
 type TabKey =
-  | "overview"
-  | "tasks"
-  | "forms"
-  | "files"
-  | "costs"
-  | "activity"
-  | "budget"
-  | "schedule";
+  "overview" | "tasks" | "forms" | "files" | "costs" | "activity" | "budget" | "schedule";
 
 // Base tabs — the Schedule tab is injected conditionally below when the flag is on.
 const BASE_TABS: { key: TabKey; label: string; enabled: boolean }[] = [
@@ -270,6 +263,12 @@ export function JobDetail({ jobId }: { jobId: string }) {
           <ScheduleTab
             job={job}
             onUpdate={(dates) => updateJob(job.id, { phaseTargetDates: dates })}
+            onRecommit={(patch) =>
+              updateJob(job.id, {
+                installDate: patch.installDate,
+                bufferDays: patch.bufferDays,
+              })
+            }
           />
         )}
         {activeTab === "costs" && (
