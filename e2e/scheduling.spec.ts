@@ -1080,7 +1080,7 @@ test.describe("scheduling slice 16 — capacity-aware quote dates in estimator",
 
     // Fill in client and project so we can save as Job.
     await page.getByLabel("Client").fill("Test Client S16");
-    await page.getByLabel("Project name").fill("S16 Capacity Test");
+    await page.getByLabel("Project", { exact: true }).fill("S16 Capacity Test");
 
     // The Save as Job button becomes enabled.
     const saveBtn = page.getByRole("button", { name: /Save as Job/i });
