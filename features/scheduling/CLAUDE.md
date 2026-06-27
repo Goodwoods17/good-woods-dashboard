@@ -161,6 +161,49 @@ blocks any crew action.
 
 No schema migration — `jobs.phase_target_dates` already exists from S1.
 
+## What's here (S12 make-ready gate, issue #100)
+
+```
+features/scheduling/
+├── lib/
+│   └── makeReady.ts         pure: STANDARD_MAKE_READY_ITEMS / buildMakeReadyItems /
+│                             applyAutoSignals / phaseIsReady / makeReadySummary (+ test)
+└── components/
+    └── MakeReadyChecklistPanel.tsx   per-phase readiness checklist in the Schedule tab
+supabase/migrations/
+└── 20260702000000_scheduling_make_ready.sql   scheduling_make_ready_items table
+```
+
+Last-Planner make-ready principle: before committing to start a phase, verify all
+prerequisites are in place. `makeReady.ts`:
+
+- `STANDARD_MAKE_READY_ITEMS` — per-phase standard checklist seeded from shop best
+  practice (issue spec: CNC: "Drawings final" + "Materials ordered" + "Toolpath / CNC
+  file ready").
+- `buildMakeReadyItems(phase, saved?)` — merge stored state (checked/overridden) onto
+  standard items; defaults all to unchecked.
+- `applyAutoSignals(items, signals)` — tick items whose named signal has fired
+  (`design_signoff` | `blocker_resolved` | `material_logged`). Pure: never mutates input.
+- `phaseIsReady(items)` — true when every item is checked OR overridden (soft gate,
+  ADR 0013: warns but never blocks progress).
+- `makeReadySummary(items)` — `{ total, checkedCount, ready, hasOverride }` for the badge.
+
+`scheduling_make_ready_items` stores per-job checklist state: `template_item_id`,
+`checked`, `overridden`, `auto_signal`, etc. RLS authenticated-only.
+
+`MakeReadyChecklistPanel` renders inside `ScheduleTab`:
+- Loads saved state from Supabase; merges onto standard items.
+- Applies auto-signals at render time (signals derived from Job in ScheduleTab).
+- Per-phase sections with `data-testid="make-ready-phase-<phase>"`.
+- "Not ready" amber warning when items are outstanding (soft gate: `data-testid="make-ready-warning-<phase>"`).
+- "Proceed anyway" button per unchecked manual item (`data-testid="make-ready-override-<id>"`).
+- Persists check/override state to Supabase via upsert on `(job_id, template_item_id)`.
+
+Auto-signals wired in `ScheduleTab.tsx` from `Job`:
+- `designSignoff`: `currentMilestoneIndex > 0` (past design = drawings approved)
+- `blockerResolved`: `!job.blocker` (no free-text blocker = no outstanding block)
+- `materialLogged`: `false` for now (requires job-items store, wired in a future slice)
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write
