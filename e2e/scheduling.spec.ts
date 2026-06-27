@@ -503,3 +503,60 @@ test.describe("scheduling slice 9 — fever hitlist + one number to watch", () =
     await expect(demoPill).toHaveText(/On track/i);
   });
 });
+
+// Scheduling S10 — shop-floor phase targets + daily goals + advisory EDD/bottleneck
+// flags (issue #98). When NEXT_PUBLIC_SCHEDULING_ENABLED=true the job status drill-in
+// shows per-phase target badges in each phase header, and the status board shows an
+// advisory banner when a job is behind its current-phase target.
+// The demo job is seeded with a PAST cnc target so:
+//   - Opening the demo job on /status should show a phase-target-badge in the CNC
+//     phase section with data-pace="behind".
+//   - The /status board itself should show data-testid="board-advisory-banner".
+test.describe("scheduling slice 10 — shop-floor phase targets + advisory banner", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("status board shows an advisory banner when a job is behind its phase target", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/status");
+
+    // The status board renders (active jobs are seeded).
+    await expect(page.getByTestId("status-board")).toBeVisible({ timeout: 15_000 });
+
+    // The advisory banner appears because the demo job's CNC target is in the past.
+    const banner = page.getByTestId("board-advisory-banner");
+    await expect(banner).toBeVisible({ timeout: 10_000 });
+
+    // The banner message mentions a job phase (non-empty advisory text).
+    const bannerText = await banner.textContent();
+    expect(bannerText).toBeTruthy();
+    expect(bannerText!.length).toBeGreaterThan(10);
+  });
+
+  test("drilling into the demo job shows phase target badges in phase headers", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/status");
+
+    // Drill into the demo job.
+    const card = page.locator(`[data-testid="board-job-card"][data-job-id="${DEMO_JOB_ID}"]`);
+    await expect(card).toBeVisible({ timeout: 15_000 });
+    await card.click();
+    await expect(page.getByTestId("job-status-tab")).toBeVisible({ timeout: 15_000 });
+
+    // The CNC phase section should show a phase-target-badge (seeded with a past target).
+    const cncSection = page.getByTestId("phase-section-cnc");
+    await expect(cncSection).toBeVisible({ timeout: 10_000 });
+
+    const badge = cncSection.getByTestId("phase-target-badge");
+    await expect(badge).toBeVisible({ timeout: 10_000 });
+
+    // The badge must have data-pace="behind" (CNC target is in the past).
+    await expect(badge).toHaveAttribute("data-pace", "behind");
+  });
+});

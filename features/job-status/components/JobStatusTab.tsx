@@ -8,6 +8,7 @@ import { formatError } from "@shared/lib/formatError";
 import { hasSupabase } from "@shared/lib/supabase";
 import { MILESTONE_STAGES } from "@shared/lib/types";
 import { stageLabel, DONE as PIECE_DONE } from "@features/drawings/lib/pipelines";
+import { PhaseTargetBadge } from "@features/scheduling/components/PhaseTargetBadge";
 import { toTrackableItems, piecesToTrackableItems, pieceToPhase } from "../lib/adapter";
 import { phaseProgress, jobProgress } from "../lib/progress";
 import { materialiseTemplates } from "../lib/templates";
@@ -15,6 +16,7 @@ import { useJobProgress } from "../lib/jobProgressStore";
 import { JOB_ITEM_STATUS_LABELS, jobItemStatusTone } from "../lib/statusPill";
 import { nextVisibility, isClientFacing, VISIBILITY_LABELS, VISIBILITY_SHORT_LABELS, visibilityTone } from "../lib/visibilityPill";
 import type { Phase, TrackableItemKind, Visibility } from "../lib/types";
+import type { MilestoneStage } from "@shared/lib/types";
 
 // ─── Unified display row (job_items + Drawings pieces) ────────────────────────
 
@@ -125,6 +127,7 @@ function PhaseSection({
   onAddSubmit,
   onAddCancel,
   addingBusy,
+  targetDate,
 }: {
   phase: Phase;
   phaseLabel: string;
@@ -145,6 +148,8 @@ function PhaseSection({
   onAddSubmit: () => void;
   onAddCancel: () => void;
   addingBusy: boolean;
+  /** S10: ISO date for the phase's internal target (from scheduling). Advisory only. */
+  targetDate?: string | null;
 }) {
   const pctInt = Math.round(pct * 100);
   const doneCount = rows.filter((r) => r.done).length;
@@ -178,6 +183,13 @@ function PhaseSection({
           {pctInt}%
         </span>
       </button>
+
+      {/* S10: phase target badge — advisory schedule info, shown when scheduling is on */}
+      {targetDate && (
+        <div className="px-4 pb-1">
+          <PhaseTargetBadge targetDate={targetDate} />
+        </div>
+      )}
 
       {/* Phase progress bar (always visible, even when collapsed) */}
       <div className="px-4 pb-2">
@@ -285,7 +297,14 @@ function PhaseSection({
  * (idempotent — slice 2). Photos + notes land in slice 3. Visibility tagging
  * (owner | client | both) per item: slice 6.
  */
-export function JobStatusTab({ jobId }: { jobId: string }) {
+export function JobStatusTab({
+  jobId,
+  phaseTargetDates,
+}: {
+  jobId: string;
+  /** S10: per-phase internal target dates from the scheduling engine (advisory). */
+  phaseTargetDates?: Partial<Record<MilestoneStage, string>> | null;
+}) {
   const { items, pieces, loading, cycleItem, cyclePiece, addItem, refresh, setItemVisibility, setPieceVisibility } = useJobProgress(jobId);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [visibilityBusyId, setVisibilityBusyId] = useState<string | null>(null);
@@ -475,6 +494,7 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
                   onAddSubmit={() => onAddSubmit(key)}
                   onAddCancel={onAddCancel}
                   addingBusy={addingBusy}
+                  targetDate={phaseTargetDates?.[key]}
                 />
               );
             })}
