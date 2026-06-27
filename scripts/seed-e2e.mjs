@@ -253,7 +253,7 @@ async function upsert(token, table, row) {
 // TradeDatePanel can render in the e2e test.
 // Fixed ids → idempotent upserts across re-runs.
 const S11_TRADE = {
-  id: "s11trade-0000-4000-8000-000000000001",
+  id: "51110000-0000-4000-8000-000000000001",
   key: "install",
   label: "Install",
   color: "install",
@@ -263,7 +263,7 @@ const S11_TRADE = {
   active: true,
 };
 const S11_SUBTRADE = {
-  id: "s11subt-0000-4000-8000-000000000001",
+  id: "51110000-0000-4000-8000-000000000002",
   name: "Demo Sub Co.",
   trade_id: S11_TRADE.id,
   active: true,
@@ -271,7 +271,7 @@ const S11_SUBTRADE = {
 // A job_trades line on the DEMO_JOB: booked, sub assigned, no date yet.
 // After the migration, the date columns default to null.
 const S11_JOB_TRADE = {
-  id: "s11jtrd-0000-4000-8000-000000000001",
+  id: "51110000-0000-4000-8000-000000000003",
   job_id: "job-status-demo",
   trade_id: S11_TRADE.id,
   subtrade_id: S11_SUBTRADE.id,
