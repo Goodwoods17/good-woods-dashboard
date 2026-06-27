@@ -1418,3 +1418,74 @@ test.describe("scheduling slice 19 — client what's next + what we need nudge",
     }
   });
 });
+
+// Scheduling S20 — kickoff expectation-setting artifact (issue #108).
+// At project start the shop owner can copy a "here's your schedule + how/when
+// we'll update you" message from the Schedule tab. The panel auto-generates
+// the subject + body from the job's committed install date, phase targets, and
+// the job's client name. No new migration — derived entirely from existing
+// job data.
+//
+// The DEMO_JOB is seeded with phase targets + client name so the artifact
+// renders deterministically.
+test.describe("scheduling slice 20 — kickoff expectation-setting artifact", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Schedule tab shows the kickoff artifact panel with subject, phases, and update protocol", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    // The kickoff panel renders inside the Schedule tab.
+    const panel = page.getByTestId("kickoff-artifact-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Subject line includes the job name.
+    const subject = panel.getByTestId("kickoff-artifact-subject");
+    await expect(subject).toBeVisible();
+    await expect(subject).toContainText("Job Status Demo");
+
+    // The body preview renders with the phase list.
+    const body = panel.getByTestId("kickoff-artifact-body");
+    await expect(body).toBeVisible();
+
+    // All six phases are listed in the artifact (uses data-testid, never text matching).
+    const phaseList = body.getByTestId("kickoff-phase-list");
+    await expect(phaseList).toBeVisible();
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(body.getByTestId(`kickoff-phase-${phase}`)).toBeVisible();
+    }
+
+    // The update protocol section is present.
+    await expect(body.getByTestId("kickoff-update-protocol")).toBeVisible();
+
+    // Install phase is marked firm (the committed date appears).
+    const installLine = body.getByTestId("kickoff-phase-install");
+    await expect(installLine).toBeVisible();
+    await expect(installLine).toContainText("firm");
+
+    // The copy button is present and labelled.
+    await expect(panel.getByTestId("kickoff-artifact-copy")).toBeVisible();
+  });
+
+  test("kickoff artifact never leaks buffer, internal targets, or fever", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const body = page.getByTestId("kickoff-artifact-body");
+    await expect(body).toBeVisible({ timeout: 15_000 });
+
+    // Privacy guard: shop-internal terms must not appear in the client artifact.
+    await expect(body.getByText(/buffer/i)).toHaveCount(0);
+    await expect(body.getByText(/internal target/i)).toHaveCount(0);
+    await expect(body.getByText(/fever/i)).toHaveCount(0);
+  });
+});
