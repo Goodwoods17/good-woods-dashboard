@@ -102,11 +102,43 @@ UI surfaces:
 
 No new schema migration — the `jobs.buffer_days` override was added in S1.
 
-## Non-goals (S1–S3)
+## What's here (S5 editable Gantt, issue #93)
 
-No editing of dates **or capacity values** in the UI yet, no per-machine /
-per-person capacity (phase-level only in v1), no auto-write of the derived
-durations into new-job creation (the panel *previews* them — wiring into the
-`/jobs/new` form is a later slice), no buffer-burn fever chart, no per-sub
-reliability, no Gantt, no client portal/ICS, no Google push. Those are later
-slices in Milestone #7. `health.ts` stays untouched.
+```
+features/scheduling/
+├── lib/
+│   └── gantt.ts        pure: addWorkDays / workDaysBetween / rippleForward /
+│                        pullPlanBackward (+ gantt.test.ts — 25 unit tests)
+└── components/
+    └── GanttSchedule.tsx   Frappe Gantt (MIT) wrapper with ripple/pin UI
+types/
+└── frappe-gantt.d.ts   minimal TypeScript declarations for frappe-gantt
+```
+
+`GanttSchedule` renders on the job detail page below `ScheduleTimeline`
+(behind `SCHEDULING_ENABLED`). Key behaviours:
+
+- **Drag-to-reschedule** via Frappe Gantt's `on_date_change` callback →
+  `rippleForward` cascades the delta to all downstream phases.
+- **Pinnable anchors** — each phase has a pin button. Pinned phases can't shift;
+  the ripple emits `ConflictWarning` and shows an alert row. Apply is disabled
+  while conflicts exist (never silently violates).
+- **Pin Install → pull-plan backward** — pinning the install phase calls
+  `pullPlanBackward`, which re-derives all preceding phase targets from the
+  install date using `DEFAULT_PHASE_DURATION_DAYS`.
+- **Preview + Undo** — changes are staged in local state; the user sees a
+  diff table (current vs. proposed) and must click Apply to commit.
+  Undo reverts to the committed dates with no API call.
+- **Apply** calls the `onUpdate` prop (wired to `updateJob` in `JobDetail`)
+  which persists `phaseTargetDates` to Supabase.
+
+No new schema migration — `jobs.phase_target_dates` already exists from S1.
+Ripple stays in the Gantt (not the month-calendar drag, per the pre-mortem
+decision in the issue).
+
+## Non-goals (S1–S5)
+
+No per-machine / per-person capacity (phase-level only in v1), no auto-write
+of derived durations into new-job creation, no buffer-burn fever chart, no
+per-sub reliability loop, no client portal/ICS, no Google push. Those are
+later slices in Milestone #7. `health.ts` stays untouched.

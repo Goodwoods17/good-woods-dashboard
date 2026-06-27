@@ -31,6 +31,7 @@ import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { StatusEditor } from "@shared/components/ui/StatusEditor";
 import { MilestonesStrip } from "./MilestonesStrip";
 import { ScheduleTimeline } from "@features/scheduling/components/ScheduleTimeline";
+import { GanttSchedule } from "@features/scheduling/components/GanttSchedule";
 import { BlockersCard } from "./BlockersCard";
 import { CostsTab } from "./CostsTab";
 import { OverviewTab } from "./OverviewTab";
@@ -223,6 +224,10 @@ export function JobDetail({ jobId }: { jobId: string }) {
           </div>
         )}
         <ScheduleTimeline job={job} />
+        <GanttSchedule
+          job={job}
+          onUpdate={(dates) => updateJob(job.id, { phaseTargetDates: dates })}
+        />
         <BlockersCard jobId={job.id} />
       </header>
 
