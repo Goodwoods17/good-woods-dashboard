@@ -442,6 +442,17 @@ export type Job = {
   source?: string | null;
   /** Original quote, kept separate from `revenue` (which trends toward final). */
   estimatedRevenue?: number | null;
+  // ─── Scheduling & Client-Commitment Engine (ADR 0020, behind SCHEDULING_ENABLED) ──
+  /**
+   * Per-phase INTERNAL target dates (ISO YYYY-MM-DD), keyed by the six phases.
+   * Additive to the Phase axis — `installDate` stays the frozen client promise.
+   * null/absent = no internal targets set yet.
+   */
+  phaseTargetDates?: Partial<Record<MilestoneStage, string>> | null;
+  /** Job-level internal target — the honest internal finish, ahead of committed. */
+  internalTargetDate?: string | null;
+  /** Pooled buffer in days between the internal target and the committed install. */
+  bufferDays?: number | null;
 };
 
 export type JobBlocker = {
