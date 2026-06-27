@@ -6,7 +6,8 @@ import { formatError } from "@shared/lib/formatError";
 import { hasSupabase } from "@shared/lib/supabase";
 import { useJobEvents, getPhotoSignedUrl } from "../lib/eventStore";
 import { JOB_ITEM_STATUS_LABELS } from "../lib/statusPill";
-import type { JobItemEvent, JobItemStatus } from "../lib/types";
+import { VISIBILITY_LABELS, VISIBILITY_SHORT_LABELS, visibilityTone, nextVisibility } from "../lib/visibilityPill";
+import type { JobItemEvent, JobItemStatus, Visibility } from "../lib/types";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,22 @@ function PhotoThumbnail({ photoPath }: { photoPath: string }) {
   );
 }
 
+// ─── Inline visibility chip (read-only, on an event card) ─────────────────────
+
+function VisibilityChip({ visibility }: { visibility: Visibility }) {
+  const tone = visibilityTone(visibility);
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${tone.bg} ${tone.text}`}
+      data-testid="event-visibility-chip"
+      data-visibility={visibility}
+      aria-label={`Visibility: ${VISIBILITY_LABELS[visibility]}`}
+    >
+      {VISIBILITY_SHORT_LABELS[visibility]}
+    </span>
+  );
+}
+
 // ─── Single event card ────────────────────────────────────────────────────────
 
 function EventCard({ event }: { event: JobItemEvent }) {
@@ -101,6 +118,9 @@ function EventCard({ event }: { event: JobItemEvent }) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span className="text-xs font-medium text-text-primary">{typeLabel}</span>
           <span className="text-xs text-text-tertiary">{formatTime(event.createdAt)}</span>
+          {/* Slice 6: visibility chip on every event so the owner can see what
+              the client will (or won't) see in the future portal. */}
+          <VisibilityChip visibility={event.visibility} />
         </div>
 
         {event.note && (
@@ -117,7 +137,7 @@ function EventCard({ event }: { event: JobItemEvent }) {
 
 // ─── Note + photo capture form ────────────────────────────────────────────────
 
-type OnAdd = (note: string, file: File | null) => Promise<void>;
+type OnAdd = (note: string, file: File | null, visibility: Visibility) => Promise<void>;
 
 function CaptureForm({
   itemLabel,
@@ -132,6 +152,8 @@ function CaptureForm({
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Slice 6: default owner (private). User can promote to client or both.
+  const [visibility, setVisibility] = useState<Visibility>("owner");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const submit = useCallback(async () => {
@@ -139,14 +161,14 @@ function CaptureForm({
     setBusy(true);
     setError(null);
     try {
-      await onAdd(note.trim(), file);
+      await onAdd(note.trim(), file, visibility);
       onClose();
     } catch (e) {
       setError(formatError(e));
     } finally {
       setBusy(false);
     }
-  }, [note, file, onAdd, onClose]);
+  }, [note, file, visibility, onAdd, onClose]);
 
   return (
     <div
@@ -215,6 +237,18 @@ function CaptureForm({
           </button>
         )}
 
+        {/* Slice 6: visibility cycle button — tap to advance owner → client → both → owner */}
+        <button
+          type="button"
+          onClick={() => setVisibility((v) => nextVisibility(v))}
+          data-testid="capture-visibility-toggle"
+          data-visibility={visibility}
+          aria-label={`Event visibility: ${VISIBILITY_LABELS[visibility]}, tap to change`}
+          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium transition-colors duration-fast ${visibilityTone(visibility).bg} ${visibilityTone(visibility).text}`}
+        >
+          {VISIBILITY_SHORT_LABELS[visibility]}
+        </button>
+
         <button
           type="button"
           onClick={submit}
@@ -259,7 +293,7 @@ export function ItemTimeline({
   const selectedItem = items.find((i) => i.id === selectedItemId) ?? null;
 
   const handleAdd = useCallback(
-    async (note: string, file: File | null) => {
+    async (note: string, file: File | null, visibility: Visibility) => {
       if (!selectedItemId) return;
       if (file) {
         await addPhoto({
@@ -267,12 +301,14 @@ export function ItemTimeline({
           itemKind: "job_item",
           file,
           caption: note || undefined,
+          visibility,
         });
       } else if (note) {
         await addNote({
           itemId: selectedItemId,
           itemKind: "job_item",
           note,
+          visibility,
         });
       }
     },

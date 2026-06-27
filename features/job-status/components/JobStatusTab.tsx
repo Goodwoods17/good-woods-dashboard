@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronDown, ChevronRight, Plus, X, Check } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, X, Check, Eye, EyeOff } from "lucide-react";
 import { Pill } from "@shared/components/ui/Pill";
 import type { PillTone } from "@shared/components/ui/Pill";
 import { formatError } from "@shared/lib/formatError";
@@ -13,7 +13,8 @@ import { phaseProgress, jobProgress } from "../lib/progress";
 import { materialiseTemplates } from "../lib/templates";
 import { useJobProgress } from "../lib/jobProgressStore";
 import { JOB_ITEM_STATUS_LABELS, jobItemStatusTone } from "../lib/statusPill";
-import type { Phase, TrackableItemKind } from "../lib/types";
+import { nextVisibility, isClientFacing, VISIBILITY_LABELS, VISIBILITY_SHORT_LABELS, visibilityTone } from "../lib/visibilityPill";
+import type { Phase, TrackableItemKind, Visibility } from "../lib/types";
 
 // ─── Unified display row (job_items + Drawings pieces) ────────────────────────
 
@@ -27,6 +28,8 @@ type StatusRow = {
   done: boolean;
   statusLabel: string;
   tone: PillTone;
+  /** Slice 6: which audience can see this item. Default 'owner'. */
+  visibility: Visibility;
 };
 
 /** Pill tone for a Drawings piece status. Production statuses look like in_progress;
@@ -63,6 +66,44 @@ function ProgressBar({ pct, testId }: { pct: number; testId?: string }) {
   );
 }
 
+// ─── Visibility badge button ───────────────────────────────────────────────────
+
+/**
+ * Compact inline button that shows the current visibility and cycles it on tap.
+ * Client-facing values (client | both) are highlighted in amber/blue; owner is
+ * muted so the default state doesn't distract from item labels.
+ */
+function VisibilityBadge({
+  visibility,
+  onCycle,
+  busy,
+}: {
+  visibility: Visibility;
+  onCycle: () => void;
+  busy: boolean;
+}) {
+  const facing = isClientFacing(visibility);
+  const tone = visibilityTone(visibility);
+  return (
+    <button
+      type="button"
+      onClick={onCycle}
+      disabled={busy}
+      data-testid="visibility-toggle"
+      data-visibility={visibility}
+      aria-label={`Visibility: ${VISIBILITY_LABELS[visibility]}, tap to change`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-fast disabled:opacity-50 ${tone.bg} ${tone.text}`}
+    >
+      {facing ? (
+        <Eye className="h-3 w-3" aria-hidden />
+      ) : (
+        <EyeOff className="h-3 w-3" aria-hidden />
+      )}
+      <span>{VISIBILITY_SHORT_LABELS[visibility]}</span>
+    </button>
+  );
+}
+
 // ─── Phase section ────────────────────────────────────────────────────────────
 
 type AddForm = { label: string };
@@ -76,6 +117,8 @@ function PhaseSection({
   onToggle,
   busyId,
   onCycle,
+  visibilityBusyId,
+  onSetVisibility,
   addForm,
   onAddStart,
   onAddLabelChange,
@@ -92,6 +135,10 @@ function PhaseSection({
   onToggle: () => void;
   busyId: string | null;
   onCycle: (id: string, kind: TrackableItemKind) => Promise<void>;
+  /** Slice 6: id of the item whose visibility is being updated right now. */
+  visibilityBusyId: string | null;
+  /** Slice 6: update the visibility on an item to the next value in the cycle. */
+  onSetVisibility: (id: string, kind: TrackableItemKind, next: Visibility) => Promise<void>;
   addForm: AddForm | null;
   onAddStart: () => void;
   onAddLabelChange: (label: string) => void;
@@ -145,7 +192,8 @@ function PhaseSection({
           ) : (
             <ul className="flex flex-col gap-1.5 mt-1">
               {rows.map((row) => (
-                <li key={row.id}>
+                <li key={row.id} className="flex items-center gap-1.5">
+                  {/* Status cycle button (flex-1 so it takes remaining width) */}
                   <button
                     type="button"
                     onClick={() => onCycle(row.id, row.kind)}
@@ -155,11 +203,20 @@ function PhaseSection({
                     data-kind={row.kind}
                     data-phase={phase}
                     aria-label={`${row.label} — ${row.statusLabel}, tap to advance`}
-                    className="flex w-full items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
+                    className="flex flex-1 min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm text-text-primary">{row.label}</span>
                     <Pill tone={row.tone} label={row.statusLabel} />
                   </button>
+
+                  {/* Visibility toggle (slice 6) — separate tap target, no nesting */}
+                  <VisibilityBadge
+                    visibility={row.visibility}
+                    busy={visibilityBusyId === row.id}
+                    onCycle={() =>
+                      onSetVisibility(row.id, row.kind, nextVisibility(row.visibility))
+                    }
+                  />
                 </li>
               ))}
             </ul>
@@ -225,11 +282,13 @@ function PhaseSection({
  * Full mobile field view for one job: all 6 phases as collapsible sections,
  * items as tap-to-cycle rows, per-phase + job progress bars, and an inline
  * "add step" form per phase. Template steps are materialised on first open
- * (idempotent — slice 2). Photos + notes land in slice 3.
+ * (idempotent — slice 2). Photos + notes land in slice 3. Visibility tagging
+ * (owner | client | both) per item: slice 6.
  */
 export function JobStatusTab({ jobId }: { jobId: string }) {
-  const { items, pieces, loading, cycleItem, cyclePiece, addItem, refresh } = useJobProgress(jobId);
+  const { items, pieces, loading, cycleItem, cyclePiece, addItem, refresh, setItemVisibility, setPieceVisibility } = useJobProgress(jobId);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [visibilityBusyId, setVisibilityBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [collapsedPhases, setCollapsedPhases] = useState<Set<Phase>>(new Set());
   const [addPhase, setAddPhase] = useState<Phase | null>(null);
@@ -267,12 +326,17 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
         done: item.status === "done",
         statusLabel: JOB_ITEM_STATUS_LABELS[item.status],
         tone: jobItemStatusTone(item.status),
+        visibility: item.visibility,
       };
       if (!map.has(item.phase)) map.set(item.phase, []);
       map.get(item.phase)!.push(row);
     }
     for (const piece of pieces) {
       const phase = pieceToPhase(piece.status);
+      // JobPiece.visibility is optional string; coerce to Visibility with safe fallback.
+      const rawVis = piece.visibility ?? "owner";
+      const visibility: Visibility =
+        rawVis === "client" || rawVis === "both" ? rawVis : "owner";
       const row: StatusRow = {
         id: piece.id,
         label: piece.label,
@@ -281,6 +345,7 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
         done: piece.status === PIECE_DONE,
         statusLabel: stageLabel(piece.status),
         tone: pieceStatusTone(piece.status),
+        visibility,
       };
       if (!map.has(phase)) map.set(phase, []);
       map.get(phase)!.push(row);
@@ -311,6 +376,23 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
       }
     },
     [cycleItem, cyclePiece]
+  );
+
+  // Slice 6: cycle visibility on an item (job_item or piece).
+  const onSetVisibility = useCallback(
+    async (id: string, kind: TrackableItemKind, next: Visibility) => {
+      setVisibilityBusyId(id);
+      setError(null);
+      try {
+        if (kind === "job_item") await setItemVisibility(id, next);
+        else await setPieceVisibility(id, next);
+      } catch (e) {
+        setError(formatError(e));
+      } finally {
+        setVisibilityBusyId(null);
+      }
+    },
+    [setItemVisibility, setPieceVisibility]
   );
 
   const onAddStart = useCallback((phase: Phase) => {
@@ -385,6 +467,8 @@ export function JobStatusTab({ jobId }: { jobId: string }) {
                   onToggle={() => togglePhase(key)}
                   busyId={busyId}
                   onCycle={onCycle}
+                  visibilityBusyId={visibilityBusyId}
+                  onSetVisibility={onSetVisibility}
                   addForm={addPhase === key ? { label: addLabel } : null}
                   onAddStart={() => onAddStart(key)}
                   onAddLabelChange={setAddLabel}

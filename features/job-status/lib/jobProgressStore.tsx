@@ -7,7 +7,7 @@ import { rowToJobItem, jobItemToInsertRow, type JobItemRow } from "./jobItemRowM
 import { rowToPiece, pieceToRow, type PieceRow } from "@features/drawings/lib/piecesRowMap";
 import { nextStatus as drawingNextStatus } from "@features/drawings/lib/pipelines";
 import { nextStatus } from "./statusCycle";
-import type { JobItem } from "./types";
+import type { JobItem, Visibility } from "./types";
 
 const STORAGE_KEY = "gw_job_items_v1";
 const PIECES_STORAGE_KEY = "gw_job_pieces_v1";
@@ -29,6 +29,10 @@ export type UseJobProgress = {
   /** Re-fetch all items from the DB — call after materialiseTemplates so newly
    *  inserted template items appear even if the Realtime push hasn't arrived. */
   refresh: () => Promise<void>;
+  /** Slice 6: update the visibility on a job_item (optimistic + DB write). */
+  setItemVisibility: (id: string, visibility: Visibility) => Promise<void>;
+  /** Slice 6: update the visibility on a Drawings piece (optimistic + DB write). */
+  setPieceVisibility: (id: string, visibility: Visibility) => Promise<void>;
 };
 
 function localLoad(): JobItem[] {
@@ -369,6 +373,52 @@ export function useJobProgress(jobId: string): UseJobProgress {
     }
   }, [backend, jobId]);
 
+  // ─── Slice 6: setItemVisibility — update visibility on a job_item ─────────
+  const setItemVisibility = useCallback(
+    async (id: string, visibility: Visibility) => {
+      const prev = itemsRef.current.find((x) => x.id === id);
+      if (!prev) return;
+      const merged: JobItem = { ...prev, visibility };
+      itemsRef.current = itemsRef.current.map((x) => (x.id === id ? merged : x));
+      setItems(itemsRef.current);
+      if (backend === "supabase") {
+        const { error } = await getSupabase()
+          .from(JOB_ITEMS_TABLE)
+          .update({ visibility })
+          .eq("id", id);
+        if (error) {
+          itemsRef.current = itemsRef.current.map((x) => (x.id === id ? prev : x));
+          setItems(itemsRef.current);
+          throw error;
+        }
+      }
+    },
+    [backend]
+  );
+
+  // ─── Slice 6: setPieceVisibility — update visibility on a Drawings piece ──
+  const setPieceVisibility = useCallback(
+    async (id: string, visibility: Visibility) => {
+      const prev = piecesRef.current.find((x) => x.id === id);
+      if (!prev) return;
+      const merged: typeof prev = { ...prev, visibility };
+      piecesRef.current = piecesRef.current.map((x) => (x.id === id ? merged : x));
+      setPieces(piecesRef.current);
+      if (backend === "supabase") {
+        const { error } = await getSupabase()
+          .from(JOB_PIECES_TABLE)
+          .update({ visibility })
+          .eq("id", id);
+        if (error) {
+          piecesRef.current = piecesRef.current.map((x) => (x.id === id ? prev : x));
+          setPieces(piecesRef.current);
+          throw error;
+        }
+      }
+    },
+    [backend]
+  );
+
   const sorted = useMemo(
     () =>
       [...items].sort(
@@ -396,5 +446,7 @@ export function useJobProgress(jobId: string): UseJobProgress {
     cyclePiece,
     addItem,
     refresh,
+    setItemVisibility,
+    setPieceVisibility,
   };
 }
