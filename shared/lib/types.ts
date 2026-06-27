@@ -252,6 +252,8 @@ export type JobPiece = {
   parentRef?: string | null;
   createdBy?: string | null;
   createdAt: string;
+  /** Added in job-status slice 1 migration; NOT NULL DEFAULT 'owner' in DB. */
+  visibility?: string;
 };
 
 export type AnnotationType = "ink" | "highlight" | "shape" | "text";

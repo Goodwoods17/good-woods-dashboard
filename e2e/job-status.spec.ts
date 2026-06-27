@@ -188,6 +188,148 @@ test.describe("job status slice 3 — photos + notes + event timeline", () => {
   });
 });
 
+// ─── Slice 4 (issue #60) — fold in Drawings pieces ────────────────────────────
+
+test.describe("job status slice 4 — Drawings pieces in delivery/install", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY + a seeded Supabase"
+  );
+
+  test("a seeded piece appears in the delivery phase and is cyclable", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Seed a piece for the demo job (project_id = job_id in this codebase).
+    // Use status 'not_started' so it maps to the delivery phase; it should appear
+    // alongside any job_items in that section.
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+    const { data: pieceData, error: pieceErr } = await sb
+      .from("job_pieces")
+      .insert({
+        project_id: DEMO_JOB_ID,
+        kind: "cabinet",
+        label: "E2E kitchen island base",
+        status: "not_started",
+        source: "manual",
+        sort_order: 0,
+        visibility: "owner",
+      })
+      .select()
+      .single();
+    expect(pieceErr).toBeNull();
+    const pieceId = (pieceData as { id: string }).id;
+
+    await login(page);
+    await page.goto("/status");
+
+    // The piece should appear in the delivery phase section as a status row.
+    // Use data-kind="piece" to distinguish it from job_items with the same testid.
+    const deliverySection = page.getByTestId("phase-section-delivery");
+    await expect(deliverySection).toBeVisible({ timeout: 15_000 });
+
+    const pieceRow = deliverySection
+      .locator('[data-testid="job-status-item"][data-kind="piece"]')
+      .filter({ hasText: "E2E kitchen island base" });
+    await expect(pieceRow).toBeVisible({ timeout: 15_000 });
+    await expect(pieceRow).toHaveAttribute("data-status", "not_started");
+
+    // Tap to advance: not_started → cut (first step in the cabinet pipeline).
+    await pieceRow.click();
+    await expect(pieceRow).toHaveAttribute("data-status", "cut");
+
+    // Reload — the status persisted to the DB (optimistic write committed).
+    await page.reload();
+    const reloaded = page
+      .getByTestId("phase-section-delivery")
+      .locator('[data-testid="job-status-item"][data-kind="piece"]')
+      .filter({ hasText: "E2E kitchen island base" });
+    await expect(reloaded).toBeVisible({ timeout: 15_000 });
+    await expect(reloaded).toHaveAttribute("data-status", "cut");
+
+    // Verify the DB row matches what we see.
+    const { data: dbRow, error: dbErr } = await sb
+      .from("job_pieces")
+      .select("status")
+      .eq("id", pieceId)
+      .single();
+    expect(dbErr).toBeNull();
+    expect((dbRow as { status: string }).status).toBe("cut");
+  });
+
+  test("a piece at installed status appears in the install phase", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Seed a piece already at 'installed' so it maps to the install section.
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").insert({
+      project_id: DEMO_JOB_ID,
+      kind: "cabinet",
+      label: "E2E installed cabinet",
+      status: "installed",
+      source: "manual",
+      sort_order: 0,
+      visibility: "owner",
+    });
+
+    await login(page);
+    await page.goto("/status");
+
+    // The piece should appear in the install phase section.
+    const installSection = page.getByTestId("phase-section-install");
+    await expect(installSection).toBeVisible({ timeout: 15_000 });
+
+    const pieceRow = installSection
+      .locator('[data-testid="job-status-item"][data-kind="piece"]')
+      .filter({ hasText: "E2E installed cabinet" });
+    await expect(pieceRow).toBeVisible({ timeout: 15_000 });
+    await expect(pieceRow).toHaveAttribute("data-status", "installed");
+  });
+
+  test("overall progress includes pieces: a done piece raises job %", async ({ page }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clear everything for a predictable baseline.
+    await sb.from("job_items").delete().eq("job_id", DEMO_JOB_ID);
+    await sb.from("job_pieces").delete().eq("project_id", DEMO_JOB_ID);
+
+    // Seed two items: one job_item (not done) + one piece (done).
+    // With 1/2 done, job progress should be ~50%.
+    await sb.from("job_items").insert({
+      job_id: DEMO_JOB_ID,
+      phase: "assembly",
+      label: "E2E assembly step",
+      source: "adhoc",
+      status: "not_started",
+      visibility: "owner",
+      sort_order: 0,
+    });
+    await sb.from("job_pieces").insert({
+      project_id: DEMO_JOB_ID,
+      kind: "cabinet",
+      label: "E2E done piece",
+      status: "done",
+      source: "manual",
+      sort_order: 0,
+      visibility: "owner",
+    });
+
+    await login(page);
+    await page.goto("/status");
+
+    await expect(page.getByTestId("job-status-tab")).toBeVisible({ timeout: 15_000 });
+
+    // Job-level progress should reflect the done piece (≥ 1 out of total).
+    const pctText = await page.getByTestId("job-progress-pct").textContent({ timeout: 15_000 });
+    expect(parseInt(pctText ?? "0", 10)).toBeGreaterThan(0);
+  });
+});
+
 // ─── Slice 2 (issue #58) — templates + full mobile field view ────────────────
 
 test.describe("job status slice 2 — template materialisation + full field view", () => {

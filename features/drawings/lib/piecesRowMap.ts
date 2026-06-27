@@ -25,6 +25,8 @@ export type PieceRow = {
   parent_ref: string | null;
   created_by: string | null;
   created_at: string;
+  /** Added in job-status slice 1 migration; NOT NULL DEFAULT 'owner'. */
+  visibility: string;
 };
 
 export function rowToPiece(row: PieceRow): JobPiece {
@@ -37,6 +39,7 @@ export function rowToPiece(row: PieceRow): JobPiece {
     sortOrder: row.sort_order, dimensions: row.dimensions, material: row.material,
     edgeband: row.edgeband, parentRef: row.parent_ref, createdBy: row.created_by,
     createdAt: row.created_at,
+    visibility: row.visibility ?? "owner",
   };
 }
 
@@ -50,5 +53,6 @@ export function pieceToRow(p: JobPiece): PieceRow {
     pin_x: p.pinX ?? null, pin_y: p.pinY ?? null, sort_order: p.sortOrder,
     dimensions: p.dimensions ?? null, material: p.material ?? null, edgeband: p.edgeband ?? null,
     parent_ref: p.parentRef ?? null, created_by: p.createdBy ?? null, created_at: p.createdAt,
+    visibility: p.visibility ?? "owner",
   };
 }

@@ -1,20 +1,29 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { JOB_ITEMS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
+import { JOB_ITEMS_TABLE, JOB_PIECES_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
+import type { JobPiece } from "@shared/lib/types";
 import { rowToJobItem, jobItemToInsertRow, type JobItemRow } from "./jobItemRowMap";
+import { rowToPiece, pieceToRow, type PieceRow } from "@features/drawings/lib/piecesRowMap";
+import { nextStatus as drawingNextStatus } from "@features/drawings/lib/pipelines";
 import { nextStatus } from "./statusCycle";
 import type { JobItem } from "./types";
 
 const STORAGE_KEY = "gw_job_items_v1";
+const PIECES_STORAGE_KEY = "gw_job_pieces_v1";
 type Backend = "supabase" | "localStorage";
 
 export type UseJobProgress = {
   items: JobItem[];
+  /** Drawings pieces for this job's delivery/install phases (slice 4). */
+  pieces: JobPiece[];
   backend: Backend;
   loading: boolean;
-  /** Advance one item to the next status (optimistic; rolls back + throws on error). */
+  /** Advance one job_item to the next status (optimistic; rolls back + throws on error). */
   cycleItem: (id: string) => Promise<void>;
+  /** Advance one Drawings piece to its next status in its kind's pipeline
+   *  (optimistic; rolls back + throws on error). Slice 4. */
+  cyclePiece: (id: string) => Promise<void>;
   /** Add an ad-hoc tracer item to this job (optimistic; rolls back + throws on error). */
   addItem: (label: string, phase: JobItem["phase"]) => Promise<void>;
   /** Re-fetch all items from the DB — call after materialiseTemplates so newly
@@ -36,6 +45,20 @@ function localSave(items: JobItem[]) {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
 }
 
+function localLoadPieces(): JobPiece[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PIECES_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as JobPiece[]) : [];
+  } catch {
+    return [];
+  }
+}
+function localSavePieces(pieces: JobPiece[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PIECES_STORAGE_KEY, JSON.stringify(pieces));
+}
+
 /**
  * Live per-job progress. Mirrors features/drawings/lib/piecesStore.tsx — one
  * realtime channel + optimistic, idempotent merge — but scoped to a single
@@ -52,6 +75,16 @@ export function useJobProgress(jobId: string): UseJobProgress {
   useEffect(() => {
     itemsRef.current = items;
   }, [items]);
+
+  // ─── Slice 4: Drawings pieces for this job ─────────────────────────────────
+  // Pieces are scoped by project_id which equals jobId in this codebase
+  // (DrawingsView passes jobId as projectId when creating/querying pieces).
+  const [pieces, setPieces] = useState<JobPiece[]>([]);
+  const [piecesLoading, setPiecesLoading] = useState(true);
+  const piecesRef = useRef<JobPiece[]>([]);
+  useEffect(() => {
+    piecesRef.current = pieces;
+  }, [pieces]);
 
   // Unique per hook instance. Two useJobProgress() on the SAME jobId (e.g. the
   // board's note picker + the embedded field view) must NOT share a Realtime
@@ -138,6 +171,79 @@ export function useJobProgress(jobId: string): UseJobProgress {
     };
   }, [backend, jobId]);
 
+  // ─── Slice 4: pieces initial load ─────────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (backend === "localStorage") {
+        if (!cancelled) {
+          setPieces(localLoadPieces().filter((p) => p.projectId === jobId));
+          setPiecesLoading(false);
+        }
+        return;
+      }
+      const { data, error } = await getSupabase()
+        .from(JOB_PIECES_TABLE)
+        .select("*")
+        .eq("project_id", jobId);
+      if (!cancelled) {
+        if (!error && data) setPieces((data as PieceRow[]).map(rowToPiece));
+        setPiecesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [backend, jobId]);
+
+  // ─── Slice 4: pieces local persistence ─────────────────────────────────────
+  useEffect(() => {
+    if (!piecesLoading && backend === "localStorage") {
+      const others = localLoadPieces().filter((p) => p.projectId !== jobId);
+      localSavePieces([...others, ...pieces]);
+    }
+  }, [pieces, piecesLoading, backend, jobId]);
+
+  // ─── Slice 4: pieces live sync (filtered to this job's project_id) ─────────
+  // job_pieces already has REPLICA IDENTITY DEFAULT + is in supabase_realtime
+  // publication (migration 20260624001000_job_pieces.sql). A per-instance channel
+  // name (same unique suffix as job_items) prevents duplicate-subscriber errors.
+  useEffect(() => {
+    if (backend !== "supabase") return;
+    const sb = getSupabase();
+    const channel = sb
+      .channel(`job_pieces_status_${jobId}_${channelKeyRef.current}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: JOB_PIECES_TABLE,
+          filter: `project_id=eq.${jobId}`,
+        },
+        (payload) => {
+          setPieces((cur) => {
+            let next = cur;
+            if (payload.eventType === "DELETE") {
+              const id = (payload.old as { id?: string })?.id;
+              next = id ? cur.filter((x) => x.id !== id) : cur;
+            } else {
+              const piece = rowToPiece(payload.new as PieceRow);
+              next = cur.some((x) => x.id === piece.id)
+                ? cur.map((x) => (x.id === piece.id ? piece : x))
+                : [...cur, piece];
+            }
+            piecesRef.current = next;
+            return next;
+          });
+        }
+      )
+      .subscribe();
+    return () => {
+      sb.removeChannel(channel);
+    };
+  }, [backend, jobId]);
+
   const cycleItem = useCallback(
     async (id: string) => {
       const prev = itemsRef.current.find((x) => x.id === id);
@@ -158,6 +264,36 @@ export function useJobProgress(jobId: string): UseJobProgress {
         if (error) {
           itemsRef.current = itemsRef.current.map((x) => (x.id === id ? prev : x));
           setItems(itemsRef.current);
+          throw error;
+        }
+      }
+    },
+    [backend]
+  );
+
+  // ─── Slice 4: cyclePiece — advance a Drawings piece through its pipeline ───
+  const cyclePiece = useCallback(
+    async (id: string) => {
+      const prev = piecesRef.current.find((x) => x.id === id);
+      if (!prev) return;
+      const nextSt = drawingNextStatus(prev.kind, prev.status);
+      // Already at terminal status — nothing to do.
+      if (!nextSt) return;
+      const merged: JobPiece = {
+        ...prev,
+        status: nextSt,
+        statusUpdatedAt: new Date().toISOString(),
+      };
+      piecesRef.current = piecesRef.current.map((x) => (x.id === id ? merged : x));
+      setPieces(piecesRef.current);
+      if (backend === "supabase") {
+        const { error } = await getSupabase()
+          .from(JOB_PIECES_TABLE)
+          .update(pieceToRow(merged))
+          .eq("id", id);
+        if (error) {
+          piecesRef.current = piecesRef.current.map((x) => (x.id === id ? prev : x));
+          setPieces(piecesRef.current);
           throw error;
         }
       }
@@ -241,5 +377,24 @@ export function useJobProgress(jobId: string): UseJobProgress {
     [items]
   );
 
-  return { items: sorted, backend, loading, cycleItem, addItem, refresh };
+  const sortedPieces = useMemo(
+    () =>
+      [...pieces].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)
+      ),
+    [pieces]
+  );
+
+  const combinedLoading = loading || piecesLoading;
+
+  return {
+    items: sorted,
+    pieces: sortedPieces,
+    backend,
+    loading: combinedLoading,
+    cycleItem,
+    cyclePiece,
+    addItem,
+    refresh,
+  };
 }
