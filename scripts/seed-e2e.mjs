@@ -94,6 +94,64 @@ const DEMO_JOB = {
   buffer_days: 10,
 };
 
+// ─── Scheduling S2 (issue #90) — phase capacity/load fixtures ─────────────
+// The capacity panel reads completed labour_sessions over a trailing 7-day
+// window and derives per-phase load. To make the over/under statuses
+// deterministic we (a) shrink the `assembly` work-center's weekly capacity to a
+// tiny value, then (b) log a few hours of assembly time → over capacity; a
+// little design time stays well under its 40h default. Fixed ids → idempotent.
+const HOUR_MS = 3_600_000;
+const NOW = Date.now();
+const oneHourAgo = new Date(NOW - HOUR_MS).toISOString();
+const twoHoursAgo = new Date(NOW - 2 * HOUR_MS).toISOString();
+
+const E2E_ASSEMBLY_CAPACITY = { phase: "assembly", weekly_capacity_hours: 4 };
+
+const SCHED_JOB_A = "5ce51000-0000-4000-8000-0000000000aa";
+const SCHED_JOB_B = "5ce51000-0000-4000-8000-0000000000bb";
+
+const E2E_SESSIONS = [
+  // assembly: 6h logged this window vs 4h capacity → OVER. Two jobs so the
+  // derived "default duration" averages per job, not per session.
+  {
+    id: "5ce51011-0000-4000-8000-000000000001",
+    category_id: "assembly",
+    job_id: SCHED_JOB_A,
+    started_at: twoHoursAgo,
+    ended_at: oneHourAgo,
+    accumulated_ms: 4 * HOUR_MS,
+    resumed_at: null,
+  },
+  {
+    id: "5ce51011-0000-4000-8000-000000000002",
+    category_id: "assembly",
+    job_id: SCHED_JOB_B,
+    started_at: twoHoursAgo,
+    ended_at: oneHourAgo,
+    accumulated_ms: 2 * HOUR_MS,
+    resumed_at: null,
+  },
+  // design: 1h logged vs 40h default capacity → UNDER.
+  {
+    id: "5ce51011-0000-4000-8000-000000000003",
+    category_id: "design",
+    job_id: SCHED_JOB_A,
+    started_at: twoHoursAgo,
+    ended_at: oneHourAgo,
+    accumulated_ms: 1 * HOUR_MS,
+    resumed_at: null,
+  },
+];
+
+async function seedCapacity() {
+  const token = await signIn();
+  await upsert(token, "scheduling_phase_capacity", E2E_ASSEMBLY_CAPACITY);
+  for (const s of E2E_SESSIONS) {
+    await upsert(token, "labour_sessions", s);
+  }
+  console.log(`OK seeded scheduling capacity + ${E2E_SESSIONS.length} labour sessions`);
+}
+
 async function findUser() {
   const res = await fetch(`${url}/auth/v1/admin/users?per_page=200`, { headers });
   if (!res.ok) throw new Error(`list users ${res.status}: ${await res.text()}`);
@@ -170,6 +228,7 @@ async function seedJob() {
 async function main() {
   await seedUser();
   await seedJob();
+  await seedCapacity();
 }
 
 main().catch((e) => {

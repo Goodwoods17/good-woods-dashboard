@@ -35,8 +35,39 @@ features/scheduling/
 derived ONLY from the current-milestone pointer vs. the current phase's target
 (behind once today passes it; UTC end-of-day so it's timezone-independent).
 
-## Non-goals (S1)
+## What's here (S2 capacity/load, issue #90)
 
-No editing of dates, no capacity-aware committed-date computation, no buffer-burn,
-no per-sub reliability, no Gantt, no client portal/ICS, no Google push. Those are
-later slices in Milestone #7. `health.ts` is intentionally untouched this slice.
+```
+features/scheduling/
+├── lib/
+│   └── capacity.ts   pure: phase capacity/load model + seed-from-history (+ test)
+└── components/
+    └── PhaseCapacityPanel.tsx   flag-gated "Capacity" tab on /labour
+```
+
+The six `MilestoneStage` phases double as shop **work-centers**. `capacity.ts`:
+
+- `buildCapacityModel(sessions, capacityByPhase, windowStart, windowEnd)` → one
+  row per phase with derived **load** (active hours from `labour_sessions`
+  history in the window), configured **capacity**, and `under | near | over`
+  status. Load is derived at read time — never stored.
+- `seedPhaseDurationsFromHistory(sessions)` → default phase durations (work days)
+  for a **new job**, from the average active hours *per job per phase* in history
+  (the "garbage-in fix" — uses data we already have). Falls back to
+  `DEFAULT_PHASE_DURATION_DAYS` per-phase when there's no history.
+- `phaseTargetDatesFromDurations(start, durations)` chains those durations
+  (weekends skipped) into the S1 `phase_target_dates` shape.
+
+Capacity persists in `public.scheduling_phase_capacity` (one row per phase,
+`weekly_capacity_hours`, seeded at 40; migration
+`20260630000000_scheduling_phase_capacity.sql`). The panel reads it (fallback to
+`DEFAULT_WEEKLY_CAPACITY_HOURS`) and reads sessions via the labour store.
+
+## Non-goals (S1–S2)
+
+No editing of dates **or capacity values** in the UI yet, no per-machine /
+per-person capacity (phase-level only in v1), no auto-write of the derived
+durations into new-job creation (the panel *previews* them — wiring into the
+`/jobs/new` form is a later slice), no capacity-aware committed-date computation,
+no buffer-burn, no per-sub reliability, no Gantt, no client portal/ICS, no Google
+push. Those are later slices in Milestone #7. `health.ts` stays untouched.

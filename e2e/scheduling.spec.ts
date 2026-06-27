@@ -55,3 +55,39 @@ test.describe("scheduling slice 1 — read-only timeline tracer", () => {
     await expect(badge).toHaveText(/Behind/);
   });
 });
+
+// Scheduling S2 — phase-level capacity/load model (issue #90). The Capacity tab
+// on /labour only appears when NEXT_PUBLIC_SCHEDULING_ENABLED=true. The seed
+// shrinks the `assembly` work-center to 4h capacity and logs 6h of assembly
+// time this window → "over capacity"; 1h of design time stays under its 40h
+// default → "has room". Derived default phase durations also render.
+test.describe("scheduling slice 2 — phase capacity/load model", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the Capacity tab shows per-phase load vs capacity + derived durations", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/labour");
+
+    await page.getByRole("button", { name: "Capacity" }).click();
+
+    const panel = page.getByTestId("phase-capacity-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // All six work-centers render a capacity row.
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(panel.getByTestId(`capacity-row-${phase}`)).toBeVisible();
+    }
+
+    // Assembly is seeded over capacity; design has room.
+    await expect(panel.getByTestId("capacity-row-assembly")).toHaveAttribute("data-status", "over");
+    await expect(panel.getByTestId("capacity-row-design")).toHaveAttribute("data-status", "under");
+
+    // The derived default phase durations for a new job render too.
+    await expect(panel.getByTestId("duration-row-assembly")).toBeVisible();
+  });
+});
