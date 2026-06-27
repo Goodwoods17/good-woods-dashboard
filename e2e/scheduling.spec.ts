@@ -91,3 +91,51 @@ test.describe("scheduling slice 2 — phase capacity/load model", () => {
     await expect(panel.getByTestId("duration-row-assembly")).toBeVisible();
   });
 });
+
+// Scheduling S3 — capacity-aware committed date + risk-tiered buffer +
+// floating-bottleneck detection (issue #91). The seed already puts assembly
+// over capacity (6h logged vs 4h configured), so assembly must be the
+// floating bottleneck. The capacity-aware date section and risk buffer
+// breakdown both render on the Capacity tab.
+test.describe("scheduling slice 3 — capacity-aware date + risk buffer + bottleneck", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Capacity tab shows floating bottleneck (assembly) + recommended commit date", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/labour");
+
+    await page.getByRole("button", { name: "Capacity" }).click();
+
+    const panel = page.getByTestId("phase-capacity-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Floating bottleneck banner appears — assembly is the most-overloaded phase.
+    const bottleneck = page.getByTestId("floating-bottleneck");
+    await expect(bottleneck).toBeVisible();
+    await expect(bottleneck).toHaveAttribute("data-phase", "assembly");
+    await expect(bottleneck).toContainText(/Assembly/i);
+
+    // Capacity-aware date section renders with a recommended commit date.
+    const dateSection = page.getByTestId("capacity-aware-date-section");
+    await expect(dateSection).toBeVisible();
+    await expect(page.getByTestId("recommended-commit-date")).toBeVisible();
+  });
+
+  test("job detail schedule timeline shows a risk-buffer breakdown", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const timeline = page.getByTestId("schedule-timeline");
+    await expect(timeline).toBeVisible({ timeout: 15_000 });
+
+    // Risk buffer breakdown row renders below the phase timeline.
+    const breakdown = page.getByTestId("risk-buffer-breakdown");
+    await expect(breakdown).toBeVisible();
+    await expect(breakdown).toContainText(/base/i);
+  });
+});
