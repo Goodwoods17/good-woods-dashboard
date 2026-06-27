@@ -9,16 +9,20 @@ import { BottleneckAnalytics } from "./BottleneckAnalytics";
 import { TimeCardsView } from "./TimeCardsView";
 import { LabourSetup } from "./LabourSetup";
 import { TaskTemplatesEditor } from "@features/job-costing/components/TaskTemplatesEditor";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
+import { PhaseCapacityPanel } from "@features/scheduling/components/PhaseCapacityPanel";
 
-type Tab = "timers" | "analytics" | "timecards" | "templates" | "setup";
+type Tab = "timers" | "analytics" | "capacity" | "timecards" | "templates" | "setup";
 
 export function LabourView() {
   const { running, suggestions, loading, error } = useLabour();
   const [tab, setTab] = useState<Tab>("timers");
+  const showCapacity = schedulingEnabled();
 
   const tabs: { key: Tab; label: string; count?: number }[] = [
     { key: "timers", label: "Timers", count: running.length || undefined },
     { key: "analytics", label: "Bottlenecks", count: suggestions.length || undefined },
+    ...(showCapacity ? [{ key: "capacity" as const, label: "Capacity" }] : []),
     { key: "timecards", label: "Time cards" },
     { key: "templates", label: "Templates" },
     { key: "setup", label: "Setup" },
@@ -75,6 +79,8 @@ export function LabourView() {
           <TimersBoard />
         ) : tab === "analytics" ? (
           <BottleneckAnalytics />
+        ) : tab === "capacity" ? (
+          <PhaseCapacityPanel />
         ) : tab === "timecards" ? (
           <TimeCardsView />
         ) : tab === "templates" ? (
