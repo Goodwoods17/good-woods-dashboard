@@ -1,5 +1,10 @@
 import type { Job, JobBlocker } from "@shared/lib/types";
-import { computeMargin } from "@shared/lib/types";
+import { MILESTONE_STAGES, computeMargin } from "@shared/lib/types";
+import {
+  computeBufferBurn,
+  chainCompletionPct,
+  feverZone as computeFeverZone,
+} from "@features/scheduling/lib/bufferBurn";
 import { blockerAgeDays, partyLabel } from "@features/jobs/lib/jobBlockers";
 
 export const BRIEFING_MODEL = "claude-sonnet-4-6";
@@ -113,6 +118,11 @@ EXECUTION STEPS:
    - pipeline_status is "complete" but install date is in the future (data hygiene)
    - externalBlockers is non-empty (EXTERNAL BLOCKER, severity red): the shop is waiting on an outside party and cannot progress.
 2a. Client followup rule: when the trigger is "last activity > 14 days" specifically and nothing else is firing, frame the item as a CLIENT-NUDGE not a project-blocker. Headline pattern: "<Client>. <N> days since last word. Check in." Suggested action is verb-first outreach: "Text <client> a quick how's-it-going about <project name>." This is the "auto-followup reminder" Andrew asked for — the dashboard reminding him to chase before clients feel forgotten.
+2b. Schedule/buffer alert rule (S8): when a job has a "scheduleSignal" field, ALSO check its feverZone — this is the CCPM buffer health signal from the scheduling engine. Flag these items before other triggers where possible:
+   - feverZone "red": commitment at risk. The buffer is burning faster than progress justifies. Severity: red. Headline pattern: "<JobName>. Commitment at risk. Buffer <X>% consumed." Reason must cite bufferConsumedPct and remainingBufferDays. Suggested action: "Review schedule with Andrew and decide whether to crunch or push the install date."
+   - feverZone "yellow": eating into buffer contingency. Severity: yellow (unless another higher trigger already fired). Headline pattern: "<JobName> eating into buffer. <N> buffer days left." Reason cites bufferConsumedPct and remainingBufferDays. Suggested action: "Check which phase is lagging and whether hours can be recovered this week."
+   - feverZone "green": buffer healthy. Do NOT surface as a briefing item.
+   Buffer alerts rank with other job items by urgency — red buffer alert ranks alongside red blockers/install alerts.
 3. Read every stale anchor. These are strategic relationships (designers who refer business, key GCs) that have not been touched in 30+ days. Each represents revenue risk if the relationship goes cold. Flag every one; the older the silence, the higher the urgency.
 4. Order all flagged items by urgency. Most-pressing first. Anchor relationships compete with jobs on the same axis; an anchor at 60 days deserves "red" treatment over a job that's only mildly off track.
 5. For each, write a six-to-ten-word HEADLINE, one-sentence REASON citing the actual data, and one concrete SUGGESTED ACTION.
@@ -151,6 +161,15 @@ VOICE EXAMPLES:
     reason:   "Anchor designer, last touched 2026-04-08. 30% of trailing-twelve revenue traces back to her referrals."
     action:   "Send the Allenby finish photos and ask what's on her board for September."`;
 
+export type ScheduleSignal = {
+  /** CCPM buffer fever zone: green = healthy, yellow = eating buffer, red = commitment at risk. */
+  feverZone: "green" | "yellow" | "red";
+  /** Percentage of the buffer pool already consumed (0–100+). */
+  bufferConsumedPct: number;
+  /** Remaining buffer work-days. Negative = past the committed date. */
+  remainingBufferDays: number;
+};
+
 export type JobInput = {
   id: string;
   code: string;
@@ -169,6 +188,12 @@ export type JobInput = {
   daysSinceLastActivity: number | null;
   daysUntilInstall: number;
   externalBlockers: { reason: string; party: string; days: number }[];
+  /**
+   * Present when the Scheduling & Client-Commitment Engine is active and the
+   * job has internal schedule data (internalTargetDate + installDate).
+   * Undefined/absent = scheduling not active for this job.
+   */
+  scheduleSignal?: ScheduleSignal;
 };
 
 export function jobsToInput(
@@ -193,6 +218,22 @@ export function jobsToInput(
       party: partyLabel(b, contactName ?? (() => undefined)),
       days: blockerAgeDays(b, today),
     }));
+
+    // Compute buffer/fever signal when the job has internal scheduling data.
+    let scheduleSignal: ScheduleSignal | undefined;
+    if (job.internalTargetDate && job.installDate) {
+      const milestoneIndex = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+      if (milestoneIndex >= 0) {
+        const burn = computeBufferBurn(job.internalTargetDate, job.installDate, today);
+        const chainPct = chainCompletionPct({ currentMilestoneIndex: milestoneIndex });
+        scheduleSignal = {
+          feverZone: computeFeverZone(burn.bufferConsumedPct, chainPct),
+          bufferConsumedPct: Math.round(burn.bufferConsumedPct),
+          remainingBufferDays: burn.remainingBufferDays,
+        };
+      }
+    }
+
     return {
       id: job.id,
       code: job.code,
@@ -211,6 +252,7 @@ export function jobsToInput(
       daysSinceLastActivity,
       daysUntilInstall,
       externalBlockers,
+      scheduleSignal,
     };
   });
 }

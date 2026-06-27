@@ -5,7 +5,14 @@
 // the synthetic value with a "demo" tag.
 
 import type { Job, JobBlocker, PipelineStatus, HealthStatus } from "@shared/lib/types";
+import { MILESTONE_STAGES } from "@shared/lib/types";
 import { deriveHealth } from "@features/jobs/lib/health";
+import {
+  computeBufferBurn,
+  chainCompletionPct,
+  feverZone as computeFeverZone,
+  type FeverZone,
+} from "@features/scheduling/lib/bufferBurn";
 
 /**
  * True when this job's blocker/nextStep is synthetic (heuristic-derived,
@@ -163,15 +170,43 @@ export function getNextStep(job: Job, today: Date = new Date()): string {
 // Priority ranking for the hitlist:
 //   1. Blocked health  → top
 //   2. At-risk health  → next
-//   3. Closer install date → bumps within band
-//   4. Pipeline stage ordinal as a tie-breaker
+//   3. Buffer fever zone (S8) — RED/YELLOW nudge a job up within its band
+//   4. Closer install date → bumps within band
+//   5. Pipeline stage ordinal as a tie-breaker
 export type HitlistEntry = {
   job: Job;
   blocker: BlockerKind;
   nextStep: string;
   daysToInstall: number;
   priority: number; // lower = more urgent
+  /**
+   * Set when the job has internal scheduling data (internalTargetDate +
+   * installDate) and the scheduling engine has computed a fever zone.
+   * GREEN = healthy; YELLOW = eating into buffer; RED = commitment at risk.
+   * Undefined when no scheduling data is present.
+   */
+  feverZone?: FeverZone;
 };
+
+// Priority uplift for buffer-burning jobs (S8). Subtracting from priority
+// floats the job up the hitlist relative to jobs in the same health band.
+// RED brings an on_track job close to the at_risk tier (but not past a real
+// blocked job). YELLOW nudges it up within the on_track band.
+const BUFFER_BURN_UPLIFT: Record<FeverZone, number> = {
+  green: 0,
+  yellow: 40,
+  red: 90,
+};
+
+/** Returns the job's buffer fever zone when scheduling data is available. */
+function computeJobFeverZone(job: Job, today: Date): FeverZone | undefined {
+  if (!job.internalTargetDate || !job.installDate) return undefined;
+  const milestoneIndex = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+  if (milestoneIndex < 0) return undefined;
+  const burn = computeBufferBurn(job.internalTargetDate, job.installDate, today);
+  const chainPct = chainCompletionPct({ currentMilestoneIndex: milestoneIndex });
+  return computeFeverZone(burn.bufferConsumedPct, chainPct);
+}
 
 const STAGE_ORDER: Record<PipelineStatus, number> = {
   new: 0,
@@ -206,11 +241,16 @@ export function buildHitlist(
       const installMs = new Date(job.installDate + "T12:00:00").getTime();
       const daysToInstall = Math.round((installMs - t.getTime()) / (1000 * 60 * 60 * 24));
       const urgencyFromDate = Math.max(0, Math.min(60, daysToInstall));
+      // S8: compute buffer fever zone and subtract its uplift from the priority
+      // so buffer-burning jobs float up the list before becoming a fire.
+      const zone = computeJobFeverZone(job, t);
+      const bufferUplift = zone !== undefined ? BUFFER_BURN_UPLIFT[zone] : 0;
       const priority =
-        HEALTH_WEIGHT[deriveHealth(job, t, activeByJob?.get(job.id) ?? [])] +
+        HEALTH_WEIGHT[deriveHealth(job, t, activeByJob?.get(job.id) ?? [])] -
+        bufferUplift +
         urgencyFromDate +
         STAGE_ORDER[job.pipelineStatus] * 0.01;
-      return { job, blocker, nextStep, daysToInstall, priority };
+      return { job, blocker, nextStep, daysToInstall, priority, feverZone: zone };
     })
     .sort((a, b) => a.priority - b.priority);
 }

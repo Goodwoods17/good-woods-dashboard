@@ -94,6 +94,38 @@ const DEMO_JOB = {
   buffer_days: 10,
 };
 
+// ─── Scheduling S8 (issue #96) — buffer-burn hitlist job ─────────────────
+// This job has an internal target date deep in the past (Jan 2026) and is only
+// at the CNC phase. Buffer consumed % ≈ 50% while chain progress ≈ 17% → RED
+// fever zone. It should appear in the hitlist with data-testid="hitlist-fever-chip".
+const BUFFER_BURN_JOB = {
+  id: "s8-buffer-burn-demo",
+  code: "GW-BUF-001",
+  name: "Buffer Burn Demo Job",
+  client: "E2E Test Client",
+  address: "3 Buffer Rd, Victoria BC",
+  template: "full_project",
+  pipeline_status: "in_production",
+  health_status: "on_track",
+  current_milestone: "cnc",
+  install_date: "2026-12-31",
+  revenue: 0,
+  costs: [],
+  invoice: {
+    number: "INV-BUF-001",
+    issuedDate: "2026-01-01",
+    dueDate: "2026-01-15",
+    lineItems: [],
+  },
+  activity: [],
+  site_access: {},
+  payer_id: E2E_CONTACT.id,
+  // internal_target_date in Jan 2026 → buffer deeply consumed while at cnc (index 1)
+  // → computeBufferBurn returns RED zone when today is mid-2026+.
+  internal_target_date: "2026-01-15",
+  buffer_days: 10,
+};
+
 // ─── Scheduling S2 (issue #90) — phase capacity/load fixtures ─────────────
 // The capacity panel reads completed labour_sessions over a trailing 7-day
 // window and derives per-phase load. To make the over/under statuses
@@ -222,7 +254,8 @@ async function seedJob() {
   await upsert(token, "contacts", E2E_CONTACT);
   await upsert(token, "jobs", E2E_JOB);
   await upsert(token, "jobs", DEMO_JOB);
-  console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}`);
+  await upsert(token, "jobs", BUFFER_BURN_JOB);
+  console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 
 async function main() {
