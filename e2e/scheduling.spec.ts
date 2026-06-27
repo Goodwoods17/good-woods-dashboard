@@ -386,6 +386,52 @@ test.describe("scheduling slice 7 — Schedule tab + overview widget", () => {
   });
 });
 
+// Scheduling S8 — buffer-aware hitlist + daily-briefing schedule alerts (issue #96).
+// The seed adds BUFFER_BURN_JOB: internal_target_date = "2026-01-15" (months in the
+// past), current_milestone = "cnc" (index 1 ≈ 17% chain). Buffer consumed ≈ 50%,
+// chain ≈ 17% → RED fever zone. The job must appear in the homepage hitlist with
+// a data-testid="hitlist-fever-chip" data-zone="red" chip, AND it must sort above
+// jobs without scheduling data (DEMO_JOB, install_date=2026-12-15, on_track).
+test.describe("scheduling slice 8 — buffer-aware hitlist", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("buffer-burning job shows a fever chip and floats above on-track jobs in the hitlist", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/");
+
+    // The hitlist section must be visible. Target the stable testid rather than
+    // the header text — the rendered copy uses a typographic apostrophe (&rsquo;,
+    // U+2019), which a straight-quote getByText() can never match.
+    const hitlistHeader = page.getByTestId("hitlist-header");
+    await expect(hitlistHeader).toBeVisible({ timeout: 15_000 });
+
+    // The buffer-burn demo job must have a red fever chip.
+    const feverChip = page.locator('[data-testid="hitlist-fever-chip"][data-zone="red"]').first();
+    await expect(feverChip).toBeVisible({ timeout: 5_000 });
+    await expect(feverChip).toHaveText(/Buffer risk/i);
+
+    // The buffer-burn job must appear BEFORE the DEMO_JOB (which has no consumed buffer).
+    // We check that the Buffer Burn Demo job's fever chip row comes before any row
+    // that contains "Job Status Demo" (the DEMO_JOB from the seed).
+    const allRows = page.locator("ul li a");
+    const rowTexts = await allRows.allTextContents();
+    const bufferBurnIdx = rowTexts.findIndex((t) => t.includes("Buffer Burn Demo"));
+    const demoJobIdx = rowTexts.findIndex((t) => t.includes("Job Status Demo"));
+
+    // Both jobs must appear in the hitlist (install dates far in the future → top N).
+    expect(bufferBurnIdx).toBeGreaterThanOrEqual(0);
+    // Buffer-burning job must be above (smaller index) the DEMO_JOB.
+    if (demoJobIdx >= 0) {
+      expect(bufferBurnIdx).toBeLessThan(demoJobIdx);
+    }
+  });
+});
+
 // Scheduling S9 — Owner fever-chart hitlist + "one number to watch" (issue #97).
 // The home page gains a "Fever board" view toggle that's only visible when
 // NEXT_PUBLIC_SCHEDULING_ENABLED=true. Clicking it shows:
@@ -399,9 +445,7 @@ test.describe("scheduling slice 9 — fever hitlist + one number to watch", () =
     "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
   );
 
-  test("home page shows a Fever board view toggle when scheduling is enabled", async ({
-    page,
-  }) => {
+  test("home page shows a Fever board view toggle when scheduling is enabled", async ({ page }) => {
     await login(page);
     await page.goto("/");
 
@@ -410,9 +454,7 @@ test.describe("scheduling slice 9 — fever hitlist + one number to watch", () =
     await expect(feverButton).toBeVisible({ timeout: 15_000 });
   });
 
-  test("clicking Fever board renders the one-number banner and ranked board", async ({
-    page,
-  }) => {
+  test("clicking Fever board renders the one-number banner and ranked board", async ({ page }) => {
     await login(page);
     await page.goto("/");
 

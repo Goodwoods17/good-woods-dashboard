@@ -52,7 +52,10 @@ export function Hitlist({ jobs }: { jobs: Job[] }) {
           <div className="flex items-baseline gap-3">
             <div className="flex items-center gap-2">
               <Flame className="h-4 w-4 text-accent" strokeWidth={2} />
-              <h3 className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]">
+              <h3
+                data-testid="hitlist-header"
+                className="font-serif text-lg font-medium text-text-primary tracking-[-0.01em]"
+              >
                 This week&rsquo;s hitlist
               </h3>
             </div>
@@ -126,7 +129,7 @@ function HitlistRow({
   reduceMotion: boolean | null;
   activeBlockers: import("@shared/lib/types").JobBlocker[];
 }) {
-  const { job, nextStep, daysToInstall } = entry;
+  const { job, nextStep, daysToInstall, feverZone } = entry;
   const health = deriveHealth(job, new Date(), activeBlockers);
   const installLabel =
     daysToInstall < 0
@@ -165,6 +168,23 @@ function HitlistRow({
             <StatusBadge status={job.pipelineStatus} />
             <span>·</span>
             <span className="tabular-nums">{installLabel}</span>
+            {feverZone && feverZone !== "green" && (
+              <>
+                <span>·</span>
+                <span
+                  data-testid="hitlist-fever-chip"
+                  data-zone={feverZone}
+                  className={cn(
+                    "inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                    feverZone === "red"
+                      ? "bg-status-blocked-soft text-status-blocked"
+                      : "bg-status-at-risk-soft text-status-at-risk"
+                  )}
+                >
+                  {feverZone === "red" ? "Buffer risk" : "Eating buffer"}
+                </span>
+              </>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-3">
