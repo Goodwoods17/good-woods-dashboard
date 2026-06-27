@@ -315,7 +315,11 @@ function GanttScheduleInner({
       <div className="px-4 pt-3 pb-1 flex flex-wrap gap-1.5" aria-label="Phase pin controls">
         {MILESTONE_STAGES.map(({ key, label }) => {
           const isPinned = pinned.has(key);
-          const hasDate = !!activeDates[key];
+          // Install is the frozen client-committed anchor (jobs.install_date),
+          // kept separate from the internal phase_target_dates (ADR 0020). It can
+          // be pinned off that committed date even when no internal install target
+          // exists — mirroring togglePin's `base["install"] ?? job.installDate`.
+          const hasDate = !!activeDates[key] || (key === "install" && !!job.installDate);
           return (
             <button
               key={key}
@@ -354,10 +358,7 @@ function GanttScheduleInner({
 
       {/* Proposed-change preview table */}
       {hasPending && (
-        <div
-          data-testid="gantt-preview-table"
-          className="px-4 pb-4 border-t border-border pt-3"
-        >
+        <div data-testid="gantt-preview-table" className="px-4 pb-4 border-t border-border pt-3">
           <p className="text-xs font-medium text-text-secondary mb-2">
             Proposed changes
             {hasConflicts && (
@@ -385,10 +386,7 @@ function GanttScheduleInner({
                   >
                     {label}
                     {pinned.has(key) && (
-                      <Pin
-                        className="inline ml-1 h-2.5 w-2.5 text-accent"
-                        strokeWidth={1.75}
-                      />
+                      <Pin className="inline ml-1 h-2.5 w-2.5 text-accent" strokeWidth={1.75} />
                     )}
                   </span>
                   <span className={cn(changed && "line-through text-text-tertiary")}>
