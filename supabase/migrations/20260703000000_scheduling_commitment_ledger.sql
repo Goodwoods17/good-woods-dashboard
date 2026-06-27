@@ -31,7 +31,7 @@ COMMENT ON COLUMN public.jobs.phase_owners IS
 
 CREATE TABLE IF NOT EXISTS public.commitment_ledger (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  job_id uuid NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
+  job_id text NOT NULL REFERENCES public.jobs(id) ON DELETE CASCADE,
   -- 'client' = the shop's install promise; 'phase' = an internal phase target.
   level text NOT NULL CHECK (level IN ('client', 'phase')),
   -- MilestoneStage key for phase-level rows; NULL for the client install.
