@@ -38,3 +38,4 @@ export const INVOICE_LINES_TABLE = "invoice_lines";
 export const JOB_ITEMS_TABLE = "job_items";
 export const JOB_ITEM_EVENTS_TABLE = "job_item_events";
 export const PHASE_STEP_TEMPLATES_TABLE = "phase_step_templates";
+export const SCHEDULING_MAKE_READY_ITEMS_TABLE = "scheduling_make_ready_items";

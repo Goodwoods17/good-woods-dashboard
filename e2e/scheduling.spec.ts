@@ -620,3 +620,137 @@ test.describe("scheduling slice 11 — trade-line dates + sub accountability", (
     await expect(confirmed).toContainText("2027-01-15");
   });
 });
+
+// Scheduling S12 — make-ready gate (templated checklist, soft gate, issue #100).
+// The Schedule tab on a job detail page now shows a MakeReadyChecklistPanel below
+// the Gantt. It has:
+//   – A panel with data-testid="make-ready-panel"
+//   – Per-phase sections (data-testid="make-ready-phase-<phase>")
+//   – A "not ready" warning for phases with unchecked items (soft gate)
+//   – A "Proceed anyway" per-item override button (soft gate — ADR 0013)
+//
+// The demo job's currentMilestone is "cnc" (seeded), so:
+//   - milestoneIndex > 0 → designSignoff=true → "Drawings final" auto-ticked
+//   - No blocker text on demo job → blockerResolved=true → blocker-signal items ticked
+//   - materialLogged=false (no inventory store in tab) → "Materials ordered" unticked
+// So CNC phase will NOT be fully ready (Materials ordered + Toolpath file = unticked).
+test.describe("scheduling slice 12 — make-ready gate (templated checklist, soft)", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Schedule tab shows the make-ready panel with all six phase sections", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Navigate to the Schedule tab.
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const tab = page.getByTestId("schedule-tab");
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+
+    // The make-ready panel renders inside the Schedule tab.
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // All six phase sections are present.
+    for (const phase of ["design", "cnc", "assembly", "finishing", "delivery", "install"]) {
+      await expect(panel.getByTestId(`make-ready-phase-${phase}`)).toBeVisible();
+    }
+  });
+
+  test("standard make-ready items render for each phase", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // The CNC phase must have the issue-spec items (drawings final + materials/Toolpath).
+    const cncPhase = panel.getByTestId("make-ready-phase-cnc");
+    await expect(cncPhase).toBeVisible();
+    await expect(cncPhase.getByTestId("make-ready-item-cnc-mr-01")).toBeVisible();
+    await expect(cncPhase.getByTestId("make-ready-item-cnc-mr-02")).toBeVisible();
+    await expect(cncPhase.getByTestId("make-ready-item-cnc-mr-03")).toBeVisible();
+  });
+
+  test("design_signoff auto-signal ticks 'Drawings final' when design phase is past", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // The demo job is at "cnc" milestone (milestoneIndex > 0) → designSignoff=true.
+    // "Drawings final" (cnc-mr-01) has autoSignal=design_signoff → should be auto-ticked.
+    const drawingsFinalItem = panel.getByTestId("make-ready-item-cnc-mr-01");
+    await expect(drawingsFinalItem).toBeVisible();
+    await expect(drawingsFinalItem).toHaveAttribute("data-checked", "true");
+  });
+
+  test("phase warns 'not ready' when items are unchecked (soft gate)", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // CNC has manual items (Toolpath file) that are not yet checked → not ready.
+    const cncWarning = panel.getByTestId("make-ready-warning-cnc");
+    await expect(cncWarning).toBeVisible();
+    await expect(cncWarning).toContainText(/not ready|outstanding/i);
+  });
+
+  test("'Proceed anyway' override button is present for unchecked manual items (soft gate)", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // The Toolpath item (cnc-mr-03) is manual and unchecked → "Proceed anyway" button present.
+    const toolpathItem = panel.getByTestId("make-ready-item-cnc-mr-03");
+    await expect(toolpathItem).toBeVisible();
+
+    // The override button for that item should be visible.
+    const overrideBtn = panel.getByTestId("make-ready-override-cnc-mr-03");
+    await expect(overrideBtn).toBeVisible();
+  });
+
+  test("clicking 'Proceed anyway' overrides the item and it is no longer shown as blocking", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("make-ready-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // Override the Toolpath item.
+    const overrideBtn = panel.getByTestId("make-ready-override-cnc-mr-03");
+    await expect(overrideBtn).toBeVisible();
+    await overrideBtn.click();
+
+    // After override, data-overridden should be "true" on that item.
+    const toolpathItem = panel.getByTestId("make-ready-item-cnc-mr-03");
+    await expect(toolpathItem).toHaveAttribute("data-overridden", "true", { timeout: 5_000 });
+
+    // The "Proceed anyway" button for this item should no longer be present.
+    await expect(panel.getByTestId("make-ready-override-cnc-mr-03")).not.toBeVisible();
+  });
+});

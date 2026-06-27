@@ -2,11 +2,14 @@
 
 import { Share2, CalendarClock } from "lucide-react";
 import type { Job, MilestoneStage } from "@shared/lib/types";
+import { MILESTONE_STAGES } from "@shared/lib/types";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { buildScheduleOverview } from "../lib/scheduleOverview";
 import { ScheduleTimeline } from "./ScheduleTimeline";
 import { GanttSchedule } from "./GanttSchedule";
+import { MakeReadyChecklistPanel } from "./MakeReadyChecklistPanel";
+import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
  * Schedule tab for the JobDetail page (S7, issue #95).
@@ -15,6 +18,7 @@ import { GanttSchedule } from "./GanttSchedule";
  *   – Committed-vs-target summary row
  *   – Read-only 6-phase timeline (ScheduleTimeline)
  *   – Editable Gantt with ripple preview (GanttSchedule)
+ *   – Make-ready gate checklist (S12, issue #100)
  *   – Share (ICS) + Google-push entry points (Google push lives in S23 / P6)
  *
  * Ships behind NEXT_PUBLIC_SCHEDULING_ENABLED; the parent JobDetail only adds
@@ -29,6 +33,22 @@ export function ScheduleTab({
   onUpdate?: (dates: Partial<Record<MilestoneStage, string>>) => Promise<void> | void;
 }) {
   const overview = buildScheduleOverview(job, new Date());
+
+  // Derive make-ready signals from what the Job type can tell us.
+  // These are best-effort heuristics from data already on the job — deeper
+  // signals (per-item phase progress, inventory) require dedicated fetches
+  // and live in the store layer once those features mature.
+  const milestoneIndex = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+  const makeReadySignals: MakeReadySignals = {
+    // If the current milestone is past Design (index 0), drawings are approved.
+    designSignoff: milestoneIndex > 0,
+    // No free-text blocker on the job = no outstanding block. Phase-gated
+    // blockers would need the jobBlockersStore — out of scope for this component.
+    blockerResolved: !job.blocker,
+    // Material logging requires the job-items store; default to false here.
+    // Future: wire this from a useJobProgress(job.id).items count.
+    materialLogged: false,
+  };
 
   return (
     <div data-testid="schedule-tab" className="flex flex-col gap-4 max-w-5xl">
@@ -75,6 +95,13 @@ export function ScheduleTab({
 
       {/* ── Editable Gantt with ripple preview ─────────────────────────────── */}
       <GanttSchedule job={job} onUpdate={onUpdate} />
+
+      {/* ── Make-ready gate checklist (S12) ────────────────────────────────── */}
+      <MakeReadyChecklistPanel
+        jobId={job.id}
+        currentMilestone={job.currentMilestone}
+        signals={makeReadySignals}
+      />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section
