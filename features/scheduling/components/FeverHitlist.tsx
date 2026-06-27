@@ -14,7 +14,7 @@
  */
 
 import Link from "next/link";
-import { AlertTriangle, ThumbsUp, Minus } from "lucide-react";
+import { AlertTriangle, ThumbsUp, Minus, Star } from "lucide-react";
 import type { Job } from "@shared/lib/types";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
@@ -239,6 +239,17 @@ function BoardRow({ entry, rank }: { entry: FeverHitlistEntry; rank: number }) {
             <span className="text-sm font-semibold text-text-primary truncate group-hover:text-accent transition-colors duration-fast">
               {job.name}
             </span>
+            {/* S17: Priority/VIP badge — surfaces first in capacity conflicts */}
+            {job.isPriority && (
+              <span
+                data-testid={`priority-badge-${job.id}`}
+                title="Priority / VIP — surfaces first in capacity conflicts"
+                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium shrink-0 bg-amber-100 text-amber-700"
+              >
+                <Star className="h-2.5 w-2.5 fill-amber-500 stroke-amber-600" strokeWidth={1.5} />
+                VIP
+              </span>
+            )}
             {pill && (
               <span
                 data-testid={`fever-zone-pill-${job.id}`}

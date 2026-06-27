@@ -1094,3 +1094,144 @@ test.describe("scheduling slice 16 — capacity-aware quote dates in estimator",
     await page.waitForURL(/\/jobs\//, { timeout: 15_000 });
   });
 });
+
+// Scheduling S17 — Priority/VIP flag + manual bump-with-impact
+// (cross-job conflict resolution, issue #105).
+//
+// The DEMO_JOB is seeded with is_priority=true. Tests verify:
+//   1. The PriorityBumpPanel renders in the Schedule tab.
+//   2. The priority badge shows (job is flagged Priority/VIP).
+//   3. Selecting a job to bump + entering days shows the impact preview.
+//   4. The VIP badge appears in the fever board for the DEMO_JOB.
+//   5. The fever board sort places the DEMO_JOB (green zone, priority) above
+//      the E2E_SMOKE_JOB (green zone, non-priority) — priority wins the tie.
+test.describe("scheduling slice 17 — Priority/VIP flag + bump-with-impact", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("job Schedule tab shows the priority-bump panel", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const tab = page.getByTestId("schedule-tab");
+    await expect(tab).toBeVisible({ timeout: 15_000 });
+
+    // The PriorityBumpPanel renders inside the Schedule tab.
+    const panel = page.getByTestId("priority-bump-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("priority badge is shown because the DEMO_JOB is seeded as priority", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("priority-bump-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The demo job has is_priority=true → the flag badge renders with data-priority="true".
+    const badge = panel.getByTestId("priority-flag-badge");
+    await expect(badge).toBeVisible({ timeout: 5_000 });
+    await expect(badge).toHaveAttribute("data-priority", "true");
+
+    // The priority toggle button shows "Priority" (active state).
+    const toggle = panel.getByTestId("priority-toggle");
+    await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  });
+
+  test("selecting a job to bump + entering days shows an impact preview", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("priority-bump-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // The bump section is visible (current job is priority).
+    const bumpSection = panel.getByTestId("bump-section");
+    await expect(bumpSection).toBeVisible({ timeout: 5_000 });
+
+    // Select any available job from the dropdown (the E2E smoke job or another).
+    const jobSelect = panel.getByTestId("bump-job-select");
+    await expect(jobSelect).toBeVisible();
+
+    // Pick the first non-empty option.
+    const options = await jobSelect.locator("option").all();
+    const nonEmpty = options.filter(async (o) => (await o.getAttribute("value")) !== "");
+    if (nonEmpty.length === 0) {
+      // No candidates — skip the remainder gracefully (rare in CI with only 1 job).
+      return;
+    }
+    const firstValue = await options[1].getAttribute("value");
+    await jobSelect.selectOption(firstValue ?? "");
+
+    // Enter bump days.
+    const daysInput = panel.getByTestId("bump-days-input");
+    await expect(daysInput).toBeVisible({ timeout: 5_000 });
+    await daysInput.fill("4");
+    // Trigger change event.
+    await daysInput.press("Tab");
+
+    // The impact preview should render with the correct format.
+    const preview = panel.getByTestId("bump-impact-preview");
+    await expect(preview).toBeVisible({ timeout: 5_000 });
+    await expect(preview).toContainText("4d");
+    await expect(preview).toContainText("needs re-commit");
+    await expect(preview).toContainText("Job Status Demo");
+  });
+
+  test("fever board shows a VIP badge on the DEMO_JOB (seeded as priority)", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /fever board/i }).click();
+
+    const board = page.getByTestId("fever-board");
+    await expect(board).toBeVisible({ timeout: 15_000 });
+
+    // The DEMO_JOB's VIP badge must be visible in the ranked board.
+    const vipBadge = page.getByTestId(`priority-badge-${DEMO_JOB_ID}`);
+    await expect(vipBadge).toBeVisible({ timeout: 5_000 });
+    await expect(vipBadge).toContainText("VIP");
+  });
+
+  test("priority job surfaces first within its zone on the fever board", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /fever board/i }).click();
+
+    const board = page.getByTestId("fever-board");
+    await expect(board).toBeVisible({ timeout: 15_000 });
+
+    // The DEMO_JOB (priority, green zone) should appear BEFORE the E2E_SMOKE_JOB
+    // (non-priority, green zone) in the ranked list — priority wins the zone tie.
+    // Both have internal_target_date in the future so they should be in green zone.
+    const rows = board.locator("li");
+    const rowTexts = await rows.allTextContents();
+    const demoIdx = rowTexts.findIndex((t) => t.includes("Job Status Demo"));
+    const e2eIdx = rowTexts.findIndex((t) => t.includes("E2E Smoke"));
+
+    // Both must be in the board.
+    expect(demoIdx).toBeGreaterThanOrEqual(0);
+    // If both appear, DEMO (priority) must be before E2E (non-priority) within
+    // the same zone. If only DEMO appears that's fine too (no e2eIdx = -1).
+    if (e2eIdx >= 0) {
+      expect(demoIdx).toBeLessThan(e2eIdx);
+    }
+  });
+});

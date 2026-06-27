@@ -11,6 +11,7 @@ import { GanttSchedule } from "./GanttSchedule";
 import { MakeReadyChecklistPanel } from "./MakeReadyChecklistPanel";
 import { CommitmentLedgerPanel } from "./CommitmentLedgerPanel";
 import { RecommitPanel } from "./RecommitPanel";
+import { PriorityBumpPanel } from "./PriorityBumpPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
@@ -31,10 +32,21 @@ export function ScheduleTab({
   job,
   onUpdate,
   onRecommit,
+  onTogglePriority,
+  onBump,
 }: {
   job: Job;
   onUpdate?: (dates: Partial<Record<MilestoneStage, string>>) => Promise<void> | void;
   onRecommit?: (patch: { installDate: string; bufferDays: number }) => Promise<void> | void;
+  /** S17: toggle the Priority/VIP flag on this job. */
+  onTogglePriority?: () => Promise<void> | void;
+  /** S17: push another job's committed date to protect this priority job. */
+  onBump?: (params: {
+    bumpedJobId: string;
+    bumpDays: number;
+    reason: string;
+    newCommittedDate: string;
+  }) => Promise<void> | void;
 }) {
   const overview = buildScheduleOverview(job, new Date());
 
@@ -112,6 +124,13 @@ export function ScheduleTab({
 
       {/* ── Re-commit flow + revision history + change orders (S14) ── */}
       <RecommitPanel job={job} onRecommit={onRecommit} />
+
+      {/* ── Priority/VIP flag + manual bump-with-impact (S17) ── */}
+      <PriorityBumpPanel
+        job={job}
+        onTogglePriority={onTogglePriority}
+        onBump={onBump}
+      />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section

@@ -117,17 +117,27 @@ export function buildFeverHitlist(
     });
   }
 
-  // Sort scheduled by zone severity, then by bufferConsumedPct desc within each zone.
+  // Sort scheduled by zone severity, then Priority/VIP wins ties within a zone
+  // (S17 — issue #105), then by bufferConsumedPct desc within the same zone+priority.
   scheduled.sort((a, b) => {
     const aZone = a.zone as FeverZone;
     const bZone = b.zone as FeverZone;
     const rankDiff = ZONE_RANK[aZone] - ZONE_RANK[bZone];
     if (rankDiff !== 0) return rankDiff;
+    // Priority jobs float first within the same zone.
+    const aPri = a.job.isPriority ? 0 : 1;
+    const bPri = b.job.isPriority ? 0 : 1;
+    if (aPri !== bPri) return aPri - bPri;
     return b.bufferConsumedPct - a.bufferConsumedPct;
   });
 
-  // Sort unscheduled by installDate ascending (closest deadline first).
-  unscheduled.sort((a, b) => a.job.installDate.localeCompare(b.job.installDate));
+  // Sort unscheduled by priority first (S17), then installDate ascending.
+  unscheduled.sort((a, b) => {
+    const aPri = a.job.isPriority ? 0 : 1;
+    const bPri = b.job.isPriority ? 0 : 1;
+    if (aPri !== bPri) return aPri - bPri;
+    return a.job.installDate.localeCompare(b.job.installDate);
+  });
 
   const entries = [...scheduled, ...unscheduled];
 

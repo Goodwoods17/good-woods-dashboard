@@ -103,6 +103,10 @@ const DEMO_JOB = {
       name: "Andrew Chilton",
     },
   },
+  // Scheduling S17 (issue #105): the demo job is Priority/VIP so the
+  // PriorityBumpPanel renders in its "priority on" state, and the fever board
+  // shows the VIP badge + the job floats first within its zone.
+  is_priority: true,
 };
 
 // ─── Scheduling S8 (issue #96) — buffer-burn hitlist job ─────────────────
@@ -408,6 +412,30 @@ async function seedS14Revisions(token) {
   console.log("OK seeded S14 commitment-revision history fixture");
 }
 
+// ─── Scheduling S17 (issue #105) — priority bump fixture ─────────────────────
+// A prior bump on the DEMO_JOB (priority) that pushed the E2E_JOB's committed
+// date 4 work days to protect the demo job. Fixed hex id → idempotent upsert.
+const S17_BUMPS = [
+  {
+    id: "51170000-0000-4000-8000-000000000001",
+    priority_job_id: "job-status-demo",
+    bumped_job_id: "e2e-smoke-job",
+    bump_days: 4,
+    reason: "Demo Kitchen must ship before holidays — Saywell is higher priority",
+    old_committed_date: "2026-11-27",
+    new_committed_date: "2026-12-03",
+    bumped_by: "claude-smoke-test@spacecraftjoinery.local",
+    bumped_at: "2026-05-15T10:00:00.000Z",
+  },
+];
+
+async function seedS17Bumps(token) {
+  for (const row of S17_BUMPS) {
+    await upsert(token, "priority_bumps", row);
+  }
+  console.log("OK seeded S17 priority-bump fixture");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -418,6 +446,7 @@ async function seedJob() {
   await seedS11Trades(token);
   await seedS13Ledger(token);
   await seedS14Revisions(token);
+  await seedS17Bumps(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

@@ -269,6 +269,12 @@ export function JobDetail({ jobId }: { jobId: string }) {
                 bufferDays: patch.bufferDays,
               })
             }
+            onTogglePriority={() => updateJob(job.id, { isPriority: !(job.isPriority ?? false) })}
+            onBump={({ bumpedJobId, newCommittedDate }) =>
+              // Update the bumped job's committed install date — it then routes
+              // through the S14 re-commit + approval flow on that job's Schedule tab.
+              updateJob(bumpedJobId, { installDate: newCommittedDate })
+            }
           />
         )}
         {activeTab === "costs" && (
