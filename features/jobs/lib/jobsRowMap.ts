@@ -34,6 +34,8 @@ export type JobRow = {
   internal_target_date: string | null;
   buffer_days: number | null;
   phase_owners: Job["phaseOwners"];
+  // S17 — Priority/VIP flag. Added as NOT NULL DEFAULT false so always present.
+  is_priority: boolean;
 };
 
 export function rowToJob(row: JobRow): Job {
@@ -67,6 +69,7 @@ export function rowToJob(row: JobRow): Job {
     internalTargetDate: row.internal_target_date ?? null,
     bufferDays: row.buffer_days != null ? Number(row.buffer_days) : null,
     phaseOwners: row.phase_owners ?? null,
+    isPriority: row.is_priority ?? false,
   };
 }
 
@@ -101,5 +104,6 @@ export function jobToRow(job: Job): JobRow {
     internal_target_date: job.internalTargetDate ?? null,
     buffer_days: job.bufferDays ?? null,
     phase_owners: job.phaseOwners ?? null,
+    is_priority: job.isPriority ?? false,
   };
 }

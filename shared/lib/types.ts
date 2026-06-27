@@ -446,6 +446,13 @@ export type Job = {
    * by default. The client-committed install (`installDate`) is always shop-owned.
    */
   phaseOwners?: Partial<Record<MilestoneStage, CommitmentOwner>> | null;
+  /**
+   * S17 — Priority/VIP flag. When true this job wins ties in EDD/bottleneck
+   * advice and surfaces first in capacity conflicts on the fever board.
+   * The bump-with-impact flow lets the owner push another job to protect
+   * a priority job, logging the decision for the commitment audit trail.
+   */
+  isPriority?: boolean;
 };
 
 /**
