@@ -128,6 +128,13 @@ export type RiskBufferInput = {
    */
   varianceNudgeDays?: number;
   /**
+   * Per-owner reliability nudge (work days), from S13's
+   * `ownerReliabilityBufferDays` — extra contingency earned because owners
+   * (subtrades included) on this job have a history of missing dates. 0 when
+   * there's no history. The buffer learns which owners to trust.
+   */
+  ownerReliabilityDays?: number;
+  /**
    * Owner's manual override. When non-null, the formula is bypassed entirely
    * — this is the `jobs.buffer_days` column in the DB.
    */
@@ -141,7 +148,9 @@ export type RiskBufferBreakdown = {
   subDays: number;
   /** Historical phase-variance nudge. */
   varianceDays: number;
-  /** Total: base + subs + variance, or the override if set. */
+  /** Per-owner reliability nudge (S13) — earned by owners who miss dates. */
+  ownerReliabilityDays: number;
+  /** Total: base + subs + variance + owner reliability, or the override if set. */
   totalDays: number;
   /** True when the job's stored buffer_days overrides the formula. */
   isOverridden: boolean;
@@ -153,40 +162,52 @@ export type RiskBufferBreakdown = {
  *   base     = ceil(totalInternalDays × BASE_BUFFER_PCT) — scales with job size
  *   subs     = subDependencyCount × DAYS_PER_SUB_DEPENDENCY — lead-time contingency
  *   variance = varianceNudgeDays — how variable past phases actually were
+ *   owner    = ownerReliabilityDays — per-owner (incl. sub) date-keeping history (S13)
  *
  * Overridable per job: if `overrideBufferDays` is non-null the formula is bypassed
  * and the override is returned directly (breakdown still captures the formula for
  * reference, with isOverridden = true).
  */
 export function computeRiskTieredBuffer(input: RiskBufferInput): RiskBufferBreakdown {
-  const { totalInternalDays, subDependencyCount, varianceNudgeDays = 0, overrideBufferDays } =
-    input;
+  const {
+    totalInternalDays,
+    subDependencyCount,
+    varianceNudgeDays = 0,
+    ownerReliabilityDays = 0,
+    overrideBufferDays,
+  } = input;
   const baseDays = Math.ceil(Math.max(0, totalInternalDays) * BASE_BUFFER_PCT);
   const subDays = Math.max(0, subDependencyCount) * DAYS_PER_SUB_DEPENDENCY;
   const varianceDays = Math.max(0, varianceNudgeDays);
-  const formula = baseDays + subDays + varianceDays;
+  const ownerDays = Math.max(0, ownerReliabilityDays);
+  const formula = baseDays + subDays + varianceDays + ownerDays;
 
   if (overrideBufferDays != null) {
     return {
       baseDays,
       subDays,
       varianceDays,
+      ownerReliabilityDays: ownerDays,
       totalDays: Math.max(0, overrideBufferDays),
       isOverridden: true,
     };
   }
 
-  return { baseDays, subDays, varianceDays, totalDays: formula, isOverridden: false };
+  return {
+    baseDays,
+    subDays,
+    varianceDays,
+    ownerReliabilityDays: ownerDays,
+    totalDays: formula,
+    isOverridden: false,
+  };
 }
 
 /**
  * The client-committed install date: the internal target advanced by `bufferDays`
  * work days. Weekends are skipped; zero buffer returns the internal target itself.
  */
-export function capacityAwareCommittedDate(
-  internalTargetDate: string,
-  bufferDays: number
-): string {
+export function capacityAwareCommittedDate(internalTargetDate: string, bufferDays: number): string {
   if (bufferDays <= 0) return internalTargetDate;
   const start = new Date(`${internalTargetDate}T00:00:00.000Z`);
   return isoDate(addWorkDays(start, bufferDays));
@@ -201,10 +222,7 @@ export function capacityAwareCommittedDate(
  * Phases with < 2 data points contribute 0 (not enough to read variance from).
  * Capped at `maxNudgeDays` to prevent runaway nudges from sparse/noisy data.
  */
-export function phaseVarianceNudgeDays(
-  sessions: CapacitySession[],
-  maxNudgeDays = 5
-): number {
+export function phaseVarianceNudgeDays(sessions: CapacitySession[], maxNudgeDays = 5): number {
   const byPhaseJob = new Map<MilestoneStage, Map<string, number>>();
 
   for (const s of sessions) {

@@ -204,6 +204,45 @@ Auto-signals wired in `ScheduleTab.tsx` from `Job`:
 - `blockerResolved`: `!job.blocker` (no free-text blocker = no outstanding block)
 - `materialLogged`: `false` for now (requires job-items store, wired in a future slice)
 
+## What's here (S13 commitment ledger + two-level ownership, issue #101)
+
+```
+features/scheduling/
+├── lib/
+│   └── commitmentLedger.ts   pure: SHOP_OWNER / ownerKey / buildCommitmentLedger /
+│                             computeOwnerReliability / ownerReliabilityBufferDays (+ test)
+└── components/
+    └── CommitmentLedgerPanel.tsx   two-level ledger + per-owner reliability in the Schedule tab
+supabase/migrations/
+└── 20260703000000_scheduling_commitment_ledger.sql   jobs.phase_owners + commitment_ledger table
+```
+
+Dates-as-promises (Flores / Last-Planner): every date is an explicit commitment
+with a **named owner**, at two levels — the client-committed install (shop-owned)
+and each phase's internal target (person/subtrade-owned). `commitmentLedger.ts`:
+
+- `SHOP_OWNER` — the default owner of any unassigned commitment.
+- `ownerKey(owner)` — stable `kind:id` (falls back to `kind:name`) identity key.
+- `buildCommitmentLedger(job, today)` — derives the ledger at read time from
+  `installDate` + `phaseTargetDates` + `phaseOwners`: the client entry first, then
+  one entry per phase with a target, each with its owner + derived status
+  (`kept` if the job has moved past the phase; else `missed`/`open` by date).
+- `computeOwnerReliability(records)` — per-owner roll-up (incl. subtrades), sorted
+  worst-first: `{ total, kept, missed, missRate }`.
+- `ownerReliabilityBufferDays(records, base=3)` — generalizes S11's sub-only
+  `computeSubReliabilityBufferDays` to **all owner kinds**; `ceil(missRate × base)`
+  summed. **Feeds the S3 risk-tiered buffer** via the new additive
+  `ownerReliabilityDays` term on `computeRiskTieredBuffer` (the buffer learns which
+  owners to trust).
+
+Schema (additive, nullable): `jobs.phase_owners jsonb` (phase → `{kind,id,name}`,
+absent = shop) + `public.commitment_ledger` (durable per-owner promise outcomes;
+RLS authenticated-only + anon-none). `Job.phaseOwners` + `jobsRowMap` carry the
+column. `CommitmentLedgerPanel` renders in `ScheduleTab`:
+`data-testid="commitment-ledger-panel"`, `ledger-entry-client`,
+`ledger-entry-phase-<phase>` (with `data-status` + `data-owner-kind`),
+`owner-reliability`, `owner-reliability-<ownerKey>`, `owner-reliability-buffer-days`.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write

@@ -754,3 +754,100 @@ test.describe("scheduling slice 12 — make-ready gate (templated checklist, sof
     await expect(panel.getByTestId("make-ready-override-cnc-mr-03")).not.toBeVisible();
   });
 });
+
+// Scheduling S13 — commitment ledger + two-level ownership + per-owner/sub
+// reliability (issue #101). The Schedule tab gains a CommitmentLedgerPanel that
+// lists every date as a promise with a named owner at two levels:
+//   – client-committed install (shop-owned), and
+//   – each phase's internal commitment (person/subtrade-owned).
+// The seed assigns DEMO_JOB's cnc phase to the demo subtrade and assembly to a
+// person; design defaults to the shop. It also seeds commitment_ledger rows so
+// the per-owner reliability roll-up is deterministic: the demo subtrade missed
+// 1 of 2 committed dates (50%) → earns 2 buffer days; the shop kept its promise.
+// Because the seeded cnc target (2020-02-01) is in the past and cnc is the
+// current milestone, the cnc commitment must read "missed"; design (a passed
+// phase) must read "kept".
+test.describe("scheduling slice 13 — commitment ledger + two-level ownership + reliability", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("Schedule tab shows the commitment ledger with client + phase commitments and named owners", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("commitment-ledger-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Client-level commitment is shop-owned.
+    const client = panel.getByTestId("ledger-entry-client");
+    await expect(client).toBeVisible();
+    await expect(client).toHaveAttribute("data-owner-kind", "shop");
+
+    // CNC phase commitment is owned by the seeded subtrade.
+    const cnc = panel.getByTestId("ledger-entry-phase-cnc");
+    await expect(cnc).toBeVisible();
+    await expect(cnc).toHaveAttribute("data-owner-kind", "subtrade");
+    await expect(cnc).toContainText("Demo Sub Co.");
+
+    // Assembly is owned by a named person.
+    const assembly = panel.getByTestId("ledger-entry-phase-assembly");
+    await expect(assembly).toBeVisible();
+    await expect(assembly).toHaveAttribute("data-owner-kind", "person");
+  });
+
+  test("each commitment carries a derived status (passed phase kept, overdue current phase missed)", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("commitment-ledger-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Design is before the current milestone (cnc) → kept.
+    await expect(panel.getByTestId("ledger-entry-phase-design")).toHaveAttribute(
+      "data-status",
+      "kept"
+    );
+
+    // CNC is the current milestone and its target (2020-02-01) is in the past → missed.
+    await expect(panel.getByTestId("ledger-entry-phase-cnc")).toHaveAttribute(
+      "data-status",
+      "missed"
+    );
+  });
+
+  test("per-owner reliability roll-up tracks subtrades and earns buffer days that feed the buffer", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const reliability = page.getByTestId("owner-reliability");
+    await expect(reliability).toBeVisible({ timeout: 15_000 });
+
+    // The demo subtrade appears in the reliability roll-up (per-owner, incl. subs)
+    // with its seeded 50% miss rate.
+    const subRow = reliability.getByTestId(
+      "owner-reliability-subtrade-51110000-0000-4000-8000-000000000002"
+    );
+    await expect(subRow).toBeVisible({ timeout: 10_000 });
+    await expect(subRow).toContainText("Demo Sub Co.");
+    await expect(subRow).toContainText("50% missed");
+
+    // The earned buffer days feed the risk-tiered buffer: 50% × 3 = 2 days.
+    const bufferDays = page.getByTestId("owner-reliability-buffer-days");
+    await expect(bufferDays).toBeVisible();
+    await expect(bufferDays).toHaveAttribute("data-days", "2");
+  });
+});

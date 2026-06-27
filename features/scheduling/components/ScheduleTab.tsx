@@ -9,6 +9,7 @@ import { buildScheduleOverview } from "../lib/scheduleOverview";
 import { ScheduleTimeline } from "./ScheduleTimeline";
 import { GanttSchedule } from "./GanttSchedule";
 import { MakeReadyChecklistPanel } from "./MakeReadyChecklistPanel";
+import { CommitmentLedgerPanel } from "./CommitmentLedgerPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
 
 /**
@@ -102,6 +103,9 @@ export function ScheduleTab({
         currentMilestone={job.currentMilestone}
         signals={makeReadySignals}
       />
+
+      {/* ── Commitment ledger + two-level ownership + per-owner reliability (S13) ── */}
+      <CommitmentLedgerPanel job={job} />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section
