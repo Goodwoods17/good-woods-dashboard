@@ -560,3 +560,63 @@ test.describe("scheduling slice 10 — shop-floor phase targets + advisory banne
     await expect(badge).toHaveAttribute("data-pace", "behind");
   });
 });
+
+// Scheduling S11 — Trade-line dates + sub dependency wiring + sub request/confirm
+// + accountability (issue #99). The seed adds a trade line on the DEMO_JOB with a
+// subtrade assigned (S11_SUBTRADE). When NEXT_PUBLIC_SCHEDULING_ENABLED=true the
+// job detail page's Trades card renders a TradeDatePanel for each assigned line.
+// This smoke confirms:
+//   1. The TradeDatePanel renders for the seeded trade line.
+//   2. "Record after call" reveals the committed-date input.
+//   3. Saving the committed date updates the chip to the confirmed state.
+test.describe("scheduling slice 11 — trade-line dates + sub accountability", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("job Trades card shows TradeDatePanel for an assigned subtrade when scheduling is enabled", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // The Trades card renders the seeded trade line (subtrade assigned).
+    // TradeDatePanel mounts only when scheduling is enabled + subtrade assigned.
+    const panel = page.getByTestId("trade-date-panel").first();
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // "Awaiting confirmation" text appears before any committed date is set.
+    await expect(panel).toContainText(/Awaiting confirmation/i);
+
+    // "Record after call" button is present.
+    const recordBtn = panel.getByTestId("trade-date-record-btn");
+    await expect(recordBtn).toBeVisible();
+  });
+
+  test("recording a committed date after a call updates the confirmed chip", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const panel = page.getByTestId("trade-date-panel").first();
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // Click "Record after call" to open the inline date input.
+    await panel.getByTestId("trade-date-record-btn").click();
+
+    // The committed-date input is now visible.
+    const input = panel.getByTestId("trade-committed-date-input");
+    await expect(input).toBeVisible({ timeout: 5_000 });
+
+    // Fill in a future committed date (well ahead so it won't show "Missed").
+    await input.fill("2027-01-15");
+
+    // Click Record to commit the date.
+    await panel.getByRole("button", { name: /^Record$/i }).click();
+
+    // The panel should now show a confirmed chip (not "Awaiting").
+    const confirmed = panel.getByTestId("trade-date-confirmed");
+    await expect(confirmed).toBeVisible({ timeout: 5_000 });
+    await expect(confirmed).toContainText("2027-01-15");
+  });
+});

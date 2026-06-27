@@ -248,6 +248,45 @@ async function upsert(token, table, row) {
   if (!res.ok) throw new Error(`seed ${table} ${res.status}: ${await res.text()}`);
 }
 
+// ─── Scheduling S11 (issue #99) — trade-line date fixtures ──────────────────
+// A trade, a subtrade, and a job_trades line on the DEMO_JOB so the
+// TradeDatePanel can render in the e2e test.
+// Fixed ids → idempotent upserts across re-runs.
+const S11_TRADE = {
+  id: "51110000-0000-4000-8000-000000000001",
+  key: "install",
+  label: "Install",
+  color: "install",
+  icon: "wrench",
+  is_suggested_default: true,
+  sort_order: 1,
+  active: true,
+};
+const S11_SUBTRADE = {
+  id: "51110000-0000-4000-8000-000000000002",
+  name: "Demo Sub Co.",
+  trade_id: S11_TRADE.id,
+  active: true,
+};
+// A job_trades line on the DEMO_JOB: booked, sub assigned, no date yet.
+// After the migration, the date columns default to null.
+const S11_JOB_TRADE = {
+  id: "51110000-0000-4000-8000-000000000003",
+  job_id: "job-status-demo",
+  trade_id: S11_TRADE.id,
+  subtrade_id: S11_SUBTRADE.id,
+  status: "booked",
+  cost: null,
+  notes: null,
+};
+
+async function seedS11Trades(token) {
+  await upsert(token, "trades", S11_TRADE);
+  await upsert(token, "subtrades", S11_SUBTRADE);
+  await upsert(token, "job_trades", S11_JOB_TRADE);
+  console.log("OK seeded S11 trade fixtures (trade + subtrade + job_trades)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -255,6 +294,7 @@ async function seedJob() {
   await upsert(token, "jobs", E2E_JOB);
   await upsert(token, "jobs", DEMO_JOB);
   await upsert(token, "jobs", BUFFER_BURN_JOB);
+  await seedS11Trades(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

@@ -67,6 +67,32 @@ export type JobTrade = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  // S11 — scheduling date fields (NEXT_PUBLIC_SCHEDULING_ENABLED; null when not set)
+  /** The date Andrew asked the sub to be on-site / deliver by. */
+  requestedDate: string | null;
+  /** The date the sub confirmed (token or after-call record). */
+  subCommittedDate: string | null;
+  /** When the sub committed to their date. */
+  confirmedAt: string | null;
+  /** UUID token emailed to the sub for the request/confirm flow. Null on confirm. */
+  confirmationToken: string | null;
+  /** Expiry for confirmationToken (72h from issue). Null when no token pending. */
+  tokenExpiresAt: string | null;
+};
+
+/**
+ * Historical date-keeping record for a sub-trade line (S11). One row per
+ * job_trades line with a sub_committed_date; records whether the sub met their
+ * date. Drives `computeSubReliabilityBufferDays` to size buffer for future jobs.
+ */
+export type SubtradeReliability = {
+  id: string;
+  subtradeId: string;
+  jobTradeId: string;
+  committedDate: string;
+  actualDoneDate: string | null;
+  missed: boolean;
+  recordedAt: string;
 };
 
 /** Which kind of company a person belongs to. */
