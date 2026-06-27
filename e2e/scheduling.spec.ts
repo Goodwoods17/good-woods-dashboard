@@ -432,6 +432,78 @@ test.describe("scheduling slice 8 — buffer-aware hitlist", () => {
   });
 });
 
+// Scheduling S9 — Owner fever-chart hitlist + "one number to watch" (issue #97).
+// The home page gains a "Fever board" view toggle that's only visible when
+// NEXT_PUBLIC_SCHEDULING_ENABLED=true. Clicking it shows:
+//   – A "one number" banner with the count of RED-zone commitments.
+//   – A ranked board listing jobs by buffer-health severity.
+// The seeded DEMO job has internal_target_date=2026-12-01 (future) so its
+// buffer has not yet been consumed → zone should be green, commitmentsAtRisk = 0.
+test.describe("scheduling slice 9 — fever hitlist + one number to watch", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("home page shows a Fever board view toggle when scheduling is enabled", async ({ page }) => {
+    await login(page);
+    await page.goto("/");
+
+    // The Fever board button appears in the ViewToggle (only when SCHEDULING_ENABLED).
+    const feverButton = page.getByRole("button", { name: /fever board/i });
+    await expect(feverButton).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("clicking Fever board renders the one-number banner and ranked board", async ({ page }) => {
+    await login(page);
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /fever board/i }).click();
+
+    // The fever hitlist section renders.
+    const feverHitlist = page.getByTestId("fever-hitlist");
+    await expect(feverHitlist).toBeVisible({ timeout: 15_000 });
+
+    // The "one number" banner renders.
+    const oneNumber = page.getByTestId("fever-one-number");
+    await expect(oneNumber).toBeVisible();
+
+    // The number of commitments at risk is visible.
+    const atRisk = page.getByTestId("fever-commitments-at-risk");
+    await expect(atRisk).toBeVisible();
+
+    // The ranked board renders.
+    const board = page.getByTestId("fever-board");
+    await expect(board).toBeVisible();
+  });
+
+  test("seeded DEMO job (green zone) is shown On track, not at risk", async ({ page }) => {
+    await login(page);
+    await page.goto("/");
+
+    await page.getByRole("button", { name: /fever board/i }).click();
+
+    // The one-number banner renders (its exact value depends on the whole seed —
+    // see below for why we scope the at-risk assertion to the DEMO job instead).
+    const atRisk = page.getByTestId("fever-commitments-at-risk");
+    await expect(atRisk).toBeVisible({ timeout: 15_000 });
+
+    // The ranked board includes the demo job.
+    const board = page.getByTestId("fever-board");
+    await expect(board).toContainText("Job Status Demo");
+
+    // The seeded DEMO job has internal_target_date=2026-12-01 (future) → buffer
+    // not yet consumed → green zone. Assert the DEMO job's OWN zone pill reads
+    // "On track" rather than the shop-wide at-risk counter: the combined seed
+    // intentionally contains S8's BUFFER_BURN_JOB (a red-zone, buffer-burning
+    // fixture), which legitimately raises the global "commitments at risk" count
+    // above 0. Scoping the assertion to this job keeps the test's intent —
+    // "the green-zone DEMO job is not counted at risk" — robust to seed additions.
+    const demoPill = page.getByTestId(`fever-zone-pill-${DEMO_JOB_ID}`);
+    await expect(demoPill).toHaveText(/On track/i);
+  });
+});
+
 // Scheduling S10 — shop-floor phase targets + daily goals + advisory EDD/bottleneck
 // flags (issue #98). When NEXT_PUBLIC_SCHEDULING_ENABLED=true the job status drill-in
 // shows per-phase target badges in each phase header, and the status board shows an
