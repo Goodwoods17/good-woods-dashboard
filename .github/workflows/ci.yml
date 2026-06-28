@@ -67,6 +67,11 @@ jobs:
       # Scheduling (milestone #7) is likewise flag-gated OFF in prod; turn it ON
       # for the e2e job so the read-only schedule-timeline smoke renders.
       NEXT_PUBLIC_SCHEDULING_ENABLED: "true"
+      # P6 dark-ship sub-flag (S23+): the not-yet-live scheduling surfaces (Google
+      # Calendar push, P&L forecast) ride a separate switch, OFF in prod. Turn it
+      # ON for the e2e job so the gated panels render under test. The Google push
+      # degrades to a clean "not configured" state with no OAuth creds present.
+      NEXT_PUBLIC_SCHEDULING_P6_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

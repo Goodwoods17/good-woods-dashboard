@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Share2, CalendarClock } from "lucide-react";
+import { Share2 } from "lucide-react";
 import type { Job, MilestoneStage } from "@shared/lib/types";
 import { MILESTONE_STAGES } from "@shared/lib/types";
+import { schedulingP6Enabled } from "../lib/featureFlag";
+import { GoogleCalendarPanel } from "./GoogleCalendarPanel";
 import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import { buildScheduleOverview } from "../lib/scheduleOverview";
@@ -183,25 +185,18 @@ export function ScheduleTab({
             <Share2 className="h-3.5 w-3.5" strokeWidth={1.75} />
             Share via ICS
           </button>
-
-          {/* Google Calendar push — planned for S23 (P6). Entry point present so
-              the user knows it's coming; disabled until the OAuth + push slice lands. */}
-          <button
-            type="button"
-            data-testid="schedule-google-push"
-            disabled
-            title="Google Calendar push — coming in a future release"
-            aria-disabled="true"
-            className="inline-flex items-center gap-2 rounded-full border border-border px-4 py-1.5 text-sm font-medium text-text-disabled cursor-not-allowed opacity-50"
-          >
-            <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Google Calendar push
-          </button>
         </div>
-        <p className="text-xs text-text-tertiary mt-3">
-          Google Calendar push is planned for a future release.
-        </p>
+        {!schedulingP6Enabled() && (
+          <p className="text-xs text-text-tertiary mt-3">
+            Google Calendar push is planned for a future release.
+          </p>
+        )}
       </section>
+
+      {/* ── One-way Google Calendar push (S23, P6 — dark-shipped) ────────────── */}
+      {/* Gated behind NEXT_PUBLIC_SCHEDULING_P6_ENABLED: invisible in prod until
+          the owner flips the P6 flag. Handles missing OAuth creds gracefully. */}
+      {schedulingP6Enabled() && <GoogleCalendarPanel job={job} />}
     </div>
   );
 }

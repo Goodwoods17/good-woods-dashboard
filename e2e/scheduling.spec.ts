@@ -1652,3 +1652,33 @@ test.describe("scheduling slice 22 — notifications + contacts link", () => {
     expect(hasLinks).toBe(hasInstalls);
   });
 });
+
+// Scheduling S23 (P6) — one-way Google Calendar push (issue #111). The
+// "Connect Google Calendar" panel in the Schedule tab is dark-shipped behind
+// NEXT_PUBLIC_SCHEDULING_P6_ENABLED (separate from SCHEDULING_ENABLED); CI turns
+// the P6 flag on. With no Google OAuth creds present in CI, the status probe
+// reports configured:false and the panel must degrade to a clean "not
+// configured" state — never a dead button, never a crash.
+test.describe("scheduling slice 23 — Google Calendar push panel (P6, gated)", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the Schedule tab shows the Google push panel, gracefully unconfigured", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^Schedule$/i }).click();
+
+    const panel = page.getByTestId("google-push-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // No OAuth creds in CI → the status probe returns configured:false, so the
+    // panel resolves to the "not configured" state (not a connect button).
+    await expect(page.getByTestId("google-push-not-configured")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("google-push-connect")).toHaveCount(0);
+  });
+});
