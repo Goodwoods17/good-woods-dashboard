@@ -17,6 +17,7 @@
 import { NextResponse } from "next/server";
 import { invoicesQboEnabled } from "@features/invoices/lib/featureFlag";
 import { previewInvoicePush, pushInvoiceBill } from "@features/invoices/lib/qboBillPushServer";
+import { getAuthedUserId } from "@shared/lib/authedUserServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,7 +65,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ ok: false, reason: "missing_id" }, { status: 400 });
   }
 
-  const result = await pushInvoiceBill(params.id);
+  // QBO-H5: record WHO triggered this push on the audit row (issue #188).
+  const pushedBy = await getAuthedUserId();
+  const result = await pushInvoiceBill(params.id, pushedBy);
 
   switch (result.status) {
     case "pushed":

@@ -15,6 +15,7 @@
 import { NextResponse } from "next/server";
 import { invoicesQboEnabled } from "@features/invoices/lib/featureFlag";
 import { voidInvoiceBill } from "@features/invoices/lib/qboVoidServer";
+import { getAuthedUserId } from "@shared/lib/authedUserServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,7 +44,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
     return NextResponse.json({ ok: false, reason: "missing_id" }, { status: 400 });
   }
 
-  const result = await voidInvoiceBill(params.id);
+  // QBO-H5: record WHO triggered this void on the audit row (issue #188).
+  const voidedBy = await getAuthedUserId();
+  const result = await voidInvoiceBill(params.id, voidedBy);
 
   switch (result.status) {
     case "voided":
