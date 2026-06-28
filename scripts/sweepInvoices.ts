@@ -27,7 +27,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { extractInvoice } from "../features/invoices/lib/engine";
-import { parseExtractedInvoice } from "../features/invoices/lib/extractedInvoice";
 import {
   runSweep,
   type SweepDeps,
@@ -58,8 +57,10 @@ const tmpDirs: string[] = [];
 const deps: SweepDeps = {
   async fetchPending(): Promise<PendingRow[]> {
     let q = sb.from("invoices").select("id, storage_path, mime").eq("status", "pending");
+    // Keep status=pending even when targeting one id — never re-extract a
+    // reviewed/posted invoice (that would wipe human edits).
     if (onlyId) {
-      q = sb.from("invoices").select("id, storage_path, mime").eq("id", onlyId);
+      q = q.eq("id", onlyId);
     }
     const { data, error } = await q;
     if (error) throw error;
@@ -80,8 +81,8 @@ const deps: SweepDeps = {
     const ext = input.filePath.split(".").pop() || "pdf";
     const localPath = join(tmp, `source.${ext}`);
     await writeFile(localPath, bytes);
-    const raw = await extractInvoice({ filePath: localPath, mime: input.mime });
-    return parseExtractedInvoice(raw);
+    // extractInvoice already validates through parseExtractedInvoice (its trust boundary).
+    return extractInvoice({ filePath: localPath, mime: input.mime });
   },
 
   async writeSuccess(id: string, extracted: ExtractedInvoice): Promise<void> {

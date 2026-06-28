@@ -40,7 +40,9 @@ const onlyId = process.argv[2] && !process.argv[2].startsWith("--") ? process.ar
 
 async function main() {
   let query = sb.from("invoices").select("*").eq("status", "pending");
-  if (onlyId) query = sb.from("invoices").select("*").eq("id", onlyId);
+  // Keep status=pending even when targeting one id — re-running on a
+  // reviewed/posted invoice must not silently re-extract and discard edits.
+  if (onlyId) query = query.eq("id", onlyId);
   const { data: pending, error } = await query;
   if (error) throw error;
 
