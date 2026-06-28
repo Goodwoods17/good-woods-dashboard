@@ -1,11 +1,6 @@
 import { describe, it, expect } from "vitest";
-import {
-  addWorkDays,
-  workDaysBetween,
-  rippleForward,
-  pullPlanBackward,
-  type PinnedPhases,
-} from "./gantt";
+import { rippleForward, pullPlanBackward, type PinnedPhases } from "./gantt";
+import { addWorkDays, workDaysBetween } from "@shared/lib/workdays";
 import type { MilestoneStage } from "@shared/lib/types";
 
 // ── addWorkDays ──────────────────────────────────────────────────────────────
@@ -243,10 +238,13 @@ describe("pullPlanBackward", () => {
     expect(dates.finishing).toBe("2026-07-07");
     // assembly = finishing - duration[finishing] work days = 2026-07-07 - 3wd = 2026-07-02 (Thu)
     expect(dates.assembly).toBe("2026-07-02");
-    // cnc = assembly - duration[assembly] work days = 2026-07-02 - 5wd = 2026-06-25 (Thu)
-    expect(dates.cnc).toBe("2026-06-25");
-    // design = cnc - duration[cnc] work days = 2026-06-25 - 3wd = 2026-06-22 (Mon)
-    expect(dates.design).toBe("2026-06-22");
+    // cnc = assembly - duration[assembly] work days = 2026-07-02 - 5wd = 2026-06-24 (Wed).
+    // Canada Day (Wed Jul 1) is a stat holiday, so walking back skips it — the
+    // result is one work day earlier than a naive Mon–Fri walk (which gave Jun 25).
+    expect(dates.cnc).toBe("2026-06-24");
+    // design = cnc - duration[cnc] work days = 2026-06-24 - 3wd = 2026-06-19 (Fri).
+    // Shifted from 2026-06-22 because the cnc anchor moved back across Canada Day.
+    expect(dates.design).toBe("2026-06-19");
   });
 
   it("does not change phases after the anchor", () => {

@@ -1,16 +1,15 @@
 import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { addWorkDays, workDaysBetween } from "@shared/lib/workdays";
 
 /**
  * S5 — Editable Gantt schedule: ripple/pull-plan/conflict logic (issue #93).
  * Pure + dependency-free so it unit-tests without React/Supabase.
  * Ships behind NEXT_PUBLIC_SCHEDULING_ENABLED (off in prod).
  *
- * Three core operations:
- *   1. `addWorkDays` / `workDaysBetween` — work-day calendar arithmetic
- *      (shared helpers so the rest of the file stays readable).
- *   2. `rippleForward` — when the user drags a phase bar, cascade the
+ * Two core operations (work-day arithmetic lives in `@shared/lib/workdays`):
+ *   1. `rippleForward` — when the user drags a phase bar, cascade the
  *      same delta to all downstream phases; halt at pinned anchors (warn).
- *   3. `pullPlanBackward` — when Install (or any anchor) is pinned, compute
+ *   2. `pullPlanBackward` — when Install (or any anchor) is pinned, compute
  *      all preceding phase dates backward from the anchor using stored phase
  *      durations; warn if any pinned intermediate conflicts.
  */
@@ -34,63 +33,6 @@ export type RippleResult = {
   /** Non-empty when a pinned anchor was in the ripple path. */
   conflicts: ConflictWarning[];
 };
-
-// ── Calendar helpers ───────────────────────────────────────────────────────
-
-/** ISO YYYY-MM-DD of a UTC-anchored Date. */
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-/** Parse an ISO YYYY-MM-DD string to a midnight-UTC Date. */
-function parseDate(iso: string): Date {
-  return new Date(`${iso}T00:00:00.000Z`);
-}
-
-/**
- * Add `n` work days (Mon–Fri, UTC) to an ISO date string. Negative `n` moves
- * backward. Zero returns the same string unchanged.
- */
-export function addWorkDays(date: string, n: number): string {
-  if (n === 0) return date;
-  const d = parseDate(date);
-  const step = n > 0 ? 1 : -1;
-  let remaining = Math.abs(n);
-  while (remaining > 0) {
-    d.setUTCDate(d.getUTCDate() + step);
-    const dow = d.getUTCDay();
-    if (dow !== 0 && dow !== 6) remaining -= 1;
-  }
-  return isoDate(d);
-}
-
-/**
- * Count work days (Mon–Fri) from `from` to `to`, exclusive of `from` and
- * inclusive of `to`. Returns negative when `to` is before `from`, zero when
- * equal.
- *
- * This is the inverse of `addWorkDays`:
- *   addWorkDays(from, workDaysBetween(from, to)) === to
- * (when both dates are weekdays — weekend dates are accepted but treated as
- * the date value supplied, without snapping).
- */
-export function workDaysBetween(from: string, to: string): number {
-  if (from === to) return 0;
-  const fromMs = parseDate(from).getTime();
-  const toMs = parseDate(to).getTime();
-  const forward = toMs > fromMs;
-  const a = forward ? from : to;
-  const b = forward ? to : from;
-  // Walk from a toward b, counting weekdays (start excluded, end included).
-  let count = 0;
-  const d = parseDate(a);
-  while (isoDate(d) !== b) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const dow = d.getUTCDay();
-    if (dow !== 0 && dow !== 6) count += 1;
-  }
-  return forward ? count : -count;
-}
 
 // ── 1. Ripple forward ──────────────────────────────────────────────────────
 

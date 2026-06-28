@@ -221,9 +221,11 @@ describe("capacityAwareCommittedDate", () => {
     expect(capacityAwareCommittedDate("2026-08-01", 0)).toBe("2026-08-01");
   });
 
-  it("adds buffer work days (weekends skipped)", () => {
-    // Fri 2026-07-31 + 3 work days → Mon 4, Tue 5, Wed 6 Aug
-    expect(capacityAwareCommittedDate("2026-07-31", 3)).toBe("2026-08-05");
+  it("adds buffer work days (weekends + BC stat holidays skipped)", () => {
+    // Fri 2026-07-31 + 3 work days. BC Day (1st Mon Aug = Mon Aug 3) is a stat
+    // holiday, so it is skipped: Tue 4 (1), Wed 5 (2), Thu 6 (3) → 2026-08-06.
+    // (A naive Mon–Fri walk would have landed Aug 5; the work calendar skips BC Day.)
+    expect(capacityAwareCommittedDate("2026-07-31", 3)).toBe("2026-08-06");
   });
 
   it("treats negative buffer the same as zero", () => {
