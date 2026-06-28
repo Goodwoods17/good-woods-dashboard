@@ -7,10 +7,10 @@ import {
   buildCapacityModel,
   seedPhaseDurationsFromHistory,
   phaseTargetDatesFromDurations,
-  DEFAULT_PHASE_DURATION_DAYS,
   type CapacitySession,
   type UtilizationStatus,
 } from "@features/scheduling/lib/capacity";
+import { DEFAULT_PHASE_DURATION_DAYS } from "@features/scheduling/lib/phases";
 import {
   detectFloatingBottleneck,
   computeCapacityAwareSchedule,

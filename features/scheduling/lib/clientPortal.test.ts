@@ -7,10 +7,10 @@ import {
   buildClientScheduleView,
   clientNextMilestoneNudge,
   buildClientActionItems,
-  CLIENT_PHASE_LABELS,
   CLIENT_STATUS_LABELS,
   type ClientScheduleInput,
 } from "./clientPortal";
+import { CLIENT_PHASE_LABELS } from "./phases";
 
 describe("clientScheduleStatus", () => {
   it("is on_track when the live committed date matches the snapshot", () => {

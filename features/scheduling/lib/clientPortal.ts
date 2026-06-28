@@ -1,6 +1,6 @@
 import type { MilestoneStage } from "@shared/lib/types";
-import { MILESTONE_STAGES } from "@shared/lib/types";
 import { businessWeekWindow } from "@shared/lib/workdays";
+import { PHASE_LIST, phaseIndex, CLIENT_PHASE_LABELS } from "./phases";
 import type { PhaseTargetDates } from "./schedule";
 
 // Re-export so existing importers (kickoffArtifact, tests) keep resolving
@@ -52,25 +52,6 @@ export const CLIENT_STATUS_LABELS: Record<ClientScheduleStatus, string> = {
 };
 
 /**
- * Client-friendly phase names. Deliberately hide shop jargon ("CNC / Cut")
- * behind plain language a homeowner reads at a glance.
- */
-export const CLIENT_PHASE_LABELS: Record<MilestoneStage, string> = {
-  design: "Design & drawings",
-  cnc: "Cutting & machining",
-  assembly: "Cabinet assembly",
-  finishing: "Finishing",
-  delivery: "Delivery",
-  install: "Installation",
-};
-
-const PHASE_KEYS = MILESTONE_STAGES.map((s) => s.key);
-
-function milestoneIndex(stage: MilestoneStage): number {
-  return PHASE_KEYS.indexOf(stage);
-}
-
-/**
  * The ONLY status a client ever sees. On track unless the live committed install
  * date has diverged from the date promised when the link was minted (the
  * snapshot). Any movement — earlier or later — surfaces as "Date updated" so the
@@ -89,14 +70,14 @@ export function clientScheduleStatus(
  * honest headroom for the install itself rather than implying "done".
  */
 export function clientPercentDone(currentMilestone: MilestoneStage): number {
-  const idx = milestoneIndex(currentMilestone);
-  return Math.round((idx / PHASE_KEYS.length) * 100);
+  const idx = phaseIndex(currentMilestone);
+  return Math.round((idx / PHASE_LIST.length) * 100);
 }
 
 /** The next concrete step for the client — the upcoming phase, friendly named. */
 export function clientNextStepLabel(currentMilestone: MilestoneStage): string {
-  const idx = milestoneIndex(currentMilestone);
-  const next = PHASE_KEYS[idx + 1];
+  const idx = phaseIndex(currentMilestone);
+  const next = PHASE_LIST[idx + 1];
   if (!next) return `${CLIENT_PHASE_LABELS.install} — final step`;
   return CLIENT_PHASE_LABELS[next];
 }
@@ -111,8 +92,8 @@ export function clientNextMilestoneNudge(
   currentMilestone: MilestoneStage,
   phaseTargetDates?: Partial<Record<MilestoneStage, string>> | null
 ): ClientNextMilestoneNudge | null {
-  const idx = milestoneIndex(currentMilestone);
-  const nextKey = PHASE_KEYS[idx + 1] as MilestoneStage | undefined;
+  const idx = phaseIndex(currentMilestone);
+  const nextKey = PHASE_LIST[idx + 1] as MilestoneStage | undefined;
   if (!nextKey) return null;
   const target = phaseTargetDates?.[nextKey];
   return {
@@ -186,9 +167,9 @@ export type ClientScheduleView = {
  * appear in the output.
  */
 export function buildClientScheduleView(input: ClientScheduleInput): ClientScheduleView {
-  const currentIdx = milestoneIndex(input.currentMilestone);
+  const currentIdx = phaseIndex(input.currentMilestone);
 
-  const phases: ClientPhaseEntry[] = MILESTONE_STAGES.map(({ key }, idx) => {
+  const phases: ClientPhaseEntry[] = PHASE_LIST.map((key, idx) => {
     const state: ClientPhaseState =
       idx < currentIdx ? "done" : idx === currentIdx ? "current" : "upcoming";
 

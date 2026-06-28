@@ -1,5 +1,6 @@
-import { MILESTONE_STAGES, type Job } from "@shared/lib/types";
+import { type Job } from "@shared/lib/types";
 import { scheduleStatus, type ScheduleStatus } from "./schedule";
+import { PHASE_LIST, phaseIndex } from "./phases";
 
 /**
  * Consolidated schedule overview data for ScheduleTab and ScheduleHealthWidget.
@@ -23,7 +24,7 @@ export type ScheduleOverview = {
 
 export function buildScheduleOverview(job: Job, today: Date): ScheduleOverview {
   const status = scheduleStatus(job.currentMilestone, job.phaseTargetDates, today);
-  const currentIdx = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+  const currentIdx = phaseIndex(job.currentMilestone);
   return {
     status,
     committedInstall: job.installDate,
@@ -31,6 +32,6 @@ export function buildScheduleOverview(job: Job, today: Date): ScheduleOverview {
     bufferDays: job.bufferDays ?? 0,
     // Phases before the current one are assumed complete (the phase pointer has moved past them).
     phasesComplete: Math.max(0, currentIdx),
-    phasesTotal: MILESTONE_STAGES.length,
+    phasesTotal: PHASE_LIST.length,
   };
 }

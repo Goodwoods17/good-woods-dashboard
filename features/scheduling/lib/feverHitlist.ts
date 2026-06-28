@@ -1,10 +1,6 @@
-import { MILESTONE_STAGES, type Job } from "@shared/lib/types";
-import {
-  computeBufferBurn,
-  chainCompletionPct,
-  feverZone,
-  type FeverZone,
-} from "./bufferBurn";
+import { type Job } from "@shared/lib/types";
+import { computeBufferBurn, chainCompletionPct, feverZone, type FeverZone } from "./bufferBurn";
+import { phaseIndex } from "./phases";
 
 /**
  * S9 — Owner fever-chart hitlist + "one number to watch" (issue #97).
@@ -97,7 +93,7 @@ export function buildFeverHitlist(
     }
 
     // Derive chain completion % from the milestone phase pointer.
-    const milestoneIndex = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
+    const milestoneIndex = phaseIndex(job.currentMilestone);
     const currentMilestoneIndex = milestoneIndex < 0 ? 0 : milestoneIndex;
     const chainPct = chainCompletionPct({ currentMilestoneIndex });
 

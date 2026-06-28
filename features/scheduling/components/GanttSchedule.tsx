@@ -14,7 +14,7 @@ import {
   type ConflictWarning,
   type RippleResult,
 } from "../lib/gantt";
-import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/capacity";
+import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/phases";
 
 // Frappe Gantt is loaded client-side only (requires a DOM).
 

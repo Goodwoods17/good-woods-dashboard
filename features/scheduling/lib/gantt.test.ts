@@ -216,7 +216,7 @@ describe("rippleForward", () => {
 
 // ── pullPlanBackward ─────────────────────────────────────────────────────────
 
-import { DEFAULT_PHASE_DURATION_DAYS } from "./capacity";
+import { DEFAULT_PHASE_DURATION_DAYS } from "./phases";
 
 describe("pullPlanBackward", () => {
   it("computes all preceding phases from the anchor backward", () => {
