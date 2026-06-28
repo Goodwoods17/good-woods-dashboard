@@ -694,6 +694,8 @@ test.describe("invoices slice 8 — QBO export stub", () => {
       const exp = body.export;
       // QBO header fields present.
       expect(exp.invoiceId).toBe(inv.id);
+      // No QBO connection in CI → the central link can't resolve, so the export
+      // falls back to the embedded qbo_vendor_id (identical to the push path).
       expect(exp.vendorRef).toBe("qbo-vendor-e2e");
       expect(exp.vendorName).toBe("Reimer Hardwoods");
       expect(exp.docNumber).toBe("E2E-QBO-001");
@@ -705,6 +707,11 @@ test.describe("invoices slice 8 — QBO export stub", () => {
       expect(exp.lines).toHaveLength(1);
       expect(exp.lines[0].accountRef).toBe("5000-Materials");
       expect(exp.lines[0].taxCodeRef).toBe("TAX");
+      // QBO-H6: the thin route now also delegates the real v3 Bill + its
+      // reconciliation (built via the same central-link path as the push route).
+      expect(body.bill.VendorRef.value).toBe("qbo-vendor-e2e");
+      expect(body.bill.Line).toHaveLength(1);
+      expect(body.reconciliation.balanced).toBe(true);
     }
 
     // 3. Clean up.
