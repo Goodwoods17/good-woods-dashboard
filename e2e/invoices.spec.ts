@@ -798,3 +798,69 @@ test.describe("invoices slice 2 — processor status + manual trigger", () => {
     await expect(page.locator('[data-testid="last-run-at"]')).toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// QBO S3 — Vendor mapping (supplier ↔ QB vendor, auto-create + dedupe)
+// ---------------------------------------------------------------------------
+
+// The vendor-mapping endpoints ride the same NEXT_PUBLIC_INVOICES_QBO_ENABLED
+// gate as QBO S1/S2. With no QBO OAuth creds in CI the resolve endpoint must
+// degrade gracefully (unconfigured / not_connected, never 5xx crash). The
+// pure-function unit tests in qboVendorSync.test.ts cover the matching logic.
+test.describe("invoices QBO S3 — vendor mapping endpoints (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("GET /api/invoices/qbo/vendors returns 404 when the flag is off, or degrades to not_connected when on without real creds", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.get("/api/invoices/qbo/vendors");
+
+    // Flag off (prod default) → 404. Flag on in CI but no real QBO creds → 400
+    // (not_connected) or 503 (unconfigured). Either way the endpoint must NOT
+    // crash with a 5xx server error.
+    expect([400, 404, 503]).toContain(res.status());
+
+    const body = await res.json();
+    // Always returns a JSON body with { ok: false } when not mapped.
+    expect(body.ok).toBe(false);
+    expect(typeof body.reason).toBe("string");
+    // Must not leak any token field.
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+
+  test("POST /api/invoices/qbo/vendors returns 400 when supplierId is missing", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/vendors", {
+      data: {},
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // Flag off → 404; flag on + valid JSON but missing supplierId → 400.
+    expect([400, 404]).toContain(res.status());
+  });
+
+  test("POST /api/invoices/qbo/vendors with a supplierId degrades gracefully without real QBO creds", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/vendors", {
+      data: { supplierId: "00000000-0000-4000-8000-000000000099" },
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // Flag off → 404. Flag on but unconfigured → 503. Flag on but no token
+    // → 400 (not_connected). Flag on + token + no supplier row → 404.
+    // Any of these is acceptable; a 5xx "crash" (500) is NOT.
+    expect([400, 404, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+})
