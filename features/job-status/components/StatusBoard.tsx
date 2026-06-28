@@ -11,26 +11,10 @@ import { useStatusBoard, isActiveJob } from "../lib/boardStore";
 import { phaseProgress, jobProgress } from "../lib/progress";
 import { JobStatusTab } from "./JobStatusTab";
 import { ItemTimeline } from "./ItemTimeline";
+import { ProgressBar } from "./ProgressBar";
+import { BoardSkeleton } from "./Skeletons";
 import { BoardAdvisoryBanner } from "@features/scheduling/components/BoardAdvisoryBanner";
 import type { TrackableItem } from "../lib/types";
-
-// ─── Mini phase progress bar (board card) ─────────────────────────────────────
-
-function MiniBar({ pct }: { pct: number }) {
-  const pctInt = Math.round(pct * 100);
-  return (
-    <div className="flex-1 h-1 rounded-full bg-surface-muted overflow-hidden">
-      <div
-        className="h-full rounded-full bg-accent transition-all duration-slow"
-        style={{ width: `${pctInt}%` }}
-        role="progressbar"
-        aria-valuenow={pctInt}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      />
-    </div>
-  );
-}
 
 // ─── Job card (board list item) ───────────────────────────────────────────────
 
@@ -77,7 +61,7 @@ function JobCard({
           return (
             <div key={key} className="flex items-center gap-2">
               <span className="text-[10px] text-text-tertiary w-16 shrink-0 truncate">{label}</span>
-              <MiniBar pct={pct} />
+              <ProgressBar pct={pct} className="h-1 flex-1" />
               <span className="text-[10px] text-text-tertiary tabular-nums w-6 text-right">
                 {Math.round(pct * 100)}%
               </span>
@@ -192,12 +176,13 @@ export function StatusBoard() {
       />
 
       {loading ? (
-        <div className="px-4 py-6">
-          <p className="text-sm text-text-tertiary">Loading jobs…</p>
-        </div>
+        <BoardSkeleton />
       ) : activeJobs.length === 0 ? (
-        <div className="px-4 py-6">
-          <p className="text-sm text-text-tertiary">No active jobs right now.</p>
+        <div className="px-4 py-10 text-center">
+          <p className="text-sm font-medium text-text-secondary">No active jobs right now</p>
+          <p className="mt-1 text-xs text-text-tertiary">
+            Jobs show here as they move from sold through install.
+          </p>
         </div>
       ) : (
         <>
