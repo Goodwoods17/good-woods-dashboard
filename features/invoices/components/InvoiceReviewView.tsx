@@ -5,10 +5,9 @@ import Link from "next/link";
 import { ArrowLeft, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { cn } from "@shared/lib/utils";
-import { formatCAD } from "@shared/lib/format";
 import { formatError } from "@shared/lib/formatError";
 import { saveReviewedInvoice, checkDuplicateInvoice } from "../lib/invoicesData";
-import { isLowConfidence, validateMath, type MathError } from "../lib/reviewInvoice";
+import { isLowConfidence, validateMath, describeMathError } from "../lib/reviewInvoice";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
 // ---------------------------------------------------------------------------
@@ -508,14 +507,4 @@ function EditField({
       />
     </div>
   );
-}
-
-function describeMathError(err: MathError): string {
-  const diff = (a: number, b: number) => formatCAD(Math.abs(a - b));
-  switch (err.kind) {
-    case "lines_vs_pretax":
-      return `Lines sum to ${formatCAD(err.actual)} but pre-tax total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
-    case "pretax_plus_tax_vs_total":
-      return `Pre-tax + GST + PST = ${formatCAD(err.actual)} but stated total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
-  }
 }
