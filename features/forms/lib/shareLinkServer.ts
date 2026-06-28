@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { type SupabaseClient } from "@supabase/supabase-js";
 import type { FormInstance, FormInstanceField, FormShareLink } from "@shared/lib/types";
 import {
   DOCUMENTS_TABLE,
@@ -7,6 +7,8 @@ import {
   FORM_SHARE_LINKS_TABLE,
   JOBS_TABLE,
 } from "@shared/lib/supabase";
+import { getServiceRoleClient } from "@shared/lib/serviceClient";
+import { loadCapabilityRow } from "@shared/lib/capabilityLink";
 import {
   rowToFormInstance,
   rowToFormInstanceField,
@@ -33,28 +35,6 @@ import {
  * is only ever imported by server components / route handlers under src/app/f.
  */
 
-let serviceClient: SupabaseClient | null = null;
-
-function getServiceClient(): SupabaseClient | null {
-  if (serviceClient) return serviceClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  serviceClient = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      // Next.js patches global fetch with its Data Cache; GET requests default to
-      // `force-cache`. supabase-js issues its reads through fetch, so without this
-      // the first load of a token (e.g. before the client submits) gets cached and
-      // a later resume read serves the STALE answer — the saved checkbox comes back
-      // unchecked. These reads are inherently live (form state behind a token), so
-      // opt every request out of the cache.
-      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
-    },
-  });
-  return serviceClient;
-}
-
 export type ShareLinkBundle = {
   link: FormShareLink;
   instance: FormInstance;
@@ -72,19 +52,14 @@ export type ShareLinkLoadResult =
  * Side effect: stamps viewed_at on first open (resume-friendly; idempotent-ish).
  */
 export async function loadShareLink(token: string): Promise<ShareLinkLoadResult> {
-  const sb = getServiceClient();
+  const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  const { data: linkRow, error: linkErr } = await sb
-    .from(FORM_SHARE_LINKS_TABLE)
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
-  if (linkErr) throw linkErr;
-  if (!linkRow) return { ok: false, reason: "not_found" };
+  // Select-by-token → revoked check → stamp viewed_at on first view.
+  const res = await loadCapabilityRow<FormShareLinkRow>(sb, FORM_SHARE_LINKS_TABLE, token);
+  if (!res.ok) return { ok: false, reason: res.reason };
 
-  const link = rowToFormShareLink(linkRow as FormShareLinkRow);
-  if (!isShareLinkActive(link)) return { ok: false, reason: "revoked" };
+  const link = rowToFormShareLink(res.row);
 
   const { data: instRow, error: instErr } = await sb
     .from(FORM_INSTANCES_TABLE)
@@ -100,14 +75,6 @@ export async function loadShareLink(token: string): Promise<ShareLinkLoadResult>
     .eq("instance_id", link.instanceId)
     .order("sort_order", { ascending: true });
   if (fieldErr) throw fieldErr;
-
-  // First view stamps viewed_at (best-effort; don't fail the load on a write error).
-  if (link.viewedAt === null) {
-    await sb
-      .from(FORM_SHARE_LINKS_TABLE)
-      .update({ viewed_at: new Date().toISOString() })
-      .eq("id", link.id);
-  }
 
   return {
     ok: true,
@@ -144,7 +111,7 @@ export async function submitShareLink(
   answers: ShareAnswers,
   audit?: SubmitAudit
 ): Promise<SubmitResult> {
-  const sb = getServiceClient();
+  const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
   const { data: linkRow, error: linkErr } = await sb
