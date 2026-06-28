@@ -6,7 +6,7 @@
  * status classification) live in `qboPushAudit.ts`.
  */
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
-import type { PushAttemptStatus, PushAttemptRow } from "./qboPushAudit";
+import type { PushAttemptStatus, PushAttemptRow, LatestPushAttempt } from "./qboPushAudit";
 
 // ── Insert helpers ─────────────────────────────────────────────────────────────
 
@@ -123,6 +123,35 @@ export async function getPushAttempts(invoiceId: string): Promise<PushAttemptRow
     return [];
   }
   return ((data as Record<string, unknown>[]) ?? []).map(rowToPushAttemptRow);
+}
+
+/**
+ * The single most-recent PUSH attempt for an invoice (kind = 'push'), distilled
+ * for the push panel (QBO-H7, #190). Connection-independent — read with the
+ * service role so a prior failure stays visible even when the QBO token is
+ * currently unconfigured/disconnected. Void attempts are excluded.
+ */
+export async function getLatestPushAttempt(invoiceId: string): Promise<LatestPushAttempt | null> {
+  const sb = getServiceRoleClient();
+  if (!sb) return null;
+
+  const { data, error } = await sb
+    .from("qbo_push_attempts")
+    .select("status, next_retry_at, error_message, created_at")
+    .eq("invoice_id", invoiceId)
+    .eq("kind", "push")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  const row = data as Record<string, unknown>;
+  return {
+    status: row.status as PushAttemptStatus,
+    nextRetryAt: (row.next_retry_at as string | null) ?? null,
+    errorMessage: (row.error_message as string | null) ?? null,
+    createdAt: row.created_at as string,
+  };
 }
 
 /**

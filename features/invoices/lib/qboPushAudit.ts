@@ -24,11 +24,7 @@
  *  retried          → superseded by a later attempt; kept for audit history only
  */
 export type PushAttemptStatus =
-  | "queued"
-  | "succeeded"
-  | "failed_transient"
-  | "failed_permanent"
-  | "retried";
+  "queued" | "succeeded" | "failed_transient" | "failed_permanent" | "retried";
 
 /** Minimal row shape for retry scheduling logic (mirrors the DB table). */
 export type PushAttemptRow = {
@@ -40,6 +36,20 @@ export type PushAttemptRow = {
   pushedBy: string | null;
   realmId: string | null;
   environment: string | null;
+  createdAt: string;
+};
+
+/**
+ * The single most-recent push attempt for an invoice, distilled to what the
+ * push panel needs to surface failed / retry-pending outcomes (QBO-H7, #190).
+ * Connection-independent: read from the audit table with the service role, so
+ * a prior failure stays visible even when the QBO token is currently
+ * unconfigured or disconnected.
+ */
+export type LatestPushAttempt = {
+  status: PushAttemptStatus;
+  nextRetryAt: string | null;
+  errorMessage: string | null;
   createdAt: string;
 };
 
@@ -69,11 +79,7 @@ export function nextRetryDelayMs(retryCount: number, baseMs = 30_000): number {
  * @param now         The current moment (injectable for tests).
  * @param baseMs      Override the base delay.
  */
-export function nextRetryAt(
-  retryCount: number,
-  now: Date = new Date(),
-  baseMs?: number
-): string {
+export function nextRetryAt(retryCount: number, now: Date = new Date(), baseMs?: number): string {
   return new Date(now.getTime() + nextRetryDelayMs(retryCount, baseMs)).toISOString();
 }
 

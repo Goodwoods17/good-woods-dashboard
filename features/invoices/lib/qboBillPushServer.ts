@@ -44,8 +44,9 @@ import {
   type BillPushGate,
 } from "./qboBillPush";
 import { attachInvoicePdfToQboBill, type AttachmentResult } from "./qboAttachableServer";
-import { logPushAttempt, updatePushAttempt } from "./qboPushAuditServer";
+import { logPushAttempt, updatePushAttempt, getLatestPushAttempt } from "./qboPushAuditServer";
 import { isTransientHttpStatus, isPermanentHttpStatus, nextRetryAt } from "./qboPushAudit";
+import type { LatestPushAttempt } from "./qboPushAudit";
 import type { Invoice, InvoiceLine } from "./types";
 
 /** `quickbooks_links.local_type` / `qbo_type` for the invoice → Bill mapping. */
@@ -254,13 +255,23 @@ export type PushPreview =
       billId: string | null;
       deepLink: string | null;
       environment: QboEnvironment;
+      /**
+       * QBO-H7 (#190): the latest push attempt, so the panel can distinguish a
+       * failed / retry-pending push from a never-attempted one.
+       */
+      latestAttempt: LatestPushAttempt | null;
     }
-  | LoadError;
+  | (LoadError & { latestAttempt: LatestPushAttempt | null });
 
 /** Build the bill + gate WITHOUT touching QBO's write API (read-only preview). */
 export async function previewInvoicePush(invoiceId: string): Promise<PushPreview> {
+  // QBO-H7: read the audit row FIRST, independent of the QBO connection, so a
+  // prior failure stays visible even when the token is currently unconfigured
+  // or disconnected (the load below would otherwise short-circuit).
+  const latestAttempt = await getLatestPushAttempt(invoiceId);
+
   const ctx = await loadPushContext(invoiceId);
-  if (!("invoice" in ctx)) return ctx;
+  if (!("invoice" in ctx)) return { ...ctx, latestAttempt };
   const c = ctx;
   return {
     status: "ok",
@@ -271,6 +282,7 @@ export async function previewInvoicePush(invoiceId: string): Promise<PushPreview
     billId: c.existingBillId,
     deepLink: c.existingBillId ? qboBillDeepLink(c.environment, c.existingBillId) : null,
     environment: c.environment,
+    latestAttempt,
   };
 }
 
@@ -469,4 +481,39 @@ export async function pushInvoiceBill(
     }
     return { status: "qbo_error", message };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Re-attach the source PDF to an already-pushed Bill (QBO-H7, issue #190)
+// ---------------------------------------------------------------------------
+
+export type ReattachResult =
+  | AttachmentResult
+  | { status: "not_pushed" }
+  | { status: "not_connected" | "unconfigured" | "not_found"; message?: string };
+
+/**
+ * Retry JUST the PDF attachment for an invoice whose Bill is already in QBO.
+ *
+ * The Bill push (S8) attaches the source PDF non-blockingly: a failed
+ * attachment leaves a real Bill in QBO with no document. Re-pushing won't help
+ * (the local link short-circuits), so this re-runs only the Attachable upload
+ * against the EXISTING Bill. Idempotent enough for the owner to click "Retry"
+ * after a transient attach failure; never creates or mutates the Bill itself.
+ */
+export async function reattachInvoicePdf(invoiceId: string): Promise<ReattachResult> {
+  const ctx = await loadPushContext(invoiceId);
+  if (!("invoice" in ctx)) return ctx;
+  const c = ctx;
+
+  if (!c.existingBillId) return { status: "not_pushed" };
+
+  return attachInvoicePdfToQboBill({
+    storagePath: c.invoice.storagePath,
+    mime: c.invoice.mime,
+    billId: c.existingBillId,
+    realmId: c.realmId,
+    environment: c.environment,
+    accessToken: c.accessToken,
+  });
 }

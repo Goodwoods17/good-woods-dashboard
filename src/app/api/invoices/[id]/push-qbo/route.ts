@@ -48,8 +48,11 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
 
   const preview = await previewInvoicePush(params.id);
   if (preview.status !== "ok") {
+    // QBO-H7 (#190): surface the latest attempt even when not connected, so a
+    // prior failed push stays visible (distinct from never-sent) regardless of
+    // the current token state.
     return NextResponse.json(
-      { ok: false, reason: preview.status },
+      { ok: false, reason: preview.status, latestAttempt: preview.latestAttempt },
       { status: statusForReason(preview.status) }
     );
   }
