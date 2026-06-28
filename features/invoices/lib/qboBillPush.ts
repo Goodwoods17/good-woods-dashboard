@@ -16,12 +16,17 @@
  * strips our internal underscore-prefixed bookkeeping before the bill is POSTed.
  */
 import type { QboEnvironment } from "./qboOAuth";
-import type { LineTaxKey } from "./qboExport";
+import type { LineTaxKey, QboBillReconciliation } from "./qboExport";
 import type { MappingLookups } from "./qboAccountMapping";
 
 /** Why a push is refused. Null = pushable. Ordered by precedence in the gate. */
 export type BillPushBlock =
-  "already_pushed" | "not_posted" | "vendor_unmapped" | "accounts_unmapped" | "taxes_unmapped";
+  | "already_pushed"
+  | "not_posted"
+  | "total_mismatch"
+  | "vendor_unmapped"
+  | "accounts_unmapped"
+  | "taxes_unmapped";
 
 /** One line's mapping-relevant facts for the gate. */
 export type LineGateInput = {
@@ -43,6 +48,12 @@ export type BillPushGate = {
   unmappedTaxes: string[];
   /** True when the invoice's vendor resolves to a QBO VendorRef. */
   vendorMapped: boolean;
+  /**
+   * True when the stated invoice total does not match Σ lines + GST + PST.
+   * Surfaced even when another block takes precedence (so the UI can show
+   * both problems at once).
+   */
+  totalMismatch: boolean;
 };
 
 /** Sentinel listed in `unmappedAccounts` when a line carries no account at all. */
@@ -52,15 +63,20 @@ export const NO_ACCOUNT_KEY = "(no account)";
  * Decide whether a posted invoice can be pushed to QBO as a Bill.
  *
  * Precedence (the UI shows exactly one primary reason):
- *   1. `already_pushed` — a Bill link exists → refuse (idempotent; re-send is a
+ *   1. `already_pushed`  — a Bill link exists → refuse (idempotent; re-send is a
  *      no-op). Wins even when everything else is in order.
- *   2. `not_posted` — only a `posted` invoice is eligible (post-then-send).
- *   3. `vendor_unmapped` — no VendorRef resolved.
- *   4. `accounts_unmapped` — some line has no (mapped) expense account. A line
+ *   2. `not_posted`      — only a `posted` invoice is eligible (post-then-send).
+ *   3. `total_mismatch`  — Σ lines + GST + PST ≠ stated total (S9): the bill
+ *      would book the wrong amount in QBO; must be corrected before pushing.
+ *   4. `vendor_unmapped` — no VendorRef resolved.
+ *   5. `accounts_unmapped` — some line has no (mapped) expense account. A line
  *      with a null account counts: every QBO Bill line needs an AccountRef.
- *   5. `taxes_unmapped` — some TAXABLE line's tax key has no QBO TaxCode link.
+ *   6. `taxes_unmapped`  — some TAXABLE line's tax key has no QBO TaxCode link.
  *
  * Non-taxable lines (null tax key) never gate on tax.
+ *
+ * `reconciliation` is optional for backward-compatibility (pre-S9 callers that
+ * don't yet supply it). When absent the total-mismatch gate is skipped.
  */
 export function evaluateBillPush(params: {
   invoiceStatus: string;
@@ -68,8 +84,10 @@ export function evaluateBillPush(params: {
   vendorRef: string | null;
   lines: LineGateInput[];
   maps: MappingLookups;
+  /** S9: when supplied, a mis-balanced reconciliation blocks the push. */
+  reconciliation?: QboBillReconciliation;
 }): BillPushGate {
-  const { invoiceStatus, alreadyPushed, vendorRef, lines, maps } = params;
+  const { invoiceStatus, alreadyPushed, vendorRef, lines, maps, reconciliation } = params;
 
   const unmappedAccounts: string[] = [];
   const seenAcct = new Set<string>();
@@ -94,14 +112,26 @@ export function evaluateBillPush(params: {
 
   const vendorMapped = vendorRef != null && vendorRef !== "";
 
+  // S9: total-mismatch flag — computed independent of the block precedence so
+  // the UI can show it alongside another block reason if needed.
+  const totalMismatch = reconciliation != null && !reconciliation.balanced;
+
   let block: BillPushBlock | null = null;
   if (alreadyPushed) block = "already_pushed";
   else if (invoiceStatus !== "posted") block = "not_posted";
+  else if (totalMismatch) block = "total_mismatch";
   else if (!vendorMapped) block = "vendor_unmapped";
   else if (unmappedAccounts.length > 0) block = "accounts_unmapped";
   else if (unmappedTaxes.length > 0) block = "taxes_unmapped";
 
-  return { pushable: block === null, block, unmappedAccounts, unmappedTaxes, vendorMapped };
+  return {
+    pushable: block === null,
+    block,
+    unmappedAccounts,
+    unmappedTaxes,
+    vendorMapped,
+    totalMismatch,
+  };
 }
 
 /** A short, human-readable sentence for a block reason (for the UI badge/notice). */
@@ -113,6 +143,8 @@ export function billPushBlockMessage(gate: BillPushGate): string | null {
       return "Already sent to QuickBooks.";
     case "not_posted":
       return "Post this invoice to actuals before sending it to QuickBooks.";
+    case "total_mismatch":
+      return "Invoice total does not match line items + taxes — correct it before sending to QuickBooks.";
     case "vendor_unmapped":
       return "Map this supplier to a QuickBooks vendor first.";
     case "accounts_unmapped":

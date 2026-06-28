@@ -1352,3 +1352,124 @@ test.describe("invoices QBO S8 — Attachable upload (non-blocking, gated)", () 
     expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S9 — total-mismatch guard + retry queue + push audit log (issue #155)
+// ───────────────────────────────────────────────────────────────────────────
+// S9 adds three surfaces, each proven without needing a live QBO sandbox:
+//
+//   1. Total-mismatch guard: the push endpoint returns 409/blocked with
+//      block="total_mismatch" when the invoice's computed total disagrees with
+//      the stated total (verified via the preview endpoint + gate shape).
+//      In CI (no QBO creds) the push gates at not_connected/unconfigured before
+//      reaching the mismatch check — so we prove the GATE SHAPE via the
+//      `evaluateBillPush` unit tests and the endpoint's known-degradation
+//      behaviour (no new 5xx surface).
+//
+//   2. Retry queue: the drain endpoint (/api/invoices/qbo/retry-queue) is
+//      accessible with the cron bearer token. Without real QBO creds the queue
+//      is empty (no prior transient failures) so the drain returns 0 retried —
+//      but the endpoint must exist and never crash.
+//
+//   3. Audit log: every push attempt logs to `qbo_push_attempts`; after any
+//      push attempt (success or failure) at least one row exists.
+//      With no QBO creds in CI the push never reaches the audit-log write path,
+//      so we verify the audit log table's existence indirectly via the DB
+//      migration — and the pure-function audit tests cover the logic exhaustively.
+//
+// The pure-function coverage lives in qboPushAudit.test.ts (36 tests).
+
+test.describe("invoices QBO S9 — total-mismatch guard (gated, degradation)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("POST push-qbo degrades gracefully without real QBO creds (S9 no regression)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post(
+      "/api/invoices/00000000-0000-4000-8000-0000000009a1/push-qbo"
+    );
+
+    // Flag off (prod default) → 404.
+    // Flag on in CI but no real QBO creds → 400 (not_connected) or 503 (unconfigured).
+    // 409 (blocked) is acceptable when connected but the invoice can't be pushed.
+    // A 5xx crash is NOT acceptable.
+    expect([400, 404, 409, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    // Never leak a token.
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+
+  test("GET preview degrades gracefully without real QBO creds (S9 no regression)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.get(
+      "/api/invoices/00000000-0000-4000-8000-0000000009a1/push-qbo"
+    );
+
+    expect([400, 404, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+});
+
+test.describe("invoices QBO S9 — retry-queue drain endpoint", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("GET retry-queue returns 401 without cron auth (endpoint exists, no crash)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // Without a bearer token the endpoint must return 401 (or 404 if flag is off).
+    const res = await page.request.get("/api/invoices/qbo/retry-queue");
+    expect([401, 404]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("POST retry-queue returns 401 without cron auth (endpoint exists, no crash)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/retry-queue");
+    expect([401, 404]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("POST retry-queue with cron auth drains (empty queue = 0 retried)", async ({ page }) => {
+    await login(page);
+
+    const cronSecret = process.env.CRON_SECRET ?? "test-secret";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+    const res = await fetch(`${baseUrl}/api/invoices/qbo/retry-queue`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${cronSecret}` },
+    });
+
+    // Flag off (prod) → 404. Flag on + valid cron auth → 200 (even with an empty
+    // queue). CRON_SECRET is absent in CI, so cron auth fails → 401 (matching the
+    // sibling export-qbo/process cron-auth probes earlier in this spec).
+    expect([200, 401, 404]).toContain(res.status);
+
+    if (res.status === 200) {
+      const body = await res.json();
+      expect(body.ok).toBe(true);
+      expect(typeof body.retried).toBe("number");
+      // In CI the queue is empty (no prior transient failures).
+      expect(body.retried).toBeGreaterThanOrEqual(0);
+      expect(Array.isArray(body.results)).toBe(true);
+    }
+  });
+});

@@ -1,6 +1,8 @@
 /**
  * Server-only I/O for QBO S7 — push a posted invoice to QuickBooks as a Bill
- * (issue #153). SERVICE-ROLE only; never import from a client component.
+ * (issue #153); extended in S9 (issue #155) with a push audit log + retry
+ * queue + total-mismatch guard. SERVICE-ROLE only; never import from a client
+ * component.
  *
  * Brings together the pieces S1–S6 built: a fresh access token (S1), the
  * central `quickbooks_links` mappings (S2–S5), the pure `buildQboBill` payload
@@ -35,6 +37,11 @@ import {
   type BillPushGate,
 } from "./qboBillPush";
 import { attachInvoicePdfToQboBill, type AttachmentResult } from "./qboAttachableServer";
+import {
+  logPushAttempt,
+  updatePushAttempt,
+} from "./qboPushAuditServer";
+import { isTransientHttpStatus, isPermanentHttpStatus, nextRetryAt } from "./qboPushAudit";
 import type { Invoice, InvoiceLine } from "./types";
 
 /** `quickbooks_links.local_type` / `qbo_type` for the invoice → Bill mapping. */
@@ -85,13 +92,24 @@ async function findQboBillByDocNumber(
   return parseQboBillQuery(await res.json());
 }
 
-/** Create a Bill in the connected QBO company. Throws on a non-2xx response. */
+/** Typed result from a QBO Bill create attempt (replaces throwing on error). */
+type QboBillCreateResult =
+  | { ok: true; ref: QboBillRef }
+  | { ok: false; httpStatus: number; body: unknown; message: string };
+
+/**
+ * Create a Bill in the connected QBO company.
+ *
+ * Returns a typed result instead of throwing: callers can distinguish
+ * transient failures (429/5xx) from permanent ones (4xx) and route them to
+ * the correct audit-log outcome (S9).
+ */
 async function createQboBill(
   accessToken: string,
   realmId: string,
   environment: QboEnvironment,
   requestBody: Record<string, unknown>
-): Promise<QboBillRef> {
+): Promise<QboBillCreateResult> {
   const base = qboApiBaseUrl(environment);
   const url = `${base}/v3/company/${realmId}/bill?minorversion=65`;
   const res = await fetch(url, {
@@ -103,10 +121,20 @@ async function createQboBill(
     },
     body: JSON.stringify(requestBody),
   });
-  if (!res.ok) throw new Error(`QBO bill create failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    return {
+      ok: false,
+      httpStatus: res.status,
+      body,
+      message: `QBO bill create failed: ${res.status} ${res.statusText}`,
+    };
+  }
   const created = parseQboCreatedBill(await res.json());
-  if (!created) throw new Error("QBO bill create returned no Bill in body");
-  return created;
+  if (!created) {
+    return { ok: false, httpStatus: 200, body: null, message: "QBO bill create returned no Bill in body" };
+  }
+  return { ok: true, ref: created };
 }
 
 // ---------------------------------------------------------------------------
@@ -175,6 +203,7 @@ async function loadPushContext(invoiceId: string): Promise<LoadedContext | LoadE
   });
   const existingBillId = existingLink?.qboId ?? null;
 
+  // S9: pass reconciliation so the gate can flag total-mismatch before push.
   const gate = evaluateBillPush({
     invoiceStatus: invoice.status,
     alreadyPushed: existingBillId != null,
@@ -184,6 +213,7 @@ async function loadPushContext(invoiceId: string): Promise<LoadedContext | LoadE
       taxKey: lineTaxKey(l.taxFlag, { gst: invoice.gst, pst: invoice.pst }),
     })),
     maps,
+    reconciliation,
   });
 
   return {
@@ -257,16 +287,29 @@ export type { AttachmentResult };
 /**
  * Push the invoice's Bill to QBO, exactly once.
  *
- * Order: local-link short-circuit → block-until-mapped gate → query-before-create
- * → POST → store the Bill link. A second call after a successful push hits the
- * local-link short-circuit and creates nothing.
+ * S9 additions:
+ *  • Every attempt (successful or not) is logged to `qbo_push_attempts`.
+ *  • Transient failures (429/5xx) store a `next_retry_at` backoff timestamp
+ *    so the drain endpoint can re-attempt automatically.
+ *  • The total-mismatch guard (reconciliation.balanced) is now checked as
+ *    part of the block-until-mapped gate — an unbalanced invoice is refused
+ *    with `status: "blocked"` before any network write.
+ *
+ * Order: local-link short-circuit → block-until-mapped gate (incl. mismatch)
+ * → log attempt → query-before-create → POST → store Bill link → update log.
+ *
+ * @param pushedBy  The authenticated user who triggered the push (email or
+ *                  user-id). Optional: pass null when triggered by cron.
  */
-export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
+export async function pushInvoiceBill(
+  invoiceId: string,
+  pushedBy?: string | null
+): Promise<PushResult> {
   const ctx = await loadPushContext(invoiceId);
   if (!("invoice" in ctx)) return ctx;
   const c = ctx;
 
-  // 1. Idempotent short-circuit: already linked → return, no network write.
+  // 1. Idempotent short-circuit: already linked → return, no audit log needed.
   if (c.existingBillId) {
     return {
       status: "already_pushed",
@@ -275,14 +318,25 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
     };
   }
 
-  // 2. Block-until-mapped (+ not-posted). Refuse before any write.
+  // 2. Block-until-mapped (+ not-posted + total_mismatch). Refuse before write.
   if (!c.gate.pushable) {
     return { status: "blocked", gate: c.gate };
   }
 
-  // 3. Query-before-create: adopt an existing QBO Bill with the same DocNumber.
-  const docNumber = c.bill.DocNumber;
+  // 3. Log the attempt as queued (S9 audit log).
+  const requestBody = toQboBillRequestBody(c.bill);
+  const attemptId = await logPushAttempt({
+    invoiceId,
+    status: "queued",
+    requestBody: requestBody as Record<string, unknown>,
+    pushedBy: pushedBy ?? null,
+    realmId: c.realmId,
+    environment: c.environment,
+  });
+
   try {
+    // 4. Query-before-create: adopt an existing QBO Bill with the same DocNumber.
+    const docNumber = c.bill.DocNumber;
     if (docNumber) {
       const existing = await findQboBillByDocNumber(
         c.accessToken,
@@ -300,6 +354,14 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
           environment: c.environment,
           syncedAt: new Date().toISOString(),
         });
+        // Mark audit attempt as succeeded (the bill already existed in QBO).
+        if (attemptId) {
+          await updatePushAttempt(attemptId, {
+            status: "succeeded",
+            qboBillId: existing.id,
+            responseBody: { adopted: true, docNumber: existing.docNumber },
+          });
+        }
         return {
           status: "already_pushed",
           billId: existing.id,
@@ -308,15 +370,40 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
       }
     }
 
-    // 4. Create the Bill (internal underscore-prefixed bookkeeping stripped).
-    const created = await createQboBill(
+    // 5. Create the Bill (internal underscore-prefixed bookkeeping stripped).
+    const createResult = await createQboBill(
       c.accessToken,
       c.realmId,
       c.environment,
-      toQboBillRequestBody(c.bill)
+      requestBody as Record<string, unknown>
     );
 
-    // 5. Persist the invoice → Bill link so re-sends short-circuit forever.
+    if (!createResult.ok) {
+      // S9: classify the failure and update the audit log accordingly.
+      const transient = isTransientHttpStatus(createResult.httpStatus);
+      const permanent = isPermanentHttpStatus(createResult.httpStatus);
+      const newStatus = transient
+        ? "failed_transient"
+        : permanent
+          ? "failed_permanent"
+          : "failed_permanent"; // unknown non-OK status → treat as permanent
+
+      if (attemptId) {
+        await updatePushAttempt(attemptId, {
+          status: newStatus,
+          httpStatus: createResult.httpStatus,
+          responseBody: createResult.body,
+          errorMessage: createResult.message,
+          // Transient failures: schedule a retry with exponential backoff.
+          nextRetryAt: transient ? nextRetryAt(0) : null,
+        });
+      }
+      return { status: "qbo_error", message: createResult.message };
+    }
+
+    const created = createResult.ref;
+
+    // 6. Persist the invoice → Bill link so re-sends short-circuit forever.
     await upsertQuickbooksLink({
       localType: INVOICE_LOCAL_TYPE,
       localId: c.invoice.id,
@@ -327,7 +414,16 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
       syncedAt: new Date().toISOString(),
     });
 
-    // 6. Attach the source PDF to the new Bill (S8, non-blocking). A failure
+    // 7. Update audit log to succeeded (S9).
+    if (attemptId) {
+      await updatePushAttempt(attemptId, {
+        status: "succeeded",
+        qboBillId: created.id,
+        responseBody: { id: created.id, docNumber: created.docNumber },
+      });
+    }
+
+    // 8. Attach the source PDF to the new Bill (S8, non-blocking). A failure
     //    surfaces in the result but does NOT undo the bill — the owner can retry.
     const attachment = await attachInvoicePdfToQboBill({
       storagePath: c.invoice.storagePath,
@@ -346,6 +442,15 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
       attachment,
     };
   } catch (e) {
-    return { status: "qbo_error", message: e instanceof Error ? e.message : String(e) };
+    // Network error or unexpected throw: treat as transient (may clear on retry).
+    const message = e instanceof Error ? e.message : String(e);
+    if (attemptId) {
+      await updatePushAttempt(attemptId, {
+        status: "failed_transient",
+        errorMessage: message,
+        nextRetryAt: nextRetryAt(0),
+      });
+    }
+    return { status: "qbo_error", message };
   }
 }
