@@ -1664,3 +1664,41 @@ test.describe("invoices QBO S12 — prod cutover: configuredEnvironment in statu
     await expect(panel.getByTestId("qbo-prod-warning")).not.toBeVisible();
   });
 });
+
+// ---------------------------------------------------------------------------
+// QBO-H1 — idempotency: prevent concurrent duplicate bills (issue #184)
+//
+// The worst money failure: two simultaneous push POSTs both read
+// existingBillId=null, both pass the gate, both miss the DocNumber query, and
+// both create a Bill → two real bills in QB. The fix sends a deterministic QBO
+// `requestid` so QBO dedupes the create server-side (pure logic unit-tested in
+// qboBillPush.test.ts + the concurrency seam in qboBillPushServer.test.ts).
+//
+// In CI there are no real QBO OAuth creds, so a live double-create can't be
+// driven from the browser. This smoke proves the no-regression invariant: even
+// firing TWO concurrent pushes at the same invoice, the endpoint always
+// degrades gracefully (never a 5xx crash) and never leaks a token.
+// ---------------------------------------------------------------------------
+test.describe("invoices QBO-H1 — concurrent push idempotency (gated, degradation)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("two concurrent push-qbo POSTs both degrade gracefully (no 5xx, no token leak)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const url = "/api/invoices/00000000-0000-4000-8000-000000184a01/push-qbo";
+
+    // Fire both pushes at once — the exact race the RequestId key closes.
+    const [a, b] = await Promise.all([page.request.post(url), page.request.post(url)]);
+
+    for (const res of [a, b]) {
+      // Flag off → 404. Flag on without creds → 400 (not_connected) / 503
+      // (unconfigured). 409 (blocked) is fine if connected-but-unpushable.
+      // A 5xx CRASH (500) is never acceptable.
+      expect([400, 404, 409, 503]).toContain(res.status());
+      const text = await res.text();
+      expect(text).not.toMatch(/access_token|refresh_token/i);
+    }
+  });
+});

@@ -158,6 +158,37 @@ export function billPushBlockMessage(gate: BillPushGate): string | null {
   }
 }
 
+/** FNV-1a 32-bit hash → 8 lowercase-hex chars. Stable across processes/runs. */
+function fnv1aHex(input: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < input.length; i++) {
+    h ^= input.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(16).padStart(8, "0");
+}
+
+/**
+ * A deterministic QBO `RequestId` idempotency key for one invoice→Bill create
+ * (issue #184, QBO-H1).
+ *
+ * QBO honours a `requestid` query param on POST: two create requests carrying
+ * the SAME RequestId are deduped server-side — the second returns the first's
+ * Bill instead of creating a second one. Because this is a pure function of
+ * `(realmId, invoiceId)` with no randomness, two concurrent pushes that both
+ * read `existingBillId = null` (the race in `qboBillPushServer.ts`) — or any
+ * retry — send the identical key and therefore collapse to exactly ONE Bill in
+ * QuickBooks. This closes the duplicate-bill window the local link unique
+ * constraint can't (it only dedupes the link row, after the POST).
+ *
+ * The key is URL-safe and well within QBO's 50-char RequestId limit. Both ids
+ * are folded into a 64-bit (2×32-bit) hash so distinct invoices/companies get
+ * distinct keys without leaking ids into request logs.
+ */
+export function qboBillRequestId(realmId: string, invoiceId: string): string {
+  return `gwbill-${fnv1aHex(`${realmId}:${invoiceId}`)}-${fnv1aHex(invoiceId)}`;
+}
+
 /**
  * The "View in QuickBooks" deep link for a created Bill. Sandbox and production
  * live on different QBO web hosts; the bill opens via its transaction id.

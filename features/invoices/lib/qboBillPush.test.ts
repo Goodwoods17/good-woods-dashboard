@@ -11,6 +11,7 @@ import { describe, it, expect } from "vitest";
 import {
   evaluateBillPush,
   qboBillDeepLink,
+  qboBillRequestId,
   stripInternalFields,
   toQboBillRequestBody,
   type LineGateInput,
@@ -222,5 +223,35 @@ describe("stripInternalFields / toQboBillRequestBody", () => {
     expect(json).toContain("VendorRef");
     expect(json).toContain("GlobalTaxCalculation");
     expect(json).toContain("TxnTaxDetail");
+  });
+});
+
+// QBO-H1 (issue #184): deterministic RequestId idempotency key. Two concurrent
+// create POSTs that both read existingBillId=null must collapse to ONE Bill —
+// QBO dedupes server-side on a stable per-invoice `requestid`. The key must be
+// a PURE function of (realm, invoice): identical across processes/retries, so
+// the second POST is recognised as a duplicate of the first.
+describe("qboBillRequestId", () => {
+  const realm = "9341452000000001";
+  const invoice = "00000000-0000-4000-8000-0000000184a1";
+
+  it("is deterministic — the same (realm, invoice) always yields the same key", () => {
+    expect(qboBillRequestId(realm, invoice)).toBe(qboBillRequestId(realm, invoice));
+  });
+
+  it("differs across invoices in the same company", () => {
+    const other = "00000000-0000-4000-8000-0000000184a2";
+    expect(qboBillRequestId(realm, invoice)).not.toBe(qboBillRequestId(realm, other));
+  });
+
+  it("differs across companies for the same invoice", () => {
+    expect(qboBillRequestId(realm, invoice)).not.toBe(qboBillRequestId("9999", invoice));
+  });
+
+  it("is URL-safe and within QBO's 50-char RequestId limit", () => {
+    const key = qboBillRequestId(realm, invoice);
+    expect(key.length).toBeGreaterThan(0);
+    expect(key.length).toBeLessThanOrEqual(50);
+    expect(key).toMatch(/^[A-Za-z0-9_-]+$/);
   });
 });

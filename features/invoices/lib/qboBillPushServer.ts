@@ -33,14 +33,12 @@ import { getQuickbooksLink, upsertQuickbooksLink } from "./quickbooksLinksServer
 import {
   evaluateBillPush,
   qboBillDeepLink,
+  qboBillRequestId,
   toQboBillRequestBody,
   type BillPushGate,
 } from "./qboBillPush";
 import { attachInvoicePdfToQboBill, type AttachmentResult } from "./qboAttachableServer";
-import {
-  logPushAttempt,
-  updatePushAttempt,
-} from "./qboPushAuditServer";
+import { logPushAttempt, updatePushAttempt } from "./qboPushAuditServer";
 import { isTransientHttpStatus, isPermanentHttpStatus, nextRetryAt } from "./qboPushAudit";
 import type { Invoice, InvoiceLine } from "./types";
 
@@ -94,8 +92,7 @@ async function findQboBillByDocNumber(
 
 /** Typed result from a QBO Bill create attempt (replaces throwing on error). */
 type QboBillCreateResult =
-  | { ok: true; ref: QboBillRef }
-  | { ok: false; httpStatus: number; body: unknown; message: string };
+  { ok: true; ref: QboBillRef } | { ok: false; httpStatus: number; body: unknown; message: string };
 
 /**
  * Create a Bill in the connected QBO company.
@@ -103,15 +100,23 @@ type QboBillCreateResult =
  * Returns a typed result instead of throwing: callers can distinguish
  * transient failures (429/5xx) from permanent ones (4xx) and route them to
  * the correct audit-log outcome (S9).
+ *
+ * `requestId` is a deterministic per-invoice QBO idempotency key (QBO-H1, issue
+ * #184): it rides on the `requestid` query param so QBO dedupes concurrent or
+ * retried create POSTs server-side — two pushes that both raced past the
+ * local-link check collapse to a single Bill rather than two real bills in QB.
  */
-async function createQboBill(
+export async function createQboBill(
   accessToken: string,
   realmId: string,
   environment: QboEnvironment,
-  requestBody: Record<string, unknown>
+  requestBody: Record<string, unknown>,
+  requestId: string
 ): Promise<QboBillCreateResult> {
   const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/bill?minorversion=65`;
+  const url = `${base}/v3/company/${realmId}/bill?minorversion=65&requestid=${encodeURIComponent(
+    requestId
+  )}`;
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -132,7 +137,12 @@ async function createQboBill(
   }
   const created = parseQboCreatedBill(await res.json());
   if (!created) {
-    return { ok: false, httpStatus: 200, body: null, message: "QBO bill create returned no Bill in body" };
+    return {
+      ok: false,
+      httpStatus: 200,
+      body: null,
+      message: "QBO bill create returned no Bill in body",
+    };
   }
   return { ok: true, ref: created };
 }
@@ -371,11 +381,16 @@ export async function pushInvoiceBill(
     }
 
     // 5. Create the Bill (internal underscore-prefixed bookkeeping stripped).
+    //    A deterministic per-invoice RequestId (QBO-H1, issue #184) makes the
+    //    POST idempotent server-side: if a concurrent push raced past the
+    //    local-link check above and POSTed first, QBO returns that same Bill
+    //    here instead of creating a second one.
     const createResult = await createQboBill(
       c.accessToken,
       c.realmId,
       c.environment,
-      requestBody as Record<string, unknown>
+      requestBody as Record<string, unknown>,
+      qboBillRequestId(c.realmId, c.invoice.id)
     );
 
     if (!createResult.ok) {
