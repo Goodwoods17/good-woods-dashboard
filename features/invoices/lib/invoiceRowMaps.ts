@@ -45,6 +45,8 @@ export type InvoiceLineRow = {
   job_id: string | null;
   // Slice 8: QBO expense account code (null until owner assigns it).
   qbo_account: string | null;
+  // QBO S5 (#151): per-line cost kind (material | subtrade). null = material.
+  line_kind: string | null;
   created_at: string;
 };
 
@@ -89,6 +91,8 @@ export function rowToInvoiceLine(row: InvoiceLineRow): InvoiceLine {
     confidence: row.confidence,
     jobId: row.job_id ?? null,
     qboAccount: row.qbo_account ?? null,
+    lineKind:
+      row.line_kind === "subtrade" ? "subtrade" : row.line_kind === "material" ? "material" : null,
     createdAt: row.created_at,
   };
 }

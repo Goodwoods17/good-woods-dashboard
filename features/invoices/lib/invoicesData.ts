@@ -16,7 +16,7 @@ import {
   type InvoiceLineRow,
 } from "./invoiceRowMaps";
 import { buildActualRows, postBlockedReason } from "./postInvoice";
-import type { Invoice, InvoiceLine } from "./types";
+import type { Invoice, InvoiceLine, InvoiceLineKind } from "./types";
 
 /** Material/subtrade actuals ledger (job-costing). No shared const exists yet. */
 const JOB_COST_ACTUALS_TABLE = "job_cost_actuals";
@@ -188,13 +188,18 @@ export async function saveReviewedInvoice(
  * Slice 4: save supplier + line job assignments for a reviewed invoice.
  *
  * Writes `invoices.supplier_id` and each `invoice_lines.job_id` (null = shop
- * stock). Does NOT change the invoice status — the invoice stays `reviewed`
+ * stock) + `invoice_lines.line_kind` (material | subtrade — null = material,
+ * #151). Does NOT change the invoice status — the invoice stays `reviewed`
  * until the owner posts it in slice 5. Updates are fired in parallel for lines.
  */
 export async function saveInvoiceMatch(
   invoiceId: string,
   supplierId: string | null,
-  lineAssignments: Array<{ lineId: string; jobId: string | null }>
+  lineAssignments: Array<{
+    lineId: string;
+    jobId: string | null;
+    lineKind?: InvoiceLineKind | null;
+  }>
 ): Promise<Invoice> {
   const sb = getSupabase();
 
@@ -207,10 +212,10 @@ export async function saveInvoiceMatch(
   if (headerErr) throw headerErr;
 
   await Promise.all(
-    lineAssignments.map(async ({ lineId, jobId }) => {
+    lineAssignments.map(async ({ lineId, jobId, lineKind }) => {
       const { error } = await sb
         .from(INVOICE_LINES_TABLE)
-        .update({ job_id: jobId })
+        .update({ job_id: jobId, line_kind: lineKind ?? null })
         .eq("id", lineId);
       if (error) throw error;
     })

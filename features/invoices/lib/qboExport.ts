@@ -12,6 +12,7 @@
  */
 import type { Invoice, InvoiceLine } from "./types";
 import { resolveVendorRef } from "./quickbooksLinks";
+import { resolveActualKind, type ActualKind } from "./postInvoice";
 
 /** One QBO Bill line (AccountBasedExpenseLineDetail shape). */
 export type QboLineDetail = {
@@ -24,6 +25,13 @@ export type QboLineDetail = {
   taxCodeRef: "TAX" | "NON";
   /** Kept for reference (supplier SKU); not a native QBO field. */
   sku: string | null;
+  /**
+   * Cost kind this line books as: "material" | "subtrade" (#151). The sync
+   * layer picks the subtrade expense account/bucket for subtrade lines so a
+   * sub bill doesn't mis-book as material. Resolved from the line's `lineKind`
+   * tag — an untagged line defaults to material (unchanged behaviour).
+   */
+  kind: ActualKind;
 };
 
 /**
@@ -91,7 +99,7 @@ export function buildQboExport(
   >,
   lines: Pick<
     InvoiceLine,
-    "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount"
+    "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount" | "lineKind"
   >[],
   centralVendorRef?: string | null
 ): QboBillExport {
@@ -116,6 +124,7 @@ export function buildQboExport(
       accountRef: l.qboAccount,
       taxCodeRef: l.taxFlag === true ? "TAX" : "NON",
       sku: l.sku,
+      kind: resolveActualKind(l.lineKind),
     })),
   };
 }

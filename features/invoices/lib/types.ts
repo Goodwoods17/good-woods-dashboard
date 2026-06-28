@@ -75,8 +75,16 @@ export type InvoiceLine = {
   // Slice 8: QBO expense account code (null until owner assigns it). Maps to
   // QBO Bill AccountBasedExpenseLineDetail.AccountRef.value.
   qboAccount: string | null;
+  // QBO S5 (#151): cost kind this line books as. null = material (the default,
+  // so untagged lines keep the historical material behaviour). Drives
+  // job_cost_actuals.kind + the QBO Bill bucket so subtrade bills don't
+  // mis-book as material.
+  lineKind: InvoiceLineKind | null;
   createdAt: string;
 };
+
+/** Cost kind a posted invoice line books as (mirrors job_cost_actuals.kind). */
+export type InvoiceLineKind = "material" | "subtrade";
 
 /**
  * The strict shape the extraction engine (ADR 0019) must return. This is the

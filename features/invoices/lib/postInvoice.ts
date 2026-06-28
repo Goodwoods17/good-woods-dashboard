@@ -10,9 +10,21 @@
  * Re-post guard: only a `reviewed` invoice can be posted; once posted it flips to
  * `posted` and `canPostInvoice` returns false, so the same bill can't double-count.
  */
-import type { Invoice, InvoiceLine } from "./types";
+import type { Invoice, InvoiceLine, InvoiceLineKind } from "./types";
 
 export type ActualKind = "material" | "subtrade";
+
+/**
+ * Resolve a line's stored kind tag to the concrete actual/QBO kind (#151).
+ *
+ * A null/undefined tag (every legacy line, and every line the owner hasn't
+ * explicitly re-tagged) resolves to "material" — the historical default — so
+ * the existing material flow is unchanged. Only an explicit "subtrade" tag
+ * routes the line to the subtrade bucket/account.
+ */
+export function resolveActualKind(kind: InvoiceLineKind | null | undefined): ActualKind {
+  return kind === "subtrade" ? "subtrade" : "material";
+}
 
 /** One job_cost_actuals row a post will write. */
 export type PostableActual = {
@@ -62,12 +74,15 @@ export function allocateLinePst(
  * assigned to a job and carries an amount. Shop-stock lines (null job) and lines
  * with no amount are skipped — they never reach a job's actuals.
  *
- * `kind` defaults to "material" (supplier-bill purchases). Branching to
- * "subtrade" is a later concern; the field exists so callers can extend.
+ * Each row's `kind` comes from the line's own `lineKind` tag (#151): an
+ * untagged line (the historical default) resolves to "material", a tagged line
+ * to "subtrade", so a mixed bill books each line to its own bucket/account.
  */
 export function buildActualRows(
   invoice: Pick<Invoice, "id" | "pst">,
-  lines: Pick<InvoiceLine, "id" | "amount" | "taxFlag" | "jobId">[]
+  lines: Array<
+    Pick<InvoiceLine, "id" | "amount" | "taxFlag" | "jobId"> & { lineKind?: InvoiceLineKind | null }
+  >
 ): PostableActual[] {
   const pstByLine = allocateLinePst(lines, invoice.pst);
   const rows: PostableActual[] = [];
@@ -78,7 +93,7 @@ export function buildActualRows(
     const pstShare = pstByLine[line.id] ?? 0;
     rows.push({
       jobId: line.jobId,
-      kind: "material",
+      kind: resolveActualKind(line.lineKind),
       amount,
       amountWithTax: round2(amount + pstShare),
       sourceInvoiceId: invoice.id,
