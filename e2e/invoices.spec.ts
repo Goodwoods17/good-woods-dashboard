@@ -1458,8 +1458,10 @@ test.describe("invoices QBO S9 — retry-queue drain endpoint", () => {
       headers: { authorization: `Bearer ${cronSecret}` },
     });
 
-    // Flag off (prod) → 404. Flag on + valid cron auth → 200 (even with an empty queue).
-    expect([200, 404]).toContain(res.status);
+    // Flag off (prod) → 404. Flag on + valid cron auth → 200 (even with an empty
+    // queue). CRON_SECRET is absent in CI, so cron auth fails → 401 (matching the
+    // sibling export-qbo/process cron-auth probes earlier in this spec).
+    expect([200, 401, 404]).toContain(res.status);
 
     if (res.status === 200) {
       const body = await res.json();
