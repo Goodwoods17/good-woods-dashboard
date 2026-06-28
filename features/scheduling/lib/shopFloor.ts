@@ -12,6 +12,8 @@
  *     is behind, explaining the downstream consequence. Never blocks the crew.
  */
 
+import { compareToTarget } from "./dateStatus";
+
 /** Whether this phase is ahead of its target, right on it, or overdue. */
 export type PaceStatus = "on_pace" | "due_today" | "behind";
 
@@ -24,9 +26,7 @@ function utcMidnight(isoDate: string): Date {
 
 /** Today's date expressed as a UTC midnight (strips the time component). */
 function todayUTC(today: Date): Date {
-  return new Date(
-    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate())
-  );
+  return new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
 }
 
 const SHORT_WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"] as const;
@@ -53,10 +53,16 @@ export function daysUntil(targetDate: string, today: Date): number {
  * past it (behind)?
  */
 export function phaseTargetPaceStatus(targetDate: string, today: Date): PaceStatus {
-  const days = daysUntil(targetDate, today);
-  if (days < 0) return "behind";
-  if (days === 0) return "due_today";
-  return "on_pace";
+  // Same UTC day-granularity comparison as `daysUntil`'s sign: past day →
+  // behind, same day → due_today, future day → on_pace.
+  switch (compareToTarget(targetDate, today)) {
+    case "past":
+      return "behind";
+    case "due":
+      return "due_today";
+    default:
+      return "on_pace";
+  }
 }
 
 // ── 3. Human-readable label ────────────────────────────────────────────────

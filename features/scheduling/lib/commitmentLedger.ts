@@ -21,6 +21,7 @@
 
 import { type MilestoneStage, type Job, type CommitmentOwner } from "@shared/lib/types";
 import { PHASE_LIST, phaseIndex, internalPhaseLabel } from "./phases";
+import { compareToTarget } from "./dateStatus";
 
 export type { CommitmentOwner };
 
@@ -94,8 +95,10 @@ function deriveStatus(
   todayISO: string
 ): CommitmentStatus {
   if (isComplete) return "kept";
-  if (committedDate < todayISO) return "missed";
-  return "open";
+  // A committed day fully behind today is missed; today-or-later stays open.
+  // Equivalent to the prior `committedDate < todayISO` string compare (both are
+  // UTC `YYYY-MM-DD`, so string order is calendar-day order).
+  return compareToTarget(committedDate, todayISO) === "past" ? "missed" : "open";
 }
 
 /**
