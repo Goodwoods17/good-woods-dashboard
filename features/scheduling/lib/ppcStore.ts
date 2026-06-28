@@ -37,6 +37,9 @@ type RevisionRow = {
 
 async function loadLedgerEntries(): Promise<ScorecardLedgerEntry[]> {
   if (!hasSupabase()) return [];
+  // Intentional: the ledger/revision summaries are readable by any authenticated
+  // user (RLS authenticated_all), so the browser/authenticated client from
+  // getSupabase() is the correct seam here — no service-role access needed.
   const { data, error } = await getSupabase()
     .from(COMMITMENT_LEDGER_TABLE)
     .select("level, status, missed");
@@ -81,10 +84,7 @@ export function useScorecardData(): UseScorecardData {
     async function load() {
       setLoading(true);
       try {
-        const [ledger, revisions] = await Promise.all([
-          loadLedgerEntries(),
-          loadRevisionEntries(),
-        ]);
+        const [ledger, revisions] = await Promise.all([loadLedgerEntries(), loadRevisionEntries()]);
         if (!cancelled) {
           setScorecard(buildReliabilityScorecard(ledger, revisions));
         }
