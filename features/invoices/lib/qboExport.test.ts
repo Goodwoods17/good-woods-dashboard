@@ -148,16 +148,12 @@ describe("buildQboExport — lines", () => {
   });
 
   it("maps null taxFlag to NON (absence of PST flag = non-taxable)", () => {
-    const result = buildQboExport(baseInvoice, [
-      { ...baseLine, taxFlag: null },
-    ]);
+    const result = buildQboExport(baseInvoice, [{ ...baseLine, taxFlag: null }]);
     expect(result.lines[0].taxCodeRef).toBe("NON");
   });
 
   it("maps null qboAccount through (not yet assigned)", () => {
-    const result = buildQboExport(baseInvoice, [
-      { ...baseLine, qboAccount: null },
-    ]);
+    const result = buildQboExport(baseInvoice, [{ ...baseLine, qboAccount: null }]);
     expect(result.lines[0].accountRef).toBeNull();
   });
 
@@ -207,5 +203,17 @@ describe("QboBillExport shape completeness", () => {
     expect("accountRef" in line).toBe(true);
     expect("taxCodeRef" in line).toBe(true);
     expect("sku" in line).toBe(true);
+  });
+
+  // QBO S2 (issue #148): the central quickbooks_links mapping is the source of
+  // truth for VendorRef; the legacy embedded column is back-compat fallback.
+  it("central quickbooks_links vendor ref WINS over the embedded qbo_vendor_id", () => {
+    const result = buildQboExport(baseInvoice, [baseLine], "qbo-central-7");
+    expect(result.vendorRef).toBe("qbo-central-7");
+  });
+
+  it("falls back to the embedded qbo_vendor_id when no central link is given", () => {
+    expect(buildQboExport(baseInvoice, [baseLine]).vendorRef).toBe("qbo-vendor-99");
+    expect(buildQboExport(baseInvoice, [baseLine], null).vendorRef).toBe("qbo-vendor-99");
   });
 });

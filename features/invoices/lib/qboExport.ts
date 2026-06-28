@@ -11,6 +11,7 @@
  * (never collapsed — ADR 0019) and map to TxnTaxDetail.totalTax.
  */
 import type { Invoice, InvoiceLine } from "./types";
+import { resolveVendorRef } from "./quickbooksLinks";
 
 /** One QBO Bill line (AccountBasedExpenseLineDetail shape). */
 export type QboLineDetail = {
@@ -36,11 +37,11 @@ export type QboBillExport = {
   invoiceId: string;
   invoiceStatus: string;
   // QBO Bill VendorRef.
-  vendorRef: string | null;   // invoice.qboVendorId → VendorRef.value
-  vendorName: string | null;  // invoice.supplier    → VendorRef.name (display)
+  vendorRef: string | null; // invoice.qboVendorId → VendorRef.value
+  vendorName: string | null; // invoice.supplier    → VendorRef.name (display)
   // QBO Bill header fields.
-  docNumber: string | null;   // invoice.invoiceNumber
-  txnDate: string | null;     // invoice.issueDate
+  docNumber: string | null; // invoice.invoiceNumber
+  txnDate: string | null; // invoice.issueDate
   dueDate: string | null;
   privateNote: string | null; // invoice.poRef
   // Amounts (CAD). Taxes are NEVER collapsed (ADR 0019).
@@ -65,6 +66,12 @@ function addNullable(a: number | null, b: number | null): number | null {
  *
  * This is the pure, testable core that a future QBO sync task will call.
  * No I/O — callers supply the already-loaded invoice + lines.
+ *
+ * VendorRef source of truth (ADR 0021): when a central `quickbooks_links`
+ * mapping exists for this invoice's supplier, pass its qbo_id as
+ * `centralVendorRef` — it WINS over the legacy embedded `invoice.qboVendorId`
+ * (slice 8). Omit it and the export falls back to the embedded column, so every
+ * existing caller keeps working unchanged.
  */
 export function buildQboExport(
   invoice: Pick<
@@ -85,12 +92,13 @@ export function buildQboExport(
   lines: Pick<
     InvoiceLine,
     "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount"
-  >[]
+  >[],
+  centralVendorRef?: string | null
 ): QboBillExport {
   return {
     invoiceId: invoice.id,
     invoiceStatus: invoice.status,
-    vendorRef: invoice.qboVendorId,
+    vendorRef: resolveVendorRef(centralVendorRef, invoice.qboVendorId),
     vendorName: invoice.supplier,
     docNumber: invoice.invoiceNumber,
     txnDate: invoice.issueDate,
