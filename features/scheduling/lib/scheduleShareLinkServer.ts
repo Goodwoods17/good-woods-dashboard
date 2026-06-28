@@ -1,5 +1,6 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { JOBS_TABLE, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
+import { getServiceRoleClient } from "@shared/lib/serviceClient";
+import { loadCapabilityRow } from "@shared/lib/capabilityLink";
 import type { MilestoneStage } from "@shared/lib/types";
 import { rowToScheduleShareLink, type ScheduleShareLinkRow } from "./scheduleShareLinksRowMap";
 import { buildClientScheduleView, type ClientScheduleView } from "./clientPortal";
@@ -17,24 +18,6 @@ import type { PhaseTargetDates } from "./schedule";
  * job display name — the buffer, internal targets, and fever data never leave
  * the server.
  */
-
-let serviceClient: SupabaseClient | null = null;
-
-function getServiceClient(): SupabaseClient | null {
-  if (serviceClient) return serviceClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  serviceClient = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: {
-      // The committed date can move between visits (a re-commit). These reads
-      // must be live, so opt out of Next.js' fetch Data Cache (force-cache).
-      fetch: (input, init) => fetch(input, { ...init, cache: "no-store" }),
-    },
-  });
-  return serviceClient;
-}
 
 type JobScheduleRow = {
   name: string | null;
@@ -76,19 +59,17 @@ export async function loadScheduleShareLink(
   options: LoadScheduleShareLinkOptions = {}
 ): Promise<ClientScheduleLoadResult> {
   const { stampView = true } = options;
-  const sb = getServiceClient();
+  const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  const { data: linkRow, error: linkErr } = await sb
-    .from(SCHEDULE_SHARE_LINKS_TABLE)
-    .select("*")
-    .eq("token", token)
-    .maybeSingle();
-  if (linkErr) throw linkErr;
-  if (!linkRow) return { ok: false, reason: "not_found" };
+  // Select-by-token → revoked check → stamp viewed_at on first view (unless the
+  // ICS feed passed stampView:false so background polls don't masquerade as a visit).
+  const res = await loadCapabilityRow<ScheduleShareLinkRow>(sb, SCHEDULE_SHARE_LINKS_TABLE, token, {
+    stampView,
+  });
+  if (!res.ok) return { ok: false, reason: res.reason };
 
-  const link = rowToScheduleShareLink(linkRow as ScheduleShareLinkRow);
-  if (link.revokedAt !== null) return { ok: false, reason: "revoked" };
+  const link = rowToScheduleShareLink(res.row);
 
   const { data: jobRow, error: jobErr } = await sb
     .from(JOBS_TABLE)
@@ -99,14 +80,6 @@ export async function loadScheduleShareLink(
   if (!jobRow) return { ok: false, reason: "not_found" };
 
   const job = jobRow as JobScheduleRow;
-
-  // First view stamps viewed_at (best-effort; don't fail the load on a write error).
-  if (stampView && link.viewedAt === null) {
-    await sb
-      .from(SCHEDULE_SHARE_LINKS_TABLE)
-      .update({ viewed_at: new Date().toISOString() })
-      .eq("id", link.id);
-  }
 
   const view = buildClientScheduleView({
     currentMilestone: job.current_milestone,
