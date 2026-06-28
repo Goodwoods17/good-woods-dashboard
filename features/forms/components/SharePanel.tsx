@@ -22,9 +22,10 @@ import type {
   RecipientType,
 } from "@shared/lib/types";
 import { useFormInstances } from "../lib/formInstancesStore";
-import { shareLinkStatus, shareLinkStatusLabel } from "../lib/shareLinkStatus";
-import { shareLinkTracking } from "../lib/shareLinkTracking";
+import { answerableFields } from "../lib/fieldRegistry";
+import { shareLinkStatus, shareLinkStatusLabel, shareLinkTracking } from "../lib/shareLinkTracking";
 import { canSendReminder, isValidEmail } from "../lib/sendShareLink";
+import { FormsErrorBanner } from "./FormsErrorBanner";
 
 // Owner-only date formatter for the recipient-tracking lines (sent / opened).
 // Short + with the time, so "Jun 23, 2026, 9:41 AM" reads at a glance.
@@ -88,6 +89,9 @@ function ShareLinkRow({
   const [sending, setSending] = useState(false);
   // Owner-facing send feedback: null = idle, otherwise a short status message.
   const [sendNote, setSendNote] = useState<string | null>(null);
+  // Row-level error affordance for genuine failures (QR build, real send failure)
+  // that previously degraded silently. Null = no error.
+  const [rowError, setRowError] = useState<string | null>(null);
 
   const status = shareLinkStatus(link);
   const tracking = shareLinkTracking(link);
@@ -128,6 +132,7 @@ function ShareLinkRow({
     }
     setSending(true);
     setSendNote(null);
+    setRowError(null);
     try {
       const res = await fetch(`/api/forms/share-links/${link.id}/send`, {
         method: "POST",
@@ -150,7 +155,9 @@ function ShareLinkRow({
         setSendNote("Enter a valid email");
         return;
       }
-      setSendNote("Send failed — try copy/email instead");
+      // A real Resend/network failure (reason: "send_failed") — surface it loudly
+      // rather than degrade silently. The owner can still copy or use the mailto draft.
+      setRowError("Couldn't send the email. Try copy or the email draft instead.");
     } catch {
       // Network failure: degrade to the mailto draft rather than dead-end.
       handleMailDraft();
@@ -167,12 +174,18 @@ function ShareLinkRow({
   }
 
   async function handleQr() {
-    if (!qrUrl) {
-      const url = await buildQrDataUrl(shareUrl);
-      setQrUrl(url);
+    try {
+      if (!qrUrl) {
+        const url = await buildQrDataUrl(shareUrl);
+        setQrUrl(url);
+      }
+      setShowQr((v) => !v);
+      setRowError(null);
+      onStampSent();
+    } catch {
+      // QR generation failed — tell the owner instead of rendering nothing.
+      setRowError("Couldn't generate the QR code.");
     }
-    setShowQr((v) => !v);
-    onStampSent();
   }
 
   async function handleRevoke() {
@@ -201,10 +214,9 @@ function ShareLinkRow({
     const nextSectionIdx = instanceFields.findIndex(
       (f, i) => i > sectionIdx && f.type === "section"
     );
-    const childIds = instanceFields
-      .slice(sectionIdx + 1, nextSectionIdx === -1 ? undefined : nextSectionIdx)
-      .filter((f) => f.type !== "section")
-      .map((f) => f.id);
+    const childIds = answerableFields(
+      instanceFields.slice(sectionIdx + 1, nextSectionIdx === -1 ? undefined : nextSectionIdx)
+    ).map((f) => f.id);
 
     const current = new Set(link.lockedFieldIds);
     const allLocked = [sectionId, ...childIds].every((id) => current.has(id));
@@ -338,6 +350,16 @@ function ShareLinkRow({
           </div>
         )}
       </div>
+
+      {rowError && (
+        <div className="mt-2">
+          <FormsErrorBanner
+            message={rowError}
+            onDismiss={() => setRowError(null)}
+            testId="share-link-error"
+          />
+        </div>
+      )}
 
       {/* QR code panel */}
       {showQr && qrUrl && (
@@ -556,6 +578,8 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Panel-level error for create/revoke failures that previously failed silently.
+  const [panelError, setPanelError] = useState<string | null>(null);
 
   const links = shareLinksForInstance(instance.id);
   const instanceFields = fieldsForInstance(instance.id);
@@ -563,6 +587,7 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
   const handleAdd = useCallback(
     async (name: string, type: RecipientType) => {
       setBusy(true);
+      setPanelError(null);
       try {
         await createShareLink({
           instanceId: instance.id,
@@ -571,7 +596,7 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
         });
         setAdding(false);
       } catch {
-        /* error surfaces via the store */
+        setPanelError("Couldn't create the share link. Please try again.");
       } finally {
         setBusy(false);
       }
@@ -581,7 +606,12 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
 
   const handleRevoke = useCallback(
     async (linkId: string) => {
-      await revokeShareLink(linkId);
+      setPanelError(null);
+      try {
+        await revokeShareLink(linkId);
+      } catch {
+        setPanelError("Couldn't revoke the link. Please try again.");
+      }
     },
     [revokeShareLink]
   );
@@ -619,6 +649,14 @@ export function SharePanel({ instance }: { instance: FormInstance }) {
 
       {open && (
         <div className="mt-2 space-y-2" data-testid="share-panel">
+          {panelError && (
+            <FormsErrorBanner
+              message={panelError}
+              onDismiss={() => setPanelError(null)}
+              testId="share-panel-error"
+            />
+          )}
+
           {links.length === 0 && !adding && (
             <p className="text-xs text-text-tertiary">
               No links yet — add a recipient to get started.

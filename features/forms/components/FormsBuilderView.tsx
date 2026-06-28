@@ -5,11 +5,13 @@ import { ClipboardList, Plus, Pencil, Trash2, ChevronDown, ChevronRight, Lock } 
 import type { FormPhase, FormTemplate } from "@shared/lib/types";
 import { useFormTemplates } from "../lib/formTemplatesStore";
 import { useFormInstances } from "../lib/formInstancesStore";
+import { answerableFields } from "../lib/fieldRegistry";
 import { formPhaseLabel } from "../lib/phase";
 import { TemplateEditor } from "./TemplateEditor";
 import { FormFillSurface } from "./FormFillSurface";
 import { FormCompletionBar } from "./FormCompletionBar";
 import { SharePanel } from "./SharePanel";
+import { FormsErrorBanner } from "./FormsErrorBanner";
 
 /**
  * /forms — template library + template CRUD (slice 2) + standalone form
@@ -24,14 +26,20 @@ export function FormsBuilderView() {
     createTemplate,
     updateTemplate,
     deleteTemplate,
+    error: tplError,
   } = useFormTemplates();
   const {
     standaloneInstances,
     attachTemplate,
     loading: insLoading,
+    error: insError,
   } = useFormInstances();
 
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Surface a swallowed provider error (load / create / delete). Dismissible.
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const storeError = tplError ?? insError;
+  const visibleError = storeError && storeError !== dismissedError ? storeError : null;
   const [creatingNew, setCreatingNew] = useState(false);
   const [expandedInstanceId, setExpandedInstanceId] = useState<string | null>(null);
 
@@ -139,6 +147,10 @@ export function FormsBuilderView() {
         </button>
       </header>
 
+      {visibleError && (
+        <FormsErrorBanner message={visibleError} onDismiss={() => setDismissedError(storeError)} />
+      )}
+
       {/* New template quick-create form */}
       {creatingNew && (
         <div className="mb-6 rounded-lg border border-border bg-surface p-4 space-y-3">
@@ -200,7 +212,9 @@ export function FormsBuilderView() {
         <div className="rounded-lg border border-dashed border-border p-8 text-center mb-6">
           <ClipboardList className="mx-auto mb-3 h-6 w-6 text-text-tertiary" strokeWidth={1.5} />
           <p className="text-sm text-text-secondary">No form templates yet.</p>
-          <p className="mt-1 text-xs text-text-tertiary">Click &ldquo;New template&rdquo; to get started.</p>
+          <p className="mt-1 text-xs text-text-tertiary">
+            Click &ldquo;New template&rdquo; to get started.
+          </p>
         </div>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 mb-6">
@@ -208,7 +222,7 @@ export function FormsBuilderView() {
             <TemplateCard
               key={t.id}
               template={t}
-              fieldCount={fieldsForTemplate(t.id).filter((f) => f.type !== "section").length}
+              fieldCount={answerableFields(fieldsForTemplate(t.id)).length}
               onEdit={() => setEditingId(t.id)}
               onDelete={() => handleDeleteTemplate(t.id)}
               onToggleActive={() => updateTemplate(t.id, { active: false })}
@@ -229,7 +243,7 @@ export function FormsBuilderView() {
               <TemplateCard
                 key={t.id}
                 template={t}
-                fieldCount={fieldsForTemplate(t.id).filter((f) => f.type !== "section").length}
+                fieldCount={answerableFields(fieldsForTemplate(t.id)).length}
                 onEdit={() => setEditingId(t.id)}
                 onDelete={() => handleDeleteTemplate(t.id)}
                 onToggleActive={() => updateTemplate(t.id, { active: true })}

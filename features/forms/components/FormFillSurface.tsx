@@ -3,7 +3,12 @@
 import { useState } from "react";
 import { Plus, Settings2, Trash2, X, Check } from "lucide-react";
 import type { FieldType, FormInstance, FormInstanceField } from "@shared/lib/types";
-import { getFieldEntry, FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
+import {
+  getFieldEntry,
+  FIELD_REGISTRY,
+  IMPLEMENTED_TYPES,
+  isFieldRequired,
+} from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import { useFormInstances } from "../lib/formInstancesStore";
 import { isFieldVisible } from "../lib/conditionals";
@@ -138,7 +143,7 @@ function FieldRow({
 }) {
   const entry = getFieldEntry(field.type);
   const Control = getFillControl(field.type);
-  const isRequired = (field.config as Record<string, unknown>)?.required === true;
+  const isRequired = isFieldRequired(field);
 
   return (
     <div className="group flex items-start gap-1">
@@ -147,11 +152,7 @@ function FieldRow({
           <div className="relative">
             <Control field={field} onChange={onChange} disabled={readOnly} />
             {isRequired && !entry.isLayout && (
-              <span
-                className="ml-0.5 text-accent"
-                aria-label="required"
-                title="Required"
-              >
+              <span className="ml-0.5 text-accent" aria-label="required" title="Required">
                 *
               </span>
             )}
@@ -217,7 +218,7 @@ function FieldDefEditor({
         value={type}
         onChange={(e) => setType(e.target.value as FieldType)}
       >
-        {FIELD_TYPES.filter((t) => FIELD_REGISTRY[t].implemented).map((t) => (
+        {IMPLEMENTED_TYPES.map((t) => (
           <option key={t} value={t}>
             {FIELD_REGISTRY[t].label}
           </option>
@@ -317,7 +318,7 @@ function AddFieldPanel({
         value={type}
         onChange={(e) => setType(e.target.value as FieldType)}
       >
-        {FIELD_TYPES.filter((t) => FIELD_REGISTRY[t].implemented).map((t) => (
+        {IMPLEMENTED_TYPES.map((t) => (
           <option key={t} value={t}>
             {FIELD_REGISTRY[t].label}
           </option>

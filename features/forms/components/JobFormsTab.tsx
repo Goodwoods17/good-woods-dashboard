@@ -11,6 +11,7 @@ import { formPhaseLabel } from "../lib/phase";
 import { FormFillSurface } from "./FormFillSurface";
 import { FormCompletionBar } from "./FormCompletionBar";
 import { SharePanel } from "./SharePanel";
+import { FormsErrorBanner } from "./FormsErrorBanner";
 
 const PHASE_ORDER: (FormPhase | null)[] = [
   "design",
@@ -28,15 +29,21 @@ const PHASE_ORDER: (FormPhase | null)[] = [
  * standalone forms + lock/PDF land in later slices.
  */
 export function JobFormsTab({ jobId }: { jobId: string }) {
-  const { templates, fieldsForTemplate, loading: tplLoading } = useFormTemplates();
+  const { templates, fieldsForTemplate, loading: tplLoading, error: tplError } = useFormTemplates();
   const {
     instancesForJob,
     attachTemplate,
     deleteInstance,
     loading: insLoading,
+    error: insError,
   } = useFormInstances();
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Surface a swallowed provider error (load / attach / delete). Dismissible:
+  // hidden once the owner closes it, re-shown if a different error arrives.
+  const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const storeError = insError ?? tplError;
+  const visibleError = storeError && storeError !== dismissedError ? storeError : null;
   const job = useJob(jobId);
   // Job id === projectId for pieces (drawings feature uses job.id as projectId).
   const pieces = useProjectPieces(jobId);
@@ -59,7 +66,13 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
     try {
       // Pass the job + pieces so that fields with config.prefillFrom are
       // pre-filled at snapshot time (Forms P3 Slice 3, issue #68).
-      await attachTemplate(template, fieldsForTemplate(templateId), jobId, job ?? undefined, pieces);
+      await attachTemplate(
+        template,
+        fieldsForTemplate(templateId),
+        jobId,
+        job ?? undefined,
+        pieces
+      );
       setPicking(false);
     } catch {
       /* error surfaces via the store */
@@ -75,6 +88,9 @@ export function JobFormsTab({ jobId }: { jobId: string }) {
 
   return (
     <div className="max-w-2xl">
+      {visibleError && (
+        <FormsErrorBanner message={visibleError} onDismiss={() => setDismissedError(storeError)} />
+      )}
       <div className="mb-4 flex items-center justify-between">
         <h2 className="font-serif text-lg text-text-primary">Forms</h2>
         <button
