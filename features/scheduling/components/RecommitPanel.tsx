@@ -7,18 +7,13 @@ import { formatDate } from "@shared/lib/format";
 import { useAuth } from "@shared/lib/authStore";
 import { MILESTONE_STAGES } from "@shared/lib/types";
 import type { Job } from "@shared/lib/types";
-import {
-  computeBufferBurn,
-  chainCompletionPct,
-  feverZone,
-  type FeverZone,
-} from "../lib/bufferBurn";
+import { chainCompletionPct, type FeverZone } from "../lib/bufferBurn";
+import { bufferState, changeOrderImpact } from "../lib/buffer";
 import {
   RECOMMIT_REASON_CODES,
   reasonCodeMeta,
   dingsReliability,
   recommitRecoveryGate,
-  changeOrderImpact,
   pushCommittedDate,
   buildCommitmentRevision,
   draftRecommitEmail,
@@ -78,9 +73,8 @@ export function RecommitPanel({
   const milestoneIndex = MILESTONE_STAGES.findIndex((s) => s.key === job.currentMilestone);
   const zone: FeverZone = useMemo(() => {
     if (!job.internalTargetDate) return "green";
-    const burn = computeBufferBurn(job.internalTargetDate, job.installDate, new Date());
     const chainPct = chainCompletionPct({ currentMilestoneIndex: Math.max(0, milestoneIndex) });
-    return feverZone(burn.bufferConsumedPct, chainPct);
+    return bufferState(job.internalTargetDate, job.installDate, new Date(), chainPct).zone;
   }, [job.internalTargetDate, job.installDate, milestoneIndex]);
 
   const gate = recommitRecoveryGate(zone);

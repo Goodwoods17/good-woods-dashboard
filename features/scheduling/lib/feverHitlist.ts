@@ -1,5 +1,6 @@
 import { type Job } from "@shared/lib/types";
-import { computeBufferBurn, chainCompletionPct, feverZone, type FeverZone } from "./bufferBurn";
+import { chainCompletionPct, type FeverZone } from "./bufferBurn";
+import { bufferState } from "./buffer";
 import { phaseIndex } from "./phases";
 
 /**
@@ -97,18 +98,16 @@ export function buildFeverHitlist(
     const currentMilestoneIndex = milestoneIndex < 0 ? 0 : milestoneIndex;
     const chainPct = chainCompletionPct({ currentMilestoneIndex });
 
-    // Buffer burn: total pool from internalTargetDate → installDate.
-    const burn = computeBufferBurn(internalTarget, job.installDate, today);
-
-    // Fever zone: where on the 2D chart this job sits.
-    const zone = feverZone(burn.bufferConsumedPct, chainPct);
+    // CONSUME + ZONE in one facade call: buffer burn (internalTargetDate →
+    // installDate) classified against chain progress on the fever chart.
+    const state = bufferState(internalTarget, job.installDate, today, chainPct);
 
     scheduled.push({
       job,
-      zone,
+      zone: state.zone,
       chainCompletionPct: chainPct,
-      bufferConsumedPct: burn.bufferConsumedPct,
-      remainingBufferDays: burn.remainingBufferDays,
+      bufferConsumedPct: state.consumedPct,
+      remainingBufferDays: state.remainingDays,
       committedDate: job.installDate,
     });
   }

@@ -10,6 +10,7 @@ import {
   shouldAutoRaiseMissedBlocker,
   type SubtradeReliabilityRecord,
 } from "./tradeDates";
+import { ownerReliabilityBufferDays, type OwnerReliabilityRecord } from "./commitmentLedger";
 import type { JobBlocker } from "@shared/lib/types";
 import type { PhaseTargetDates } from "./schedule";
 
@@ -230,6 +231,96 @@ describe("computeSubReliabilityBufferDays", () => {
     ];
     // Sub A: ceil(1.0 × 3) = 3, Sub B: 0 → total = 3
     expect(computeSubReliabilityBufferDays(records, 3)).toBe(3);
+  });
+});
+
+// ── twin lock: sub-only buffer == general owner buffer ───────────────────────
+// computeSubReliabilityBufferDays is the sub-only special case of
+// ownerReliabilityBufferDays (a sub record IS an owner record with
+// kind "subtrade" and ownerId = subtradeId). This locks them to identical
+// output on a shared fixture so the collapse can never silently drift.
+
+describe("computeSubReliabilityBufferDays == ownerReliabilityBufferDays (twin lock)", () => {
+  const subRecords: SubtradeReliabilityRecord[] = [
+    // Sub A: 1 of 2 missed (50%).
+    {
+      subtradeId: "s1",
+      jobTradeId: "jt1",
+      committedDate: "2026-06-01",
+      actualDoneDate: "2026-06-10",
+      missed: true,
+      recordedAt: "2026-06-10T00:00:00Z",
+    },
+    {
+      subtradeId: "s1",
+      jobTradeId: "jt2",
+      committedDate: "2026-07-01",
+      actualDoneDate: "2026-07-01",
+      missed: false,
+      recordedAt: "2026-07-01T00:00:00Z",
+    },
+    // Sub B: 2 of 3 missed (~67%).
+    {
+      subtradeId: "s2",
+      jobTradeId: "jt3",
+      committedDate: "2026-05-01",
+      actualDoneDate: null,
+      missed: true,
+      recordedAt: "2026-05-05T00:00:00Z",
+    },
+    {
+      subtradeId: "s2",
+      jobTradeId: "jt4",
+      committedDate: "2026-05-15",
+      actualDoneDate: null,
+      missed: true,
+      recordedAt: "2026-05-20T00:00:00Z",
+    },
+    {
+      subtradeId: "s2",
+      jobTradeId: "jt5",
+      committedDate: "2026-06-15",
+      actualDoneDate: "2026-06-15",
+      missed: false,
+      recordedAt: "2026-06-15T00:00:00Z",
+    },
+    // Sub C: perfect — earns nothing.
+    {
+      subtradeId: "s3",
+      jobTradeId: "jt6",
+      committedDate: "2026-06-20",
+      actualDoneDate: "2026-06-19",
+      missed: false,
+      recordedAt: "2026-06-19T00:00:00Z",
+    },
+  ];
+
+  const asOwnerRecords = (recs: SubtradeReliabilityRecord[]): OwnerReliabilityRecord[] =>
+    recs.map((r) => ({
+      ownerKind: "subtrade",
+      ownerId: r.subtradeId,
+      ownerName: r.subtradeId,
+      committedDate: r.committedDate,
+      actualDate: r.actualDoneDate,
+      missed: r.missed,
+    }));
+
+  it("matches on the shared multi-sub fixture (default base)", () => {
+    expect(computeSubReliabilityBufferDays(subRecords)).toBe(
+      ownerReliabilityBufferDays(asOwnerRecords(subRecords))
+    );
+  });
+
+  it("matches across a range of base values", () => {
+    for (const base of [1, 2, 3, 5, 10]) {
+      expect(computeSubReliabilityBufferDays(subRecords, base)).toBe(
+        ownerReliabilityBufferDays(asOwnerRecords(subRecords), base)
+      );
+    }
+  });
+
+  it("matches on the empty set", () => {
+    expect(computeSubReliabilityBufferDays([])).toBe(ownerReliabilityBufferDays([]));
   });
 });
 
