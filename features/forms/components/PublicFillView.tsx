@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, Loader2, Lock } from "lucide-react";
 import type { FormInstance, FormInstanceField } from "@shared/lib/types";
-import { getFieldEntry } from "../lib/fieldRegistry";
+import { getFieldEntry, isFieldRequired } from "../lib/fieldRegistry";
 import { getFillControl } from "../lib/fieldControls";
 import type { ShareAnswerPatch, ShareAnswers } from "../lib/shareLink";
 import { missingVisibleRequiredFields } from "../lib/shareLink";
@@ -59,9 +59,7 @@ export function PublicFillView({
 
     // Soft-warn: collect visible required fields still blank on the OPEN (unlocked)
     // side. We warn but do NOT block — partial saves/resume are intentional.
-    const openWorking = working.map((f) =>
-      locked.has(f.id) ? f : f
-    );
+    const openWorking = working.map((f) => (locked.has(f.id) ? f : f));
     const missing = missingVisibleRequiredFields(openWorking).filter((f) => !locked.has(f.id));
     setWarnFields(missing.map((f) => f.label));
 
@@ -137,7 +135,7 @@ export function PublicFillView({
               const isLocked = locked.has(field.id);
               const entry = getFieldEntry(field.type);
               const Control = getFillControl(field.type);
-              const isRequired = (field.config as Record<string, unknown>)?.required === true;
+              const isRequired = isFieldRequired(field);
               return (
                 <div key={field.id} className="relative">
                   {entry?.implemented && Control ? (
@@ -148,11 +146,7 @@ export function PublicFillView({
                         onChange={(patch) => patchField(field.id, patch)}
                       />
                       {isRequired && !entry.isLayout && !isLocked && (
-                        <span
-                          className="ml-0.5 text-accent"
-                          aria-label="required"
-                          title="Required"
-                        >
+                        <span className="ml-0.5 text-accent" aria-label="required" title="Required">
                           *
                         </span>
                       )}

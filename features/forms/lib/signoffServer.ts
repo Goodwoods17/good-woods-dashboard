@@ -19,6 +19,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { FormInstance, FormInstanceField } from "@shared/lib/types";
 import type { CompanyInfo } from "@features/jobs/lib/invoice";
 import { FORM_PHOTOS_BUCKET } from "./storage";
+import { preResolveImages } from "./signoffImages";
 
 /**
  * Static company identity for the server-rendered signoff PDF branding block.
@@ -58,32 +59,6 @@ async function resolveImageUrlServer(sb: SupabaseClient, storagePath: string): P
   return data.signedUrl;
 }
 
-/**
- * Pre-resolve photo + signature paths to renderable URLs, keyed by field
- * id. Identical to the same helper in `signoff.ts` but resolves via the
- * service-role client instead of the browser client.
- */
-async function resolveImages(
-  fields: FormInstanceField[],
-  resolveUrl: (path: string) => Promise<string>
-): Promise<Record<string, string>> {
-  const media = fields.filter(
-    (f) =>
-      (f.type === "photo" || f.type === "signature") && typeof f.photoUrl === "string" && f.photoUrl
-  );
-  const entries = await Promise.all(
-    media.map(async (f) => {
-      try {
-        const url = await resolveUrl(f.photoUrl as string);
-        return [f.id, url] as const;
-      } catch {
-        return null;
-      }
-    })
-  );
-  return Object.fromEntries(entries.filter((e): e is readonly [string, string] => e !== null));
-}
-
 export type ServerSignoffResult = { buffer: Buffer; storagePath: string };
 
 /**
@@ -115,7 +90,7 @@ export async function generateSignoffPdfServer(
   const { renderToBuffer } = await import("@react-pdf/renderer");
   const { FormSignoffDocument } = await import("@features/forms/components/FormSignoffDocument");
 
-  const resolvedImages = await resolveImages(fields, (path) => resolveImageUrlServer(sb, path));
+  const resolvedImages = await preResolveImages(fields, (path) => resolveImageUrlServer(sb, path));
 
   const buffer = await renderToBuffer(
     FormSignoffDocument({

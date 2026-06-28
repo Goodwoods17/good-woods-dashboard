@@ -33,7 +33,7 @@ import {
   type FormShareLinkRow,
 } from "./formShareLinksRowMap";
 import { generateShareToken } from "./shareLink";
-import { stampSentAt } from "./shareLinkStatus";
+import { stampSentAt } from "./shareLinkTracking";
 import { formatError } from "@shared/lib/formatError";
 import {
   formInstanceFieldToRow,

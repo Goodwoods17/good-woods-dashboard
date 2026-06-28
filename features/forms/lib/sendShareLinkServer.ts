@@ -1,6 +1,6 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { FormInstance, FormShareLink } from "@shared/lib/types";
 import { FORM_INSTANCES_TABLE, FORM_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
+import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { rowToFormShareLink, type FormShareLinkRow } from "./formShareLinksRowMap";
 import { rowToFormInstance, type FormInstanceRow } from "./formInstancesRowMap";
 import { buildShareEmail, resolveFromAddress, type SendMode } from "./sendShareLink";
@@ -18,19 +18,6 @@ import { isShareLinkActive } from "./shareLink";
  * `unconfigured` is the path they exercise. Tests MOCK the Resend send (no real
  * email is ever sent in CI).
  */
-
-let serviceClient: SupabaseClient | null = null;
-
-function getServiceClient(): SupabaseClient | null {
-  if (serviceClient) return serviceClient;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !serviceKey) return null;
-  serviceClient = createClient(url, serviceKey, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  return serviceClient;
-}
 
 /** Indirection so the route handler can mock the actual Resend call in tests. */
 export type EmailDeliverer = (args: {
@@ -92,7 +79,7 @@ export async function sendShareLinkEmail(args: SendShareLinkArgs): Promise<SendS
   // No key → tell the caller to fall back to mailto/copy. Check before any DB work.
   if (!process.env.RESEND_API_KEY) return { ok: false, reason: "unconfigured" };
 
-  const sb = getServiceClient();
+  const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
   const { data: linkRow, error: linkErr } = await sb
