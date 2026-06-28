@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback } from "react";
 import { JOB_ITEM_EVENTS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
+import { useLiveRows } from "@shared/lib/useLiveRows";
 import { rowToJobItemEvent, jobItemEventToInsertRow, type JobItemEventRow } from "./eventRowMap";
 import type { ItemKind, JobItemEvent, JobItemStatus, Visibility } from "./types";
 
@@ -77,95 +78,42 @@ export type UseJobEvents = {
 };
 
 /**
- * Per-job event timeline. Fetches `job_item_events` for a job and subscribes
- * to realtime changes so the owner's timeline stays live without a page reload.
- * Mirrors the same channel + idempotent-merge pattern as `useJobProgress`.
+ * Per-job event timeline. Load + realtime sync run through the shared useLiveRows
+ * module so the owner's timeline stays live without a page reload (INSERT-only —
+ * events are append-only; newest-first prepend).
  */
 export function useJobEvents(jobId: string): UseJobEvents {
-  const [events, setEvents] = useState<JobItemEvent[]>([]);
-  const [loading, setLoading] = useState(true);
-  const eventsRef = useRef<JobItemEvent[]>([]);
-  useEffect(() => {
-    eventsRef.current = events;
-  }, [events]);
+  const live = hasSupabase();
 
-  // Per-instance channel suffix — see useJobProgress: two subscribers to the same
-  // job must not share a Realtime channel name or the second `.on()` throws after
-  // `subscribe()` and blanks the page.
-  const channelKeyRef = useRef<string | null>(null);
-  if (channelKeyRef.current === null) {
-    channelKeyRef.current =
-      typeof crypto !== "undefined" && "randomUUID" in crypto
-        ? crypto.randomUUID()
-        : `r${Math.random().toString(36).slice(2)}`;
-  }
-
-  // Initial load.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!hasSupabase()) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
+  const { rows: events, loading, setRows } = useLiveRows<JobItemEventRow, JobItemEvent>({
+    table: JOB_ITEM_EVENTS_TABLE,
+    live,
+    resubscribeKey: jobId,
+    filter: `job_id=eq.${jobId}`,
+    event: "INSERT",
+    order: "prepend",
+    rowToModel: rowToJobItemEvent,
+    getId: (e) => e.id,
+    load: async () => {
+      if (!live) return [];
       const { data } = await getSupabase()
         .from(JOB_ITEM_EVENTS_TABLE)
         .select("*")
         .eq("job_id", jobId)
         .order("created_at", { ascending: false });
-      if (!cancelled) {
-        if (data) setEvents((data as JobItemEventRow[]).map(rowToJobItemEvent));
-        setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [jobId]);
+      return data ? (data as JobItemEventRow[]).map(rowToJobItemEvent) : [];
+    },
+  });
 
-  // Realtime subscription.
-  useEffect(() => {
-    if (!hasSupabase()) return;
-    const sb = getSupabase();
-    const channel = sb
-      .channel(`job_item_events_${jobId}_${channelKeyRef.current}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: JOB_ITEM_EVENTS_TABLE,
-          filter: `job_id=eq.${jobId}`,
-        },
-        (payload) => {
-          const evt = rowToJobItemEvent(payload.new as JobItemEventRow);
-          setEvents((cur) => {
-            // Prepend (timeline is newest-first). If we somehow receive a
-            // duplicate (our own optimistic write echoing back), skip it.
-            if (cur.some((e) => e.id === evt.id)) return cur;
-            const next = [evt, ...cur];
-            eventsRef.current = next;
-            return next;
-          });
-        }
-      )
-      .subscribe();
-    return () => {
-      sb.removeChannel(channel);
-    };
-  }, [jobId]);
-
-  // Prepend a freshly-inserted event to the local timeline immediately, so the
-  // author sees it without waiting for the Realtime round-trip (which can lag
-  // past a test/UX timeout). Idempotent: the Realtime INSERT echo dedupes by id.
-  const prependEvent = useCallback((evt: JobItemEvent) => {
-    setEvents((cur) => {
-      if (cur.some((e) => e.id === evt.id)) return cur;
-      const next = [evt, ...cur];
-      eventsRef.current = next;
-      return next;
-    });
-  }, []);
+  // Prepend a freshly-inserted event to the timeline immediately, so the author
+  // sees it without waiting for the Realtime round-trip (which can lag past a
+  // test/UX timeout). Idempotent: the Realtime INSERT echo dedupes by id.
+  const prependEvent = useCallback(
+    (evt: JobItemEvent) => {
+      setRows((cur) => (cur.some((e) => e.id === evt.id) ? cur : [evt, ...cur]));
+    },
+    [setRows]
+  );
 
   const addNote = useCallback(
     async ({ itemId, itemKind, note, visibility = "owner" }: AddNoteParams) => {
