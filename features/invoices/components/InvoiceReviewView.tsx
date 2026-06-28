@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowLeft, AlertTriangle, CheckCircle, Info } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { cn } from "@shared/lib/utils";
+import { formatCAD } from "@shared/lib/format";
 import { formatError } from "@shared/lib/formatError";
 import { saveReviewedInvoice, checkDuplicateInvoice } from "../lib/invoicesData";
 import { isLowConfidence, validateMath, type MathError } from "../lib/reviewInvoice";
@@ -122,8 +123,10 @@ export function InvoiceReviewView({
       .then((found) => {
         if (active) setDuplicate(found);
       })
-      .catch(() => {
-        // Silently ignore — duplicate check is advisory only.
+      .catch((e) => {
+        // Advisory check — don't block posting, but surface in logs rather than
+        // swallow: a failed check must not look identical to "no duplicate found".
+        console.warn("[invoices] duplicate check failed:", e);
       })
       .finally(() => {
         if (active) setDupChecking(false);
@@ -508,11 +511,11 @@ function EditField({
 }
 
 function describeMathError(err: MathError): string {
-  const fmt = (n: number) => n.toFixed(2);
+  const diff = (a: number, b: number) => formatCAD(Math.abs(a - b));
   switch (err.kind) {
     case "lines_vs_pretax":
-      return `Lines sum to $${fmt(err.actual)} but pre-tax total is $${fmt(err.expected)} (difference: $${fmt(Math.abs(err.expected - err.actual))})`;
+      return `Lines sum to ${formatCAD(err.actual)} but pre-tax total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
     case "pretax_plus_tax_vs_total":
-      return `Pre-tax + GST + PST = $${fmt(err.actual)} but stated total is $${fmt(err.expected)} (difference: $${fmt(Math.abs(err.expected - err.actual))})`;
+      return `Pre-tax + GST + PST = ${formatCAD(err.actual)} but stated total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
   }
 }

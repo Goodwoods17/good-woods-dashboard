@@ -16,7 +16,6 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractInvoice } from "@features/invoices/lib/engine";
-import { parseExtractedInvoice } from "@features/invoices/lib/extractedInvoice";
 import {
   runSweep,
   type SweepDeps,
@@ -60,7 +59,9 @@ export async function POST(req: Request) {
   const deps: SweepDeps = {
     async fetchPending(): Promise<PendingRow[]> {
       let q = sb.from("invoices").select("id, storage_path, mime").eq("status", "pending");
-      if (invoiceId) q = sb.from("invoices").select("id, storage_path, mime").eq("id", invoiceId);
+      // Keep the status=pending filter even when targeting one id, so re-running
+      // on a reviewed/posted invoice can't silently re-extract and wipe edits.
+      if (invoiceId) q = q.eq("id", invoiceId);
       const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as PendingRow[];
@@ -80,8 +81,8 @@ export async function POST(req: Request) {
       const ext = input.filePath.split(".").pop() || "pdf";
       const localPath = join(tmp, `source.${ext}`);
       await writeFile(localPath, bytes);
-      const raw = await extractInvoice({ filePath: localPath, mime: input.mime });
-      return parseExtractedInvoice(raw);
+      // extractInvoice already validates through parseExtractedInvoice (its trust boundary).
+      return extractInvoice({ filePath: localPath, mime: input.mime });
     },
 
     async writeSuccess(id: string, extracted: ExtractedInvoice): Promise<void> {
