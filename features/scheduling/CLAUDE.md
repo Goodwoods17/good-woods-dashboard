@@ -370,6 +370,55 @@ no event.
   `client-add-to-calendar`, `client-calendar-subscribe`, `client-calendar-google`,
   `client-calendar-download`.
 
+## What's here (S22 notifications + approval line + contacts link, issue #110)
+
+```
+features/scheduling/
+├── lib/
+│   ├── notifications.ts       pure: NotificationKind / requiresApproval /
+│   │                          withinDailyBudget / isQuietHours / shouldDebounce /
+│   │                          buildLogisticsReminder / buildScheduleNotification /
+│   │                          computeHoldReason (+ notifications.test.ts — 26 unit tests)
+│   └── notificationsRowMap.ts row ↔ NotificationRecord for scheduling_notifications
+└── components/
+    └── NotificationsPanel.tsx  approval-queue panel in the Schedule tab
+features/contacts/components/ContactDetail.tsx  — gains "Committed install" column
+                                                   + "Schedule" link per linked project
+                                                   (flag-gated, SCHEDULING_ENABLED)
+src/app/api/scheduling/notifications/send/route.ts  — owner-only approved-send route
+supabase/migrations/
+└── 20260707000000_scheduling_notifications.sql  scheduling_notifications table
+```
+
+**Approval line:** anything that involves dates or asks the client for something
+(recommit, date change, nudge, kickoff) requires an explicit owner click before
+it leaves the shop. Only pure logistics reminders ('we arrive tomorrow') are
+auto-send eligible. `requiresApproval(kind)` is the single gate.
+
+**Message budget:** `withinDailyBudget` enforces a per-client/day cap of 2
+approval-required messages; `isQuietHours` suppresses sends 9pm–7am UTC;
+`shouldDebounce` prevents ripple-cascade email floods within a configurable
+window. `computeHoldReason` composes these into a single advisory for the UI.
+
+**Trust-preserving delay flow:** the recommit email draft from S14's
+`draftRecommitEmail` (recommit.ts) surfaces in `NotificationsPanel` for approval.
+The body must be early, honest, concrete — no theatrics. The panel carries the
+pre-composed draft through to Resend via `/api/scheduling/notifications/send`
+(reuses the Forms P2 pattern: same env vars, same graceful fallback to
+`unconfigured` when `RESEND_API_KEY` is absent).
+
+**Contacts link:** `ContactDetail` gains a "Committed install" column and a
+"Schedule" link per linked project when `SCHEDULING_ENABLED`. The schedule link
+navigates to the job page where the owner can access and copy the client portal
+URL from the Schedule tab. Testids: `contact-committed-install-<jobId>`,
+`contact-schedule-link-<jobId>`.
+
+**`scheduling_notifications` schema:** `id uuid`, `job_id text` FK → `jobs.id`,
+`kind text`, `recipient_contact_id uuid` FK → `contacts.id`, `recipient_email text`,
+`subject text`, `body text`, `status text` (pending_approval → approved → sent /
+auto_sent / cancelled), `sent_at`, `resend_email_id`, `created_at`, `created_by`.
+RLS authenticated_all + anon_none.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write

@@ -21,7 +21,10 @@ function formatLastTouched(iso: string | null | undefined): string {
 
 export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
   return (
-    <div className="bg-white rounded-xl shadow-resting overflow-hidden">
+    <div
+      data-testid="contacts-list"
+      className="bg-white rounded-xl shadow-resting overflow-hidden"
+    >
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-surface-muted">

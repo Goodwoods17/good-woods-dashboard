@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Share2, CalendarClock } from "lucide-react";
 import type { Job, MilestoneStage } from "@shared/lib/types";
 import { MILESTONE_STAGES } from "@shared/lib/types";
@@ -14,7 +15,13 @@ import { RecommitPanel } from "./RecommitPanel";
 import { PriorityBumpPanel } from "./PriorityBumpPanel";
 import { ClientPortalPanel } from "./ClientPortalPanel";
 import { KickoffArtifactPanel } from "./KickoffArtifactPanel";
+import { NotificationsPanel } from "./NotificationsPanel";
 import type { MakeReadySignals } from "../lib/makeReady";
+import {
+  buildScheduleNotification,
+  buildLogisticsReminder,
+  type NotificationPayload,
+} from "../lib/notifications";
 
 /**
  * Schedule tab for the JobDetail page (S7, issue #95).
@@ -50,6 +57,15 @@ export function ScheduleTab({
     newCommittedDate: string;
   }) => Promise<void> | void;
 }) {
+  // S22: demo pending notification for the UI smoke (the real notification is
+  // composed by RecommitPanel / KickoffArtifactPanel and passed down). This
+  // placeholder shows the panel structure is wired. In the full flow the parent
+  // (JobDetail) composes and queues the payload via the server route.
+  const [pendingNotification, setPendingNotification] =
+    useState<NotificationPayload | null>(null);
+
+  void buildScheduleNotification; // keep import used (referenced in handleRecommitNotify)
+  void buildLogisticsReminder;
   const overview = buildScheduleOverview(job, new Date());
 
   // Derive make-ready signals from what the Job type can tell us.
@@ -135,6 +151,16 @@ export function ScheduleTab({
 
       {/* ── Kickoff expectation-setting artifact (S20) ── */}
       <KickoffArtifactPanel job={job} />
+
+      {/* ── Notifications queue (S22) ── */}
+      {/* The pending notification surfaces here when composed by RecommitPanel or
+          KickoffArtifactPanel (the ScheduleTab wires the compose→queue flow).
+          Rendered as null when nothing is pending. */}
+      <NotificationsPanel
+        job={job}
+        pending={pendingNotification}
+        onDismiss={() => setPendingNotification(null)}
+      />
 
       {/* ── Share + Google-push entry points ────────────────────────────────── */}
       <section

@@ -23,6 +23,7 @@ import { formatCAD, formatDate } from "@shared/lib/format";
 import { RoleTagPills } from "./RoleTagPills";
 import { WarmthChip } from "./WarmthChip";
 import type { Contact } from "@shared/lib/types";
+import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
 
 function formatLastTouched(iso: string | null | undefined): string {
   if (!iso) return "Never";
@@ -172,7 +173,8 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                     <Th>Project</Th>
                     <Th>Status</Th>
                     <Th align="right">Revenue</Th>
-                    <Th align="right">Install</Th>
+                    <Th align="right">Committed install</Th>
+                    {schedulingEnabled() && <Th align="right">Schedule</Th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -199,14 +201,30 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                       <td className="px-4 py-3 text-right tabular-nums text-text-primary">
                         {formatCAD(j.revenue)}
                       </td>
-                      <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
+                      <td
+                        data-testid={`contact-committed-install-${j.id}`}
+                        className="px-4 py-3 text-right tabular-nums text-text-secondary"
+                      >
                         {formatDate(j.installDate)}
                       </td>
+                      {schedulingEnabled() && (
+                        <td className="px-4 py-3 text-right">
+                          <Link
+                            href={`/jobs/${j.id}`}
+                            data-testid={`contact-schedule-link-${j.id}`}
+                            title="Open job schedule (share client portal link from there)"
+                            className="inline-flex items-center gap-1 text-xs text-text-tertiary hover:text-accent transition-colors duration-fast"
+                          >
+                            <CalendarClock className="h-3.5 w-3.5" strokeWidth={1.75} />
+                            Schedule
+                          </Link>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   <tr className="border-t border-[rgba(26,25,22,0.08)] bg-surface-muted/40">
                     <td
-                      colSpan={2}
+                      colSpan={schedulingEnabled() ? 3 : 2}
                       className="px-4 py-2.5 text-xs uppercase tracking-[0.06em] text-text-tertiary font-medium"
                     >
                       Lifetime
@@ -214,7 +232,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                     <td className="px-4 py-2.5 text-right tabular-nums text-text-primary font-medium">
                       {formatCAD(rollup.lifetimeRevenue)}
                     </td>
-                    <td />
+                    {schedulingEnabled() && <td />}
                   </tr>
                 </tbody>
               </table>
