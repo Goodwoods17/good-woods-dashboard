@@ -713,6 +713,94 @@ test.describe("invoices slice 8 — QBO export stub", () => {
 });
 
 // ---------------------------------------------------------------------------
+// QBO-H3 (#186) — tax correctness: the exported Bill is AST-safe (no manual
+// TxnTaxDetail) and relies on each line's TaxCodeRef so QBO computes GST + PST.
+// ---------------------------------------------------------------------------
+
+test.describe("invoices QBO-H3 — AST-safe tax on the exported Bill", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("the exported bill omits the manual TxnTaxDetail and keeps per-line TaxCodeRefs", async () => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-QBO-H3");
+
+    // Seed a GST+PST bill with a PST-taxable line AND a GST-only line.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "posted",
+        storage_path: "e2e-qbo-h3/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-qbo-h3.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-QBO-H3",
+        pre_tax_total: 1000,
+        gst: 50,
+        pst: 35,
+        total: 1085,
+        qbo_vendor_id: "qbo-vendor-h3",
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert([
+      {
+        invoice_id: inv.id,
+        line_no: 1,
+        description: "Hard maple sheet (GST+PST)",
+        amount: 700,
+        tax_flag: true,
+        confidence: 0.95,
+        qbo_account: "5000-Materials",
+      },
+      {
+        invoice_id: inv.id,
+        line_no: 2,
+        description: "Finishing supplies (GST only)",
+        amount: 300,
+        tax_flag: false,
+        confidence: 0.95,
+        qbo_account: "5010-Supplies",
+      },
+    ]);
+
+    const cronSecret = process.env.CRON_SECRET ?? "test-secret";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const resp = await fetch(`${baseUrl}/api/invoices/${inv.id}/export-qbo`, {
+      headers: { authorization: `Bearer ${cronSecret}` },
+    });
+    expect([200, 401]).toContain(resp.status);
+
+    if (resp.status === 200) {
+      const body = await resp.json();
+      const bill = body.bill;
+      // AST-safe: NO manual TxnTaxDetail — QBO computes the tax from line codes.
+      expect(bill.TxnTaxDetail).toBeUndefined();
+      expect(bill.GlobalTaxCalculation).toBe("TaxExcluded");
+      // Each line still carries the tax code QBO needs; the GST-only line is NOT
+      // collapsed with the GST+PST line.
+      expect(bill.Line).toHaveLength(2);
+      expect(bill.Line[0].AccountBasedExpenseLineDetail.TaxCodeRef.value).toBe("GST_PST");
+      expect(bill.Line[1].AccountBasedExpenseLineDetail.TaxCodeRef.value).toBe("GST");
+      // GST and PST stay split + the bill reconciles to the stated total.
+      expect(Number(body.reconciliation.gst)).toBeCloseTo(50, 2);
+      expect(Number(body.reconciliation.pst)).toBeCloseTo(35, 2);
+      expect(body.reconciliation.balanced).toBe(true);
+    }
+
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // QBO S1 — Connect QuickBooks (OAuth + encrypted token store), settings panel
 // ---------------------------------------------------------------------------
 

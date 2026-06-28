@@ -219,10 +219,11 @@ describe("stripInternalFields / toQboBillRequestBody", () => {
     const body = toQboBillRequestBody(bill);
     const json = JSON.stringify(body);
     expect(json).not.toMatch(/"_/);
-    // Core QBO fields survive.
+    // Core QBO fields survive. QBO-H3 (#186): the default AST-safe mode omits the
+    // manual TxnTaxDetail and relies on each line's TaxCodeRef instead.
     expect(json).toContain("VendorRef");
     expect(json).toContain("GlobalTaxCalculation");
-    expect(json).toContain("TxnTaxDetail");
+    expect(json).toContain("TaxCodeRef");
   });
 });
 

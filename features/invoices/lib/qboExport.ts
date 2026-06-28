@@ -160,6 +160,39 @@ export type QboRef = { value: string; name?: string };
  */
 export type LineTaxKey = "GST" | "PST" | "GST_PST" | null;
 
+/**
+ * A line's EXPLICIT Canadian tax treatment (QBO-H3, #186). Unlike the captured
+ * per-line PST `taxFlag` (a boolean that conflates "GST-only" with "exempt"),
+ * this enum models the four outcomes a Bill line can actually have so the per-
+ * line tax code — and therefore each TaxLine's `NetAmountTaxable` — is correct:
+ *
+ *  - "gst_pst"  — taxable for both GST and PST (the common materials line).
+ *  - "gst_only" — GST applies, PST-exempt (the "(GST only)" supplies line).
+ *  - "pst_only" — PST applies but no GST (rare; e.g. a PST-only adjustment).
+ *  - "exempt"   — fully non-taxable; carries NEITHER tax even on a taxed bill.
+ *
+ * The header still gates the result (we never invent a component the BILL didn't
+ * charge), but "exempt" is honoured unconditionally — that is the bug fix:
+ * before, a `taxFlag === false` line was always keyed GST on a GST bill, so a
+ * genuinely exempt line wrongly inflated the GST `NetAmountTaxable`.
+ */
+export type LineTaxTreatment = "gst_pst" | "gst_only" | "pst_only" | "exempt";
+
+/**
+ * How buildQboBill represents the bill's tax (QBO-H3, #186).
+ *
+ *  - "line-codes" (DEFAULT, AST-safe): rely on each line's `TaxCodeRef` and let
+ *    QBO's Automatic Sales Tax compute GST + PST. NO manual `TxnTaxDetail` is
+ *    emitted — Canadian AST companies reject/ignore a manual TaxLine, which is
+ *    the #1 misbooking risk this issue closes.
+ *  - "manual-detail": emit an explicit `TxnTaxDetail` with one TaxLine per
+ *    component. Only valid for a NON-AST (manual sales-tax) company, where each
+ *    TaxLine's `TaxRateRef` is a real **TaxRate** id resolved from
+ *    `maps.taxRateByLocal` (never a TaxCode id). Use only after the live-sandbox
+ *    gate (#195) confirms the company is non-AST.
+ */
+export type QboTaxMode = "line-codes" | "manual-detail";
+
 /** One QBO Bill expense line (AccountBasedExpenseLineDetail). */
 export type QboBillLine = {
   LineNum: number;
@@ -211,7 +244,13 @@ export type QboBill = {
   /** Line Amounts are pre-tax; we supply the tax explicitly below. */
   GlobalTaxCalculation: "TaxExcluded";
   Line: QboBillLine[];
-  TxnTaxDetail: {
+  /**
+   * Present ONLY in the "manual-detail" tax mode. In the default AST-safe
+   * "line-codes" mode this is omitted entirely so QBO computes the tax from each
+   * line's `TaxCodeRef` (QBO-H3, #186) — sending a manual TaxLine to an AST
+   * company is the misbooking risk this issue removes.
+   */
+  TxnTaxDetail?: {
     /** GST + PST. The split lives in TaxLine[] — this is only the sum. */
     TotalTax: number | null;
     TaxLine: QboTaxLine[];
@@ -251,6 +290,12 @@ export type BuildQboBillOptions = {
    * is still complete and inspectable.
    */
   maps?: MappingLookups;
+  /**
+   * How to represent the bill's tax (QBO-H3, #186). Defaults to the AST-safe
+   * "line-codes" mode (no manual TxnTaxDetail; QBO computes from each line's
+   * TaxCodeRef). Switch to "manual-detail" only for a confirmed non-AST company.
+   */
+  taxMode?: QboTaxMode;
 };
 
 /** Cents-accurate rounding (mirrors postInvoice.round2). */
@@ -259,29 +304,54 @@ function round2(n: number): number {
 }
 
 /**
- * Classify a line's Canadian tax from its PST flag and the header's tax totals.
+ * Map the captured per-line PST `taxFlag` to an EXPLICIT tax treatment.
  *
- * The extractor only captures a per-line PST flag (`taxFlag`), so GST is
- * inferred: a line that isn't non-taxable carries GST whenever the BILL carries
- * GST. The header totals therefore gate the result — we never invent a GST or
- * PST component the bill didn't actually charge.
+ * The extractor only captures a boolean PST flag, so GST is inferred from it:
+ *  - true  → carries PST (and, on a GST bill, GST too)         → "gst_pst"
+ *  - false → PST NOT charged; treated as GST-only (the common  → "gst_only"
+ *            Canadian supplier line where GST always applies)
+ *  - null  → unknown / no tax captured                         → "exempt"
  *
- *  - taxFlag true  + bill has GST + PST → "GST_PST"
- *  - taxFlag true  + bill has PST only → "PST"
- *  - taxFlag false + bill has GST      → "GST"   (the "(GST only)" line)
- *  - taxFlag null  (unknown)           → null    (non-taxable)
- *  - bill charges neither tax           → null
+ * A caller that KNOWS a line is fully exempt (even on a GST bill) can bypass this
+ * heuristic and pass "exempt" to {@link lineTaxKey} directly — that is how the
+ * "exempt vs GST-only" ambiguity is resolved correctly (QBO-H3, #186).
+ */
+export function taxFlagTreatment(taxFlag: boolean | null): LineTaxTreatment {
+  if (taxFlag === true) return "gst_pst";
+  if (taxFlag === false) return "gst_only";
+  return "exempt";
+}
+
+/**
+ * Resolve a line's Canadian tax key from its tax treatment and the header totals.
+ *
+ * Accepts EITHER the legacy captured PST `taxFlag` (boolean | null — mapped via
+ * {@link taxFlagTreatment}) OR an explicit {@link LineTaxTreatment}. The header
+ * gates the result so we never invent a component the BILL did not charge; an
+ * explicit "exempt" treatment always resolves to null, even on a fully taxed
+ * bill (QBO-H3, #186 — fixes a `false` line wrongly keying GST when it is exempt).
+ *
+ *  - gst_pst  + bill has GST + PST → "GST_PST"  (PST-only bill → "PST")
+ *  - gst_only + bill has GST       → "GST"
+ *  - pst_only + bill has PST       → "PST"
+ *  - exempt                        → null       (unconditional)
+ *  - any treatment, component the bill didn't charge → dropped
  */
 export function lineTaxKey(
-  taxFlag: boolean | null,
+  treatment: boolean | null | LineTaxTreatment,
   header: { gst: number | null; pst: number | null }
 ): LineTaxKey {
-  if (taxFlag == null) return null;
+  const t: LineTaxTreatment =
+    typeof treatment === "string" ? treatment : taxFlagTreatment(treatment);
+  if (t === "exempt") return null;
+
   const billHasGst = (header.gst ?? 0) > 0;
   const billHasPst = (header.pst ?? 0) > 0;
-  const pst = taxFlag === true && billHasPst;
-  // A taxable line (flag not null) carries GST whenever the bill does.
-  const gst = billHasGst;
+  const wantsGst = t === "gst_pst" || t === "gst_only";
+  const wantsPst = t === "gst_pst" || t === "pst_only";
+  const gst = wantsGst && billHasGst;
+  const pst = wantsPst && billHasPst;
+
   if (gst && pst) return "GST_PST";
   if (pst) return "PST";
   if (gst) return "GST";
@@ -296,6 +366,21 @@ function resolveRef(
   if (localKey == null) return null;
   const id = lookup?.[localKey];
   return { value: id ?? localKey };
+}
+
+/**
+ * STRICT resolve for a `TxnTaxDetail.TaxLine.TaxRateRef` (QBO-H3, #186). Returns
+ * a ref ONLY when a real **TaxRate** id is mapped — never falls back to the
+ * label or to a TaxCode id, because a wrong TaxRateRef is exactly what makes a
+ * Canadian Bill mis-book. `null` here means "no TaxRate mapping" (the caller
+ * leaves the ref out rather than guessing).
+ */
+function resolveTaxRateRef(
+  localKey: string,
+  lookup: Record<string, string> | undefined
+): QboRef | null {
+  const id = lookup?.[localKey];
+  return id != null ? { value: id } : null;
 }
 
 /**
@@ -328,7 +413,7 @@ export function buildQboBill(
   >[],
   options: BuildQboBillOptions = {}
 ): QboBillResult {
-  const { centralVendorRef, maps } = options;
+  const { centralVendorRef, maps, taxMode = "line-codes" } = options;
 
   const vendorRefValue = resolveVendorRef(centralVendorRef, invoice.qboVendorId);
   const vendorRef: QboRef | null =
@@ -366,36 +451,54 @@ export function buildQboBill(
   });
 
   // --- TxnTaxDetail: GST and PST as SEPARATE TaxLines (never collapsed) ------
+  //
+  // QBO-H3 (#186): in the default AST-safe "line-codes" mode we DON'T emit a
+  // manual TxnTaxDetail at all — QBO's Automatic Sales Tax computes GST + PST
+  // from each line's TaxCodeRef. A manual TaxLine sent to an AST company is the
+  // #1 misbooking risk. Only the "manual-detail" mode (a confirmed non-AST
+  // company) emits an explicit TxnTaxDetail, and there each TaxLine's TaxRateRef
+  // is a REAL TaxRate id from `taxRateByLocal` — never a TaxCode id.
   const gst = invoice.gst;
   const pst = invoice.pst;
-  // Net taxable bases per component, derived from the per-line tax keys.
-  const gstBase = round2(
-    billLines
-      .filter((l) => l._localTaxKey === "GST" || l._localTaxKey === "GST_PST")
-      .reduce((s, l) => s + (l.Amount ?? 0), 0)
-  );
-  const pstBase = round2(
-    billLines
-      .filter((l) => l._localTaxKey === "PST" || l._localTaxKey === "GST_PST")
-      .reduce((s, l) => s + (l.Amount ?? 0), 0)
-  );
 
-  const taxLine: QboTaxLine[] = [];
-  if (gst != null && gst !== 0) {
-    taxLine.push({
-      Amount: gst,
-      DetailType: "TaxLineDetail",
-      TaxLineDetail: { NetAmountTaxable: gstBase, TaxRateRef: resolveRef("GST", maps?.taxByLocal) },
-      _component: "GST",
-    });
-  }
-  if (pst != null && pst !== 0) {
-    taxLine.push({
-      Amount: pst,
-      DetailType: "TaxLineDetail",
-      TaxLineDetail: { NetAmountTaxable: pstBase, TaxRateRef: resolveRef("PST", maps?.taxByLocal) },
-      _component: "PST",
-    });
+  let txnTaxDetail: QboBill["TxnTaxDetail"];
+  if (taxMode === "manual-detail") {
+    // Net taxable bases per component, derived from the per-line tax keys.
+    const gstBase = round2(
+      billLines
+        .filter((l) => l._localTaxKey === "GST" || l._localTaxKey === "GST_PST")
+        .reduce((s, l) => s + (l.Amount ?? 0), 0)
+    );
+    const pstBase = round2(
+      billLines
+        .filter((l) => l._localTaxKey === "PST" || l._localTaxKey === "GST_PST")
+        .reduce((s, l) => s + (l.Amount ?? 0), 0)
+    );
+
+    const taxLine: QboTaxLine[] = [];
+    if (gst != null && gst !== 0) {
+      taxLine.push({
+        Amount: gst,
+        DetailType: "TaxLineDetail",
+        TaxLineDetail: {
+          NetAmountTaxable: gstBase,
+          TaxRateRef: resolveTaxRateRef("GST", maps?.taxRateByLocal),
+        },
+        _component: "GST",
+      });
+    }
+    if (pst != null && pst !== 0) {
+      taxLine.push({
+        Amount: pst,
+        DetailType: "TaxLineDetail",
+        TaxLineDetail: {
+          NetAmountTaxable: pstBase,
+          TaxRateRef: resolveTaxRateRef("PST", maps?.taxRateByLocal),
+        },
+        _component: "PST",
+      });
+    }
+    txnTaxDetail = { TotalTax: addNullable(gst, pst), TaxLine: taxLine };
   }
 
   const bill: QboBill = {
@@ -406,10 +509,7 @@ export function buildQboBill(
     PrivateNote: invoice.poRef,
     GlobalTaxCalculation: "TaxExcluded",
     Line: billLines,
-    TxnTaxDetail: {
-      TotalTax: addNullable(gst, pst),
-      TaxLine: taxLine,
-    },
+    ...(txnTaxDetail ? { TxnTaxDetail: txnTaxDetail } : {}),
   };
 
   // --- Reconciliation: Σ pre-tax lines + GST + PST === stated total ----------

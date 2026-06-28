@@ -150,8 +150,19 @@ export type BillLineRefs = {
 export type MappingLookups = {
   /** local category/cost-code key → QBO Account.Id. */
   accountByLocal: Record<string, string>;
-  /** local tax key ("GST" | "PST" | "GST_PST") → QBO TaxCode.Id. */
+  /**
+   * local tax key ("GST" | "PST" | "GST_PST") → QBO **TaxCode**.Id. This is the
+   * per-LINE `TaxCodeRef.value` — a TaxCode, NOT a TaxRate.
+   */
   taxByLocal: Record<string, string>;
+  /**
+   * local tax key ("GST" | "PST") → QBO **TaxRate**.Id (QBO-H3, #186). A
+   * `TxnTaxDetail.TaxLine.TaxRateRef` expects a TaxRate id, which is a DIFFERENT
+   * entity from a TaxCode — feeding a TaxCode id there is the #1 tax-misbooking
+   * risk. Optional + only consulted in the `manual-detail` tax mode; left empty
+   * in the default AST-safe `line-codes` mode (QBO computes from `TaxCodeRef`).
+   */
+  taxRateByLocal?: Record<string, string>;
 };
 
 /**

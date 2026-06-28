@@ -3,7 +3,13 @@
  * Pure functions: no Supabase, no React, no QBO API calls.
  */
 import { describe, it, expect } from "vitest";
-import { buildQboExport, buildQboBill, lineTaxKey, type QboBillExport } from "./qboExport";
+import {
+  buildQboExport,
+  buildQboBill,
+  lineTaxKey,
+  taxFlagTreatment,
+  type QboBillExport,
+} from "./qboExport";
 import type { MappingLookups } from "./qboAccountMapping";
 import type { Invoice, InvoiceLine } from "./types";
 
@@ -299,6 +305,39 @@ describe("lineTaxKey — per-line GST/PST classification (replaces hardcoded TAX
   });
 });
 
+// QBO-H3 (#186): the boolean PST flag conflates "GST-only" with "exempt". An
+// explicit LineTaxTreatment lets a caller mark a line fully exempt even on a
+// taxed bill, so its NetAmountTaxable is no longer wrongly inflated.
+describe("lineTaxKey — explicit tax treatment (exempt vs GST-only, QBO-H3)", () => {
+  it("an explicit 'exempt' line is non-taxable EVEN on a GST+PST bill", () => {
+    // This is the bug: a `false`-flag line keys GST; an explicit exempt must not.
+    expect(lineTaxKey("exempt", { gst: 50, pst: 70 })).toBeNull();
+  });
+
+  it("an explicit 'gst_only' line keys GST on a GST bill", () => {
+    expect(lineTaxKey("gst_only", { gst: 50, pst: 70 })).toBe("GST");
+  });
+
+  it("an explicit 'gst_pst' line keys GST_PST on a GST+PST bill", () => {
+    expect(lineTaxKey("gst_pst", { gst: 50, pst: 70 })).toBe("GST_PST");
+  });
+
+  it("an explicit 'pst_only' line keys PST, and is null when the bill has no PST", () => {
+    expect(lineTaxKey("pst_only", { gst: 50, pst: 70 })).toBe("PST");
+    expect(lineTaxKey("pst_only", { gst: 50, pst: 0 })).toBeNull();
+  });
+
+  it("a 'gst_only' line is null when the bill charged no GST (never invents tax)", () => {
+    expect(lineTaxKey("gst_only", { gst: 0, pst: 70 })).toBeNull();
+  });
+
+  it("taxFlagTreatment maps the captured PST flag: true→gst_pst, false→gst_only, null→exempt", () => {
+    expect(taxFlagTreatment(true)).toBe("gst_pst");
+    expect(taxFlagTreatment(false)).toBe("gst_only");
+    expect(taxFlagTreatment(null)).toBe("exempt");
+  });
+});
+
 // Persisted local→QBO id lookups (S4/S5). With these, AccountRef + TaxCodeRef
 // resolve to REAL per-company QBO ids instead of the raw local labels.
 const maps: MappingLookups = {
@@ -311,6 +350,12 @@ const maps: MappingLookups = {
     GST: "qbo-tax-G",
     PST: "qbo-tax-P",
     GST_PST: "qbo-tax-GP",
+  },
+  // QBO-H3 (#186): real TaxRate ids — a DIFFERENT entity from the TaxCode ids in
+  // taxByLocal. Only consulted in manual-detail mode's TxnTaxDetail.TaxRateRef.
+  taxRateByLocal: {
+    GST: "qbo-rate-G",
+    PST: "qbo-rate-P",
   },
 };
 
@@ -408,38 +453,89 @@ describe("buildQboBill — lines: account + tax never collapsed", () => {
   });
 });
 
-describe("buildQboBill — TxnTaxDetail keeps GST and PST as two lines", () => {
+// QBO-H3 (#186): the manual TxnTaxDetail split is now ONLY emitted in the
+// "manual-detail" tax mode (a confirmed non-AST company). These tests pin that
+// split + its NetAmountTaxable bases.
+describe("buildQboBill (manual-detail) — TxnTaxDetail keeps GST and PST as two lines", () => {
   it("emits two TaxLines (GST + PST), never a single collapsed total", () => {
-    const { bill } = buildQboBill(baseInvoice, [baseLine], { maps });
-    expect(bill.TxnTaxDetail.TotalTax).toBe(120);
-    const components = bill.TxnTaxDetail.TaxLine.map((t) => t._component).sort();
+    const { bill } = buildQboBill(baseInvoice, [baseLine], { maps, taxMode: "manual-detail" });
+    expect(bill.TxnTaxDetail?.TotalTax).toBe(120);
+    const components = bill.TxnTaxDetail?.TaxLine.map((t) => t._component).sort();
     expect(components).toEqual(["GST", "PST"]);
-    const gstLine = bill.TxnTaxDetail.TaxLine.find((t) => t._component === "GST");
-    const pstLine = bill.TxnTaxDetail.TaxLine.find((t) => t._component === "PST");
+    const gstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "GST");
+    const pstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "PST");
     expect(gstLine?.Amount).toBe(50);
     expect(pstLine?.Amount).toBe(70);
   });
 
   it("omits a zero/absent tax component (a GST-only bill has no PST TaxLine)", () => {
     const gstOnly = { ...baseInvoice, pst: 0, total: 1050 };
-    const { bill } = buildQboBill(gstOnly, [baseLine2], { maps });
-    expect(bill.TxnTaxDetail.TaxLine.map((t) => t._component)).toEqual(["GST"]);
+    const { bill } = buildQboBill(gstOnly, [baseLine2], { maps, taxMode: "manual-detail" });
+    expect(bill.TxnTaxDetail?.TaxLine.map((t) => t._component)).toEqual(["GST"]);
   });
 
   it("a fully tax-free bill has an empty TaxLine[] and null/zero TotalTax", () => {
     const free = { ...baseInvoice, gst: 0, pst: 0, total: 1000 };
-    const { bill } = buildQboBill(free, [{ ...baseLine, taxFlag: false }], { maps });
-    expect(bill.TxnTaxDetail.TaxLine).toEqual([]);
+    const { bill } = buildQboBill(free, [{ ...baseLine, taxFlag: false }], {
+      maps,
+      taxMode: "manual-detail",
+    });
+    expect(bill.TxnTaxDetail?.TaxLine).toEqual([]);
   });
 
   it("the GST TaxLine's NetAmountTaxable spans GST + GST_PST lines; PST spans only PST lines", () => {
     const matPst = { ...baseLine, amount: 800, taxFlag: true, lineNo: 0 }; // GST_PST
     const supGst = { ...baseLine2, amount: 200, taxFlag: false, lineNo: 1 }; // GST only
-    const { bill } = buildQboBill(baseInvoice, [matPst, supGst], { maps });
-    const gstLine = bill.TxnTaxDetail.TaxLine.find((t) => t._component === "GST");
-    const pstLine = bill.TxnTaxDetail.TaxLine.find((t) => t._component === "PST");
+    const { bill } = buildQboBill(baseInvoice, [matPst, supGst], {
+      maps,
+      taxMode: "manual-detail",
+    });
+    const gstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "GST");
+    const pstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "PST");
     expect(gstLine?.TaxLineDetail.NetAmountTaxable).toBe(1000); // 800 + 200
     expect(pstLine?.TaxLineDetail.NetAmountTaxable).toBe(800); // only the PST line
+  });
+
+  it("TaxRateRef is a real TaxRate id from taxRateByLocal — NEVER a TaxCode id", () => {
+    const { bill } = buildQboBill(baseInvoice, [baseLine], { maps, taxMode: "manual-detail" });
+    const gstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "GST");
+    const pstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "PST");
+    // Real TaxRate ids, not the TaxCode ids (qbo-tax-G / qbo-tax-P) in taxByLocal.
+    expect(gstLine?.TaxLineDetail.TaxRateRef).toEqual({ value: "qbo-rate-G" });
+    expect(pstLine?.TaxLineDetail.TaxRateRef).toEqual({ value: "qbo-rate-P" });
+  });
+
+  it("TaxRateRef is null (not a guessed label/TaxCode) when no TaxRate is mapped", () => {
+    const noRateMaps = { ...maps, taxRateByLocal: {} };
+    const { bill } = buildQboBill(baseInvoice, [baseLine], {
+      maps: noRateMaps,
+      taxMode: "manual-detail",
+    });
+    const gstLine = bill.TxnTaxDetail?.TaxLine.find((t) => t._component === "GST");
+    expect(gstLine?.TaxLineDetail.TaxRateRef).toBeNull();
+  });
+});
+
+// QBO-H3 (#186): the DEFAULT mode lets QBO's Automatic Sales Tax compute the tax
+// from each line's TaxCodeRef — no manual TxnTaxDetail (which AST companies
+// reject). This is the primary misbooking fix.
+describe("buildQboBill (line-codes, default) — AST-safe, QBO computes the tax", () => {
+  it("omits TxnTaxDetail entirely by default", () => {
+    const { bill } = buildQboBill(baseInvoice, [baseLine], { maps });
+    expect(bill.TxnTaxDetail).toBeUndefined();
+  });
+
+  it("still carries the per-line TaxCodeRef QBO needs to compute GST + PST", () => {
+    const { bill } = buildQboBill(baseInvoice, [baseLine], { maps });
+    expect(bill.Line[0].AccountBasedExpenseLineDetail.TaxCodeRef).toEqual({ value: "qbo-tax-GP" });
+    expect(bill.GlobalTaxCalculation).toBe("TaxExcluded");
+  });
+
+  it("reconciliation still tracks the GST/PST split for our own audit", () => {
+    const { reconciliation } = buildQboBill(baseInvoice, [baseLine, baseLine2], { maps });
+    expect(reconciliation.gst).toBe(50);
+    expect(reconciliation.pst).toBe(70);
+    expect(reconciliation.balanced).toBe(true);
   });
 });
 
