@@ -1,9 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, RefreshCcw, Send } from "lucide-react";
-import type { TokenHealth } from "../lib/qboTokenHealth";
+import { AlertTriangle, RefreshCcw, Send, WifiOff } from "lucide-react";
 import type { BulkPushSummary } from "../lib/qboBulkPush";
+import {
+  type BulkPushState,
+  type LoadResponseBody,
+  deriveLoadErrorState,
+  deriveLoadState,
+  derivePushErrorState,
+} from "../lib/qboBulkPushPanelState";
 
 /**
  * QBO S11 — Bulk catch-up push + token-health/reconnect nudge (issue #157).
@@ -26,39 +32,24 @@ import type { BulkPushSummary } from "../lib/qboBulkPush";
  * in Settings handles the onboarding path.
  */
 
-type BulkPushState =
-  | { phase: "loading" }
-  | { phase: "hidden" } // QBO off / not connected
-  | { phase: "idle"; count: number; tokenHealth: TokenHealth | null }
-  | { phase: "pushing" }
-  | { phase: "done"; summary: BulkPushSummary; tokenHealth: TokenHealth | null };
-
 export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
   const [state, setState] = useState<BulkPushState>({ phase: "loading" });
 
   const load = useCallback(async () => {
     try {
       const res = await fetch("/api/invoices/qbo/bulk-push", { cache: "no-store" });
-      if (res.status === 404 || res.status === 400 || res.status === 503) {
-        setState({ phase: "hidden" });
-        return;
+      let data: LoadResponseBody = null;
+      try {
+        data = (await res.json()) as LoadResponseBody;
+      } catch {
+        // Non-JSON body (e.g. a transient 500 HTML page) — leave data null so
+        // deriveLoadState surfaces a retryable error rather than a vanish.
+        data = null;
       }
-      if (!res.ok) {
-        setState({ phase: "hidden" });
-        return;
-      }
-      const data = (await res.json()) as {
-        ok: boolean;
-        count: number;
-        tokenHealth: TokenHealth | null;
-      };
-      if (!data.ok) {
-        setState({ phase: "hidden" });
-        return;
-      }
-      setState({ phase: "idle", count: data.count, tokenHealth: data.tokenHealth ?? null });
+      setState(deriveLoadState({ status: res.status, ok: res.ok, data }));
     } catch {
-      setState({ phase: "hidden" });
+      // Network throw / abort — a retryable error, NOT a silent hide (QBO-H9).
+      setState(deriveLoadErrorState());
     }
   }, []);
 
@@ -70,33 +61,30 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
     setState({ phase: "pushing" });
     try {
       const res = await fetch("/api/invoices/qbo/bulk-push", { method: "POST" });
-      if (!res.ok) {
-        // Something went wrong — fall back to idle so the owner can retry.
-        await load();
-        return;
+      type PushResponse = { ok: boolean; summary?: BulkPushSummary; reason?: string };
+      let data: PushResponse | null = null;
+      try {
+        data = (await res.json()) as PushResponse;
+      } catch {
+        data = null;
       }
-      const data = (await res.json()) as {
-        ok: boolean;
-        summary: BulkPushSummary;
-      };
-      if (data.ok) {
+      if (res.ok && data?.ok && data.summary) {
         // Keep the last-known token health visible in the done state.
-        const health =
-          state.phase === "idle" || state.phase === "done" ? state.tokenHealth : null;
+        const health = state.phase === "idle" || state.phase === "done" ? state.tokenHealth : null;
         setState({ phase: "done", summary: data.summary, tokenHealth: health });
         onPushed?.();
-      } else {
-        await load();
+        return;
       }
+      // QBO-H9: a failed push surfaces the server's reason, not a silent reset.
+      setState(derivePushErrorState(data?.reason));
     } catch {
-      await load();
+      setState(derivePushErrorState());
     }
-  }, [load, onPushed, state]);
+  }, [onPushed, state]);
 
   if (state.phase === "loading" || state.phase === "hidden") return null;
 
-  const tokenHealth =
-    state.phase === "idle" || state.phase === "done" ? state.tokenHealth : null;
+  const tokenHealth = state.phase === "idle" || state.phase === "done" ? state.tokenHealth : null;
   const showReconnect = tokenHealth && tokenHealth.level !== "ok";
 
   return (
@@ -128,6 +116,29 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
             <RefreshCcw className="h-3 w-3" />
             Reconnect QuickBooks
           </a>
+        </div>
+      )}
+
+      {/* QBO-H9: a reachability/push failure shows a visible, retryable row
+          instead of the whole catch-up bar silently vanishing. */}
+      {state.phase === "error" && (
+        <div
+          data-testid="qbo-bulk-push-error"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-resting"
+        >
+          <WifiOff className="h-4 w-4 shrink-0" />
+          <span data-testid="qbo-bulk-push-error-message" className="flex-1">
+            {state.message}
+          </span>
+          <button
+            type="button"
+            data-testid="qbo-bulk-push-retry-btn"
+            onClick={() => void load()}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-md border border-current px-3 py-1 text-xs font-medium hover:opacity-80"
+          >
+            <RefreshCcw className="h-3 w-3" />
+            Retry
+          </button>
         </div>
       )}
 
@@ -176,23 +187,15 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
               : "No new bills sent"}
           </span>
           {state.summary.alreadyPushed > 0 && (
-            <span className="text-emerald-600">
-              · {state.summary.alreadyPushed} already sent
-            </span>
+            <span className="text-emerald-600">· {state.summary.alreadyPushed} already sent</span>
           )}
           {state.summary.blocked > 0 && (
-            <span
-              data-testid="qbo-bulk-push-blocked"
-              className="text-amber-600"
-            >
+            <span data-testid="qbo-bulk-push-blocked" className="text-amber-600">
               · {state.summary.blocked} blocked (missing mapping)
             </span>
           )}
           {state.summary.failed > 0 && (
-            <span
-              data-testid="qbo-bulk-push-failed"
-              className="text-red-600"
-            >
+            <span data-testid="qbo-bulk-push-failed" className="text-red-600">
               · {state.summary.failed} failed
             </span>
           )}
