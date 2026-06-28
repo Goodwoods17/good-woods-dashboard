@@ -67,6 +67,47 @@ amount · per-line tax flag. Plus **per-field confidence** and the source file
 reference. Tax: pre-tax + GST + PST stored always; BvA books **pre-tax as the
 headline actual** + shows **"with PST"** alongside.
 
+## What's here (QBO S1 — Connect QuickBooks tracer, issue #147)
+
+```
+features/invoices/
+├── lib/
+│   ├── qboTokenCrypto.ts       server: AES-256-GCM encrypt/decrypt of the QBO tokens (+ test)
+│   ├── qboOAuth.ts             server: consent-URL / token-exchange / refresh; configured-check (+ test)
+│   └── qboConnectionServer.ts  server: service-role connection store + refresh-with-rotation
+└── components/
+    └── ConnectQuickBooksPanel.tsx   "Connect QuickBooks" settings panel (gated)
+src/app/api/invoices/qbo/{status,connect,callback,disconnect}/route.ts
+supabase/migrations/
+└── 20260709000000_quickbooks_connection.sql   single-shop connection (encrypted tokens)
+```
+
+**Dark-shipped behind a SEPARATE sub-flag** `invoicesQboEnabled()`
+(`NEXT_PUBLIC_INVOICES_QBO_ENABLED`, off in prod; CI sets it on). The live
+invoices feature is untouched; the panel only appears when this flag is flipped.
+This proves the riskiest assumption of the QBO sync milestone: OAuth2 → encrypted
+token → QBO **sandbox** company. **Mirrors the S23 Google pattern.**
+
+**OAuth (user-consent):** single `com.intuit.quickbooks.accounting` scope. Two
+QBO-specific quirks vs. Google: the token endpoint authenticates the client via
+HTTP **Basic** auth (base64 `clientId:clientSecret`), and the callback carries a
+**`realmId`** (the QB company id) we persist. The long-lived refresh token is
+encrypted at rest with AES-256-GCM (`qboTokenCrypto`, keyed by server-only
+`QBO_TOKEN_ENC_KEY`); plaintext never hits the DB. **QBO rotates the refresh
+token ~every 24h**, so `getFreshAccessToken()` persists the rotated refresh token
+(encrypted) on every refresh — failing to do so would brick the connection within
+a day. Single-shop: connect clears any prior row first.
+
+**Degrades gracefully** when creds are absent (mirrors the Google fallback):
+`qboOAuthConfigured()` requires client id + secret + enc key; with any missing the
+status route reports `configured:false`, the panel shows a clean "not configured"
+card, and every live Intuit call is skipped — so CI / preview / unconfigured prod
+stay green. Env needed to actually reach QBO: `QBO_OAUTH_CLIENT_ID`,
+`QBO_OAUTH_CLIENT_SECRET`, `QBO_TOKEN_ENC_KEY` (all server-only, **never
+NEXT_PUBLIC**), plus optional `QBO_ENVIRONMENT` (`sandbox` default | `production`).
+Testids: `qbo-connect-panel`, `qbo-not-configured`, `qbo-connect`,
+`qbo-connected`, `qbo-disconnect`, `qbo-notice`.
+
 ## Conventions
 
 - Folder `features/invoices/` (`components/*.tsx`, `lib/*.ts`); thin route at

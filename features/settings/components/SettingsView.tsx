@@ -10,6 +10,8 @@ import { CompanySection } from "./CompanySection";
 import { TaxSection } from "./TaxSection";
 import { ResetSection } from "./ResetSection";
 import { TradeRegistryEditor } from "@features/partners/components/TradeRegistryEditor";
+import { invoicesQboEnabled } from "@features/invoices/lib/featureFlag";
+import { ConnectQuickBooksPanel } from "@features/invoices/components/ConnectQuickBooksPanel";
 
 export function SettingsView() {
   const { error } = useJobs();
@@ -29,6 +31,14 @@ export function SettingsView() {
         </Section>
         <CompanySection />
         <TaxSection />
+        {invoicesQboEnabled() && (
+          <Section
+            title="QuickBooks"
+            description="Connect your QuickBooks company so posted invoices can sync as bills."
+          >
+            <ConnectQuickBooksPanel />
+          </Section>
+        )}
         <ResetSection />
       </div>
     </>
