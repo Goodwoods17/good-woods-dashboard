@@ -45,6 +45,8 @@ import {
 } from "./qboBillPush";
 import { attachInvoicePdfToQboBill, type AttachmentResult } from "./qboAttachableServer";
 import { logPushAttempt, updatePushAttempt, getLatestPushAttempt } from "./qboPushAuditServer";
+import { readQboTokenHealth } from "./qboConnectionHealthServer";
+import type { TokenHealth } from "./qboTokenHealth";
 import { isTransientHttpStatus, isPermanentHttpStatus, nextRetryAt } from "./qboPushAudit";
 import type { LatestPushAttempt } from "./qboPushAudit";
 import type { Invoice, InvoiceLine } from "./types";
@@ -260,6 +262,11 @@ export type PushPreview =
        * failed / retry-pending push from a never-attempted one.
        */
       latestAttempt: LatestPushAttempt | null;
+      /**
+       * QBO-H8 (#191): refresh-token health, so the push panel can show a
+       * reconnect nudge BEFORE a confirm fails on an aged/expired token.
+       */
+      tokenHealth: TokenHealth | null;
     }
   | (LoadError & { latestAttempt: LatestPushAttempt | null });
 
@@ -268,7 +275,13 @@ export async function previewInvoicePush(invoiceId: string): Promise<PushPreview
   // QBO-H7: read the audit row FIRST, independent of the QBO connection, so a
   // prior failure stays visible even when the token is currently unconfigured
   // or disconnected (the load below would otherwise short-circuit).
-  const latestAttempt = await getLatestPushAttempt(invoiceId);
+  // QBO-H8: read token health alongside the audit row, independent of the load
+  // below. A connected-but-aging token still loads fine, so the nudge rides on
+  // the "ok" preview; the value is the same probe the bulk panel uses.
+  const [latestAttempt, tokenHealth] = await Promise.all([
+    getLatestPushAttempt(invoiceId),
+    readQboTokenHealth(),
+  ]);
 
   const ctx = await loadPushContext(invoiceId);
   if (!("invoice" in ctx)) return { ...ctx, latestAttempt };
@@ -283,6 +296,7 @@ export async function previewInvoicePush(invoiceId: string): Promise<PushPreview
     deepLink: c.existingBillId ? qboBillDeepLink(c.environment, c.existingBillId) : null,
     environment: c.environment,
     latestAttempt,
+    tokenHealth,
   };
 }
 

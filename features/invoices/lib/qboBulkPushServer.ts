@@ -11,13 +11,11 @@
  * connected (typed result, never a throw) — mirrors qboBillPushServer.ts.
  */
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
-import { QUICKBOOKS_CONNECTION_TABLE, QUICKBOOKS_LINKS_TABLE } from "@shared/lib/supabase";
+import { QUICKBOOKS_LINKS_TABLE } from "@shared/lib/supabase";
 import { getFreshAccessToken } from "./qboConnectionServer";
 import { pushInvoiceBill } from "./qboBillPushServer";
-import {
-  assessTokenHealth,
-  type TokenHealth,
-} from "./qboTokenHealth";
+import { readQboTokenHealth } from "./qboConnectionHealthServer";
+import { type TokenHealth } from "./qboTokenHealth";
 import {
   BULK_PUSH_DELAY_MS,
   BULK_PUSH_MAX,
@@ -37,27 +35,7 @@ import {
  * so callers can cleanly skip the health check.
  */
 export async function getQboTokenHealth(): Promise<TokenHealth | null> {
-  const sb = getServiceRoleClient();
-  if (!sb) return null;
-
-  const { data } = await sb
-    .from(QUICKBOOKS_CONNECTION_TABLE)
-    .select("updated_at, connected_at")
-    .order("connected_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!data) {
-    // No connection row → treat as critical (the health nudge won't show until
-    // the owner connects, so this branch is mostly unreachable in the UI path).
-    return assessTokenHealth(null);
-  }
-
-  // updated_at tracks the last token refresh (rotated on every access-token
-  // refresh).  Falls back to connected_at if updated_at is absent / null.
-  const rawDate = (data.updated_at ?? data.connected_at) as string | null;
-  const lastActivity = rawDate ? new Date(rawDate) : null;
-  return assessTokenHealth(lastActivity);
+  return readQboTokenHealth();
 }
 
 // ---------------------------------------------------------------------------
@@ -133,8 +111,7 @@ type RunBulkPushParams = {
 };
 
 type RunBulkPushResult =
-  | { ok: true; summary: BulkPushSummary }
-  | { ok: false; reason: "not_connected" | "unconfigured" };
+  { ok: true; summary: BulkPushSummary } | { ok: false; reason: "not_connected" | "unconfigured" };
 
 /**
  * Push all eligible posted invoices to QBO in one batch.

@@ -34,6 +34,7 @@ export function SettingsView() {
         <TaxSection />
         {invoicesQboEnabled() && (
           <Section
+            id="quickbooks"
             title="QuickBooks"
             description="Connect your QuickBooks company so posted invoices can sync as bills."
           >
