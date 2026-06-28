@@ -1,5 +1,6 @@
-import type { Job, MilestoneStage } from "@shared/lib/types";
+import type { Job } from "@shared/lib/types";
 import { MILESTONE_STAGES } from "@shared/lib/types";
+import { internalPhaseLabel } from "./phases";
 
 /**
  * Pure model for the **one-way** Google Calendar push (S23, issue #111).
@@ -44,10 +45,6 @@ export type CalendarSyncPlan = {
   toDelete: { syncKey: string; googleEventId: string }[];
 };
 
-const PHASE_LABEL: Record<MilestoneStage, string> = Object.fromEntries(
-  MILESTONE_STAGES.map((s) => [s.key, s.label])
-) as Record<MilestoneStage, string>;
-
 /**
  * Derive the desired calendar events for one job: each internal phase TARGET
  * that has a date, plus the frozen client-committed install. Phases without a
@@ -63,8 +60,8 @@ export function buildJobCalendarEvents(job: Job): GoogleCalendarEvent[] {
     if (!date) continue;
     events.push({
       syncKey: `${job.id}:phase:${key}`,
-      summary: `${name} — ${PHASE_LABEL[key]} target`,
-      description: `Internal ${PHASE_LABEL[key]} target for ${name}. Managed by Good Woods — do not edit here; changes are overwritten on the next push.`,
+      summary: `${name} — ${internalPhaseLabel(key)} target`,
+      description: `Internal ${internalPhaseLabel(key)} target for ${name}. Managed by Good Woods — do not edit here; changes are overwritten on the next push.`,
       date,
     });
   }

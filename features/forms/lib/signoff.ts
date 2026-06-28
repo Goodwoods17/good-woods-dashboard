@@ -3,6 +3,7 @@
 import type { FormInstance, FormInstanceField } from "@shared/lib/types";
 import { resolveFormPhotoUrl, uploadSignoffPdf } from "./storage";
 import { signoffFileName } from "./completion";
+import { preResolveImages } from "./signoffImages";
 
 /**
  * Signoff PDF generation for a completed form instance (issue #35).
@@ -13,28 +14,9 @@ import { signoffFileName } from "./completion";
  *
  * react-pdf needs image `src` URLs synchronously at render time, so every
  * photo/signature field's stored path is pre-resolved to a renderable URL
- * (signed URL or inline data: URL) BEFORE the document is constructed.
+ * (signed URL or inline data: URL) BEFORE the document is constructed
+ * (`preResolveImages` in `signoffImages.ts`, shared with the server path).
  */
-
-/** Pre-resolve photo + signature paths to renderable URLs, keyed by field id. */
-async function resolveImages(fields: FormInstanceField[]): Promise<Record<string, string>> {
-  const media = fields.filter(
-    (f) =>
-      (f.type === "photo" || f.type === "signature") && typeof f.photoUrl === "string" && f.photoUrl
-  );
-  const entries = await Promise.all(
-    media.map(async (f) => {
-      try {
-        const url = await resolveFormPhotoUrl(f.photoUrl as string);
-        return [f.id, url] as const;
-      } catch {
-        // A missing/expired image must not abort the whole signoff — skip it.
-        return null;
-      }
-    })
-  );
-  return Object.fromEntries(entries.filter((e): e is readonly [string, string] => e !== null));
-}
 
 export type SignoffResult = { blob: Blob; storagePath: string };
 
@@ -52,7 +34,7 @@ export async function generateSignoffPdf(
   const { pdf } = await import("@react-pdf/renderer");
   const { FormSignoffDocument } = await import("@features/forms/components/FormSignoffDocument");
 
-  const resolvedImages = await resolveImages(fields);
+  const resolvedImages = await preResolveImages(fields, (path) => resolveFormPhotoUrl(path));
 
   const blob = await pdf(
     FormSignoffDocument({ instance, fields, resolvedImages, jobContext, signatureAudit })

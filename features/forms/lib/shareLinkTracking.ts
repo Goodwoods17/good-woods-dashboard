@@ -1,5 +1,4 @@
 import type { FormShareLink } from "@shared/lib/types";
-import { shareLinkStatus, type ShareLinkStatus } from "./shareLinkStatus";
 
 /**
  * Owner-only recipient-tracking model for a share link (Forms P2 · Slice 3,
@@ -9,7 +8,57 @@ import { shareLinkStatus, type ShareLinkStatus } from "./shareLinkStatus";
  * Andrew's explicit ask: show the SENT date + a "N days ago" counter + the
  * OPENED date per recipient. These are owner-private — they never render on the
  * public /f/<token> page.
+ *
+ * The share-link STATUS derivation (status + label + stamp) lives here too
+ * (folded in from the former `shareLinkStatus.ts` — Phase C consolidation): the
+ * status was a shallow pass-through the tracking model already depended on.
  */
+
+/**
+ * The owner-facing status of a share link, derived entirely from the *_at
+ * timestamps.
+ *
+ * Status contract (issue #41, extended by S3 #42 with the "started" state):
+ *   sentAt=null                   → draft  (minted, not yet shared)
+ *   sentAt set, viewed=null       → sent
+ *   sentAt + viewed, no start/sub → opened
+ *   startedAt set, no submit      → started (recipient saved at least once)
+ *   submittedAt set               → submitted (earlier stamps irrelevant)
+ *   revokedAt set                 → revoked   (always checked first)
+ */
+export type ShareLinkStatus = "draft" | "sent" | "opened" | "started" | "submitted" | "revoked";
+
+export function shareLinkStatus(link: FormShareLink): ShareLinkStatus {
+  if (link.revokedAt !== null) return "revoked";
+  if (link.submittedAt !== null) return "submitted";
+  if (link.startedAt !== null) return "started";
+  if (link.sentAt === null) return "draft";
+  if (link.viewedAt === null) return "sent";
+  return "opened";
+}
+
+const STATUS_LABELS: Record<ShareLinkStatus, string> = {
+  draft: "Draft",
+  sent: "Sent",
+  opened: "Opened",
+  started: "Started",
+  submitted: "Submitted",
+  revoked: "Revoked",
+};
+
+export function shareLinkStatusLabel(status: ShareLinkStatus): string {
+  return STATUS_LABELS[status];
+}
+
+/**
+ * Stamp sentAt on a link the first time an owner performs a share action
+ * (copy link, open mail/SMS draft). Idempotent: never overwrites an existing
+ * sentAt. Returns a new object — never mutates.
+ */
+export function stampSentAt(link: FormShareLink): FormShareLink {
+  if (link.sentAt !== null) return link;
+  return { ...link, sentAt: new Date().toISOString() };
+}
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 

@@ -20,7 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { GripVertical, Plus, Trash2, X, Check, Settings2 } from "lucide-react";
 import type { FieldType, FormPhase, FormTemplate, FormTemplateField } from "@shared/lib/types";
 import { useFormTemplates } from "../lib/formTemplatesStore";
-import { FIELD_REGISTRY, FIELD_TYPES } from "../lib/fieldRegistry";
+import { FIELD_REGISTRY, IMPLEMENTED_TYPES, isFieldRequired } from "../lib/fieldRegistry";
 import { formPhaseLabel } from "../lib/phase";
 import type { ShowWhenCondition } from "../lib/conditionals";
 import {
@@ -124,7 +124,7 @@ function FieldConfigPanel({
           value={type}
           onChange={(e) => setType(e.target.value as FieldType)}
         >
-          {FIELD_TYPES.filter((t) => FIELD_REGISTRY[t].implemented).map((t) => (
+          {IMPLEMENTED_TYPES.map((t) => (
             <option key={t} value={t}>
               {FIELD_REGISTRY[t].label}
             </option>
@@ -214,7 +214,7 @@ function FieldConfigPanel({
             type="checkbox"
             data-testid="field-required"
             className="h-4 w-4 rounded border-border accent-accent"
-            checked={(config.required as boolean) === true}
+            checked={isFieldRequired({ config })}
             onChange={(e) => setConfig((c) => ({ ...c, required: e.target.checked }))}
           />
           <span className="text-sm text-text-secondary">Required</span>
@@ -246,8 +246,8 @@ function FieldConfigPanel({
           </select>
           {prefillFrom && (
             <p className="mt-1 text-xs text-text-tertiary">
-              Pre-filled when this form is attached to a job. Standalone forms
-              leave the field blank. The value is frozen at attach time.
+              Pre-filled when this form is attached to a job. Standalone forms leave the field
+              blank. The value is frozen at attach time.
             </p>
           )}
         </div>

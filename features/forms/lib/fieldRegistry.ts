@@ -134,3 +134,29 @@ export function getFieldEntry(type: string): FieldRegistryEntry | undefined {
 
 /** Every field type, for builder pickers + test exhaustiveness checks. */
 export const FIELD_TYPES: FieldType[] = Object.keys(FIELD_REGISTRY) as FieldType[];
+
+/**
+ * Field-logic helpers on the registry seam (Phase C consolidation). These were
+ * re-derived inline across the fill surfaces, the public portal, the template
+ * editor, and the share panel — centralising them here keeps the registry the
+ * single source of truth for "is this field required / answerable / shippable".
+ */
+
+/** Is this field flagged required? (`config.required === true`.) */
+export function isFieldRequired(field: { config?: unknown }): boolean {
+  return (field.config as Record<string, unknown> | undefined)?.required === true;
+}
+
+/** The implemented field types, in registry order — the builder's type picker list. */
+export const IMPLEMENTED_TYPES: FieldType[] = FIELD_TYPES.filter(
+  (t) => FIELD_REGISTRY[t].implemented
+);
+
+/**
+ * Answerable fields only — drops layout types (section headings). Tolerates an
+ * unknown DB `type` (kept, mirroring the forward-compat fallback) since only a
+ * known layout entry is filtered out.
+ */
+export function answerableFields<T extends { type: string }>(fields: T[]): T[] {
+  return fields.filter((f) => !getFieldEntry(f.type)?.isLayout);
+}
