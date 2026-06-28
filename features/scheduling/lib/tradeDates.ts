@@ -18,6 +18,7 @@ import type { JobBlocker } from "@shared/lib/types";
 import { workDaysBetween } from "@shared/lib/workdays";
 import type { PhaseTargetDates } from "./schedule";
 import type { JobTradeStatus } from "@features/partners/lib/types";
+import { ownerReliabilityBufferDays, type OwnerReliabilityRecord } from "./commitmentLedger";
 
 export { type PhaseTargetDates };
 
@@ -70,29 +71,29 @@ export function blockerPhaseBurnDays(
  * full `baseDaysPerSub`; a perfect sub earns nothing extra. Works in tandem with
  * `computeRiskTieredBuffer`'s `subDependencyCount` term — this is the reliability
  * multiplier layer on top of the base sub-contingency.
+ *
+ * This is the sub-only special case of S13's `ownerReliabilityBufferDays`: a sub
+ * record IS an owner record with `kind: "subtrade"` and `ownerId = subtradeId`,
+ * so grouping by `kind:id` collapses to grouping by `subtradeId`. We map the
+ * records and delegate, keeping ONE implementation of the reliability math. The
+ * output is provably identical (locked by a shared-fixture test in
+ * `tradeDates.test.ts`).
  */
 export function computeSubReliabilityBufferDays(
   records: SubtradeReliabilityRecord[],
   baseDaysPerSub = 3
 ): number {
-  if (records.length === 0) return 0;
-
-  // Group records by subtrade.
-  const bySubtrade = new Map<string, SubtradeReliabilityRecord[]>();
-  for (const r of records) {
-    const group = bySubtrade.get(r.subtradeId) ?? [];
-    group.push(r);
-    bySubtrade.set(r.subtradeId, group);
-  }
-
-  let total = 0;
-  bySubtrade.forEach((group) => {
-    const missCount = group.filter((r) => r.missed).length;
-    if (missCount === 0) return;
-    const missRate = missCount / group.length;
-    total += Math.ceil(missRate * baseDaysPerSub);
-  });
-  return total;
+  const ownerRecords: OwnerReliabilityRecord[] = records.map((r) => ({
+    ownerKind: "subtrade",
+    ownerId: r.subtradeId,
+    // name is irrelevant to grouping (ownerId is non-null) and to the buffer
+    // math; mirror the id so the owner-key collapses to per-subtrade grouping.
+    ownerName: r.subtradeId,
+    committedDate: r.committedDate,
+    actualDate: r.actualDoneDate,
+    missed: r.missed,
+  }));
+  return ownerReliabilityBufferDays(ownerRecords, baseDaysPerSub);
 }
 
 // ── 3. Missed-date blocker reason ─────────────────────────────────────────────
