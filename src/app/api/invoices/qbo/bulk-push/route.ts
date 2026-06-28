@@ -5,6 +5,7 @@ import {
   getQboTokenHealth,
   runBulkPush,
 } from "@features/invoices/lib/qboBulkPushServer";
+import { getAuthedUserId } from "@shared/lib/authedUserServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -49,9 +50,10 @@ export async function POST() {
     return NextResponse.json({ ok: false, reason: "not_found" }, { status: 404 });
   }
 
-  // pushedBy is null for this route — the auth middleware already guards access,
-  // and the audit log records the attempt time regardless.
-  const result = await runBulkPush({ pushedBy: null });
+  // QBO-H5: a bulk catch-up is still an owner action — record who ran it on
+  // every attempt row (issue #188). Falls back to null only when unauthenticated.
+  const pushedBy = await getAuthedUserId();
+  const result = await runBulkPush({ pushedBy });
 
   if (!result.ok) {
     const status = result.reason === "unconfigured" ? 503 : 400;

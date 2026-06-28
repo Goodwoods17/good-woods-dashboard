@@ -1905,3 +1905,83 @@ test.describe("invoices QBO-H2 — token-table RLS least-privilege", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// QBO-H5 — capture who pushed/voided (audit integrity, issue #188)
+//
+// `pushInvoiceBill` / `voidInvoiceBill` accepted a `pushedBy` / `voidedBy` actor
+// but the API routes never threaded one in, so `qbo_push_attempts.pushed_by` was
+// always null for real user actions. The routes now read the authenticated user
+// id off the request cookies (getAuthedUserId) and pass it through.
+//
+// Two properties, both CI-realistic without live QBO OAuth:
+//   1. NO REGRESSION — adding the cookie-backed actor read must not break the
+//      routes: push + void still degrade gracefully (never a 5xx, never a token
+//      leak) when QBO is unconfigured.
+//   2. AUDIT COLUMN ROUND-TRIPS — a push-attempt row written with an actor id
+//      reads that exact id back from `pushed_by` (service-role gated), proving
+//      the audit trail can answer "who did this".
+// ---------------------------------------------------------------------------
+test.describe("invoices QBO-H5 — push/void still degrade gracefully with actor read (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("push + void routes never 5xx and never leak a token after threading the actor", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const base = "/api/invoices/00000000-0000-4000-8000-000000188a01";
+    const push = await page.request.post(`${base}/push-qbo`);
+    const voidRes = await page.request.post(`${base}/void-qbo`);
+
+    for (const res of [push, voidRes]) {
+      // Flag off → 404. Flag on without creds → 400 (not_connected) / 503
+      // (unconfigured). 409 is fine (blocked / not_pushed). 5xx is never OK.
+      expect([400, 404, 409, 503]).toContain(res.status());
+      const text = await res.text();
+      expect(text).not.toMatch(/access_token|refresh_token/i);
+    }
+  });
+});
+
+test.describe("invoices QBO-H5 — pushed_by audit column round-trips the actor", () => {
+  test.skip(
+    !supabaseUrl || !serviceRoleKey,
+    "needs SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_URL"
+  );
+
+  test("a push attempt written with an actor id reads that id back from pushed_by", async () => {
+    const ACTOR = "00000000-0000-4000-8000-000000188ac7";
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // qbo_push_attempts.invoice_id is a real FK — seed a throwaway invoice.
+    await sb.from("invoices").delete().eq("storage_path", "e2e-188/seed.pdf");
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({ status: "pending", storage_path: "e2e-188/seed.pdf" })
+      .select("id");
+    expect(invErr).toBeNull();
+    const invoiceId = invRows![0].id;
+
+    try {
+      const { data: attRows, error: attErr } = await sb
+        .from("qbo_push_attempts")
+        .insert({
+          invoice_id: invoiceId,
+          status: "succeeded",
+          kind: "push",
+          pushed_by: ACTOR,
+          environment: "sandbox",
+        })
+        .select("pushed_by");
+      expect(attErr).toBeNull();
+      // The audit trail records WHO — not a null actor for a user-driven push.
+      expect(attRows![0].pushed_by).toBe(ACTOR);
+    } finally {
+      // Invoice delete cascades to its push attempts.
+      await sb.from("invoices").delete().eq("id", invoiceId);
+    }
+  });
+});
