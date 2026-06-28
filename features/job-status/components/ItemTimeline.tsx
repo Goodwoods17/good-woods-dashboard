@@ -5,6 +5,7 @@ import { Camera, FileText, RefreshCw, X } from "lucide-react";
 import { formatError } from "@shared/lib/formatError";
 import { hasSupabase } from "@shared/lib/supabase";
 import { useJobEvents, getPhotoSignedUrl } from "../lib/eventStore";
+import { TimelineSkeleton } from "./Skeletons";
 import { JOB_ITEM_STATUS_LABELS } from "../lib/statusPill";
 import { VISIBILITY_LABELS, VISIBILITY_SHORT_LABELS, visibilityTone, nextVisibility } from "../lib/visibilityPill";
 import type { JobItemEvent, JobItemStatus, Visibility } from "../lib/types";
@@ -43,10 +44,10 @@ function PhotoThumbnail({ photoPath }: { photoPath: string }) {
   }, [photoPath]);
 
   if (err) {
-    return <span className="text-xs text-text-tertiary italic">(photo unavailable)</span>;
+    return <span className="text-xs text-text-secondary italic">Photo unavailable</span>;
   }
   if (!url) {
-    return <span className="text-xs text-text-tertiary animate-pulse">Loading photo…</span>;
+    return <span className="text-xs text-text-secondary animate-pulse">Loading photo…</span>;
   }
   return (
     <a
@@ -183,7 +184,7 @@ function CaptureForm({
           type="button"
           onClick={onClose}
           aria-label="Cancel"
-          className="text-text-tertiary hover:text-text-secondary"
+          className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center text-text-secondary hover:text-text-primary"
         >
           <X className="h-4 w-4" />
         </button>
@@ -217,7 +218,7 @@ function CaptureForm({
           onClick={() => fileRef.current?.click()}
           aria-label="Attach photo"
           data-testid="capture-photo-btn"
-          className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface px-2.5 py-1.5 text-xs text-text-secondary shadow-resting transition-colors duration-fast hover:bg-surface-muted"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-md border border-border bg-surface px-3 text-xs text-text-secondary shadow-resting transition-colors duration-fast hover:bg-surface-muted"
         >
           <Camera className="h-3.5 w-3.5" />
           {file ? file.name : "Photo"}
@@ -231,7 +232,7 @@ function CaptureForm({
               if (fileRef.current) fileRef.current.value = "";
             }}
             aria-label="Remove photo"
-            className="text-xs text-text-tertiary hover:text-red-500"
+            className="inline-flex min-h-[44px] items-center text-xs text-text-secondary hover:text-red-600"
           >
             Remove
           </button>
@@ -244,7 +245,7 @@ function CaptureForm({
           data-testid="capture-visibility-toggle"
           data-visibility={visibility}
           aria-label={`Event visibility: ${VISIBILITY_LABELS[visibility]}, tap to change`}
-          className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium transition-colors duration-fast ${visibilityTone(visibility).bg} ${visibilityTone(visibility).text}`}
+          className={`inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full px-3 text-xs font-medium transition-colors duration-fast ${visibilityTone(visibility).bg} ${visibilityTone(visibility).text}`}
         >
           {VISIBILITY_SHORT_LABELS[visibility]}
         </button>
@@ -254,7 +255,7 @@ function CaptureForm({
           onClick={submit}
           disabled={busy || (!note.trim() && !file)}
           data-testid="capture-submit-btn"
-          className="ml-auto inline-flex items-center rounded-md bg-accent px-3 py-1.5 text-xs font-medium text-white shadow-resting transition-colors duration-fast hover:bg-accent-hover disabled:opacity-50"
+          className="ml-auto inline-flex min-h-[44px] items-center rounded-md bg-accent px-3 text-xs font-medium text-white shadow-resting transition-colors duration-fast hover:bg-accent-hover disabled:opacity-50"
         >
           {busy ? "Saving…" : "Save"}
         </button>
@@ -323,21 +324,23 @@ export function ItemTimeline({
       {hasSupabase() && items.length > 0 && (
         <div className="mb-4">
           {!selectedItem ? (
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-text-tertiary">Add note or photo to:</span>
-              {items.slice(0, 6).map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedItemId(item.id)}
-                  aria-label={`Add note or photo to ${item.label}`}
-                  data-testid="timeline-item-picker-btn"
-                  className="rounded-md border border-border px-2 py-1 text-xs text-text-secondary transition-colors duration-fast hover:bg-surface-muted"
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
+            <>
+              <p className="mb-1.5 text-xs text-text-secondary">Add note or photo to:</p>
+              <div className="flex max-h-44 flex-wrap gap-2 overflow-y-auto pr-1">
+                {items.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedItemId(item.id)}
+                    aria-label={`Add note or photo to ${item.label}`}
+                    data-testid="timeline-item-picker-btn"
+                    className="inline-flex min-h-[44px] max-w-full items-center rounded-md border border-border px-3 text-xs text-text-secondary transition-colors duration-fast hover:bg-surface-muted hover:text-text-primary"
+                  >
+                    <span className="truncate">{item.label}</span>
+                  </button>
+                ))}
+              </div>
+            </>
           ) : (
             <CaptureForm
               itemLabel={selectedItem.label}
@@ -349,9 +352,16 @@ export function ItemTimeline({
       )}
 
       {loading ? (
-        <p className="text-sm text-text-tertiary">Loading timeline…</p>
+        <TimelineSkeleton />
       ) : events.length === 0 ? (
-        <p className="text-sm text-text-tertiary">No activity yet.</p>
+        <div>
+          <p className="text-sm text-text-secondary">No activity yet.</p>
+          {hasSupabase() && items.length > 0 && (
+            <p className="mt-1 text-xs text-text-tertiary">
+              Tap an item above to add the first note or photo.
+            </p>
+          )}
+        </div>
       ) : (
         <ul className="divide-y divide-border" data-testid="timeline-list">
           {events.map((evt) => (

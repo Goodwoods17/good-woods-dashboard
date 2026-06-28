@@ -13,6 +13,8 @@ import { toTrackableItems, piecesToTrackableItems, pieceToPhase } from "../lib/a
 import { phaseProgress, jobProgress } from "../lib/progress";
 import { materialiseTemplates } from "../lib/templates";
 import { useJobProgress } from "../lib/jobProgressStore";
+import { ProgressBar } from "./ProgressBar";
+import { FieldSkeleton } from "./Skeletons";
 import { JOB_ITEM_STATUS_LABELS, jobItemStatusTone } from "../lib/statusPill";
 import { nextVisibility, isClientFacing, VISIBILITY_LABELS, VISIBILITY_SHORT_LABELS, visibilityTone } from "../lib/visibilityPill";
 import type { Phase, TrackableItemKind, Visibility } from "../lib/types";
@@ -45,29 +47,6 @@ function pieceStatusTone(status: string): PillTone {
   return { bg: "bg-accent-soft", text: "text-accent", dot: "bg-accent" };
 }
 
-// ─── Progress bar ─────────────────────────────────────────────────────────────
-
-function ProgressBar({ pct, testId }: { pct: number; testId?: string }) {
-  const pctInt = Math.round(pct * 100);
-  return (
-    // testid lives on the always-full-width track, not the fill — the fill is
-    // zero-width at 0% progress, which Playwright treats as not-visible.
-    <div
-      data-testid={testId}
-      className="h-1.5 w-full overflow-hidden rounded-full bg-surface-muted"
-    >
-      <div
-        className="h-full rounded-full bg-accent transition-all duration-slow"
-        style={{ width: `${pctInt}%` }}
-        role="progressbar"
-        aria-valuenow={pctInt}
-        aria-valuemin={0}
-        aria-valuemax={100}
-      />
-    </div>
-  );
-}
-
 // ─── Visibility badge button ───────────────────────────────────────────────────
 
 /**
@@ -94,7 +73,7 @@ function VisibilityBadge({
       data-testid="visibility-toggle"
       data-visibility={visibility}
       aria-label={`Visibility: ${VISIBILITY_LABELS[visibility]}, tap to change`}
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium transition-colors duration-fast disabled:opacity-50 ${tone.bg} ${tone.text}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-1 rounded-full px-3 min-h-[44px] min-w-[44px] text-xs font-medium transition-colors duration-fast disabled:opacity-50 ${tone.bg} ${tone.text}`}
     >
       {facing ? (
         <Eye className="h-3 w-3" aria-hidden />
@@ -193,14 +172,14 @@ function PhaseSection({
 
       {/* Phase progress bar (always visible, even when collapsed) */}
       <div className="px-4 pb-2">
-        <ProgressBar pct={pct} testId={`phase-progress-${phase}`} />
+        <ProgressBar pct={pct} testId={`phase-progress-${phase}`} className="h-1.5 w-full" />
       </div>
 
       {/* Items + add form (hidden when collapsed) */}
       {!collapsed && (
         <div id={`phase-items-${phase}`} className="px-4 pb-3">
           {rows.length === 0 && !addForm ? (
-            <p className="py-2 text-xs text-text-tertiary">No steps yet.</p>
+            <p className="py-2 text-xs text-text-secondary">No steps yet — add one below.</p>
           ) : (
             <ul className="flex flex-col gap-1.5 mt-1">
               {rows.map((row) => (
@@ -215,7 +194,7 @@ function PhaseSection({
                     data-kind={row.kind}
                     data-phase={phase}
                     aria-label={`${row.label} — ${row.statusLabel}, tap to advance`}
-                    className="flex flex-1 min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
+                    className="flex flex-1 min-h-[44px] min-w-0 items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors duration-fast hover:bg-surface-muted disabled:opacity-60"
                   >
                     <span className="min-w-0 truncate text-sm text-text-primary">{row.label}</span>
                     <Pill tone={row.tone} label={row.statusLabel} />
@@ -249,7 +228,7 @@ function PhaseSection({
                 placeholder="Step description…"
                 aria-label={`New step for ${phaseLabel}`}
                 data-testid={`add-step-input-${phase}`}
-                className="flex-1 min-w-0 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
+                className="flex-1 min-h-[44px] min-w-0 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-tertiary outline-none focus:border-accent focus:ring-1 focus:ring-accent"
               />
               <button
                 type="button"
@@ -257,7 +236,7 @@ function PhaseSection({
                 disabled={addingBusy || !addForm.label.trim()}
                 data-testid={`add-step-submit-${phase}`}
                 aria-label="Add step"
-                className="inline-flex items-center justify-center rounded-md bg-accent px-2.5 py-2 text-white shadow-resting transition-colors duration-fast hover:bg-accent-hover disabled:opacity-50"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md bg-accent px-2.5 text-white shadow-resting transition-colors duration-fast hover:bg-accent-hover disabled:opacity-50"
               >
                 <Check className="h-4 w-4" />
               </button>
@@ -265,7 +244,7 @@ function PhaseSection({
                 type="button"
                 onClick={onAddCancel}
                 aria-label="Cancel"
-                className="inline-flex items-center justify-center rounded-md border border-border bg-surface px-2.5 py-2 text-text-secondary shadow-resting transition-colors duration-fast hover:bg-surface-muted"
+                className="inline-flex min-h-[44px] min-w-[44px] items-center justify-center rounded-md border border-border bg-surface px-2.5 text-text-secondary shadow-resting transition-colors duration-fast hover:bg-surface-muted"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -276,7 +255,7 @@ function PhaseSection({
               onClick={onAddStart}
               disabled={!hasSupabase()}
               data-testid={`add-step-btn-${phase}`}
-              className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs text-text-tertiary transition-colors duration-fast hover:bg-surface-muted hover:text-text-secondary disabled:opacity-40"
+              className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-md px-2 text-xs text-text-secondary transition-colors duration-fast hover:bg-surface-muted hover:text-text-primary disabled:opacity-40"
             >
               <Plus className="h-3.5 w-3.5" />
               Add step
@@ -452,7 +431,7 @@ export function JobStatusTab({
       )}
 
       {loading ? (
-        <p className="text-sm text-text-tertiary">Loading…</p>
+        <FieldSkeleton />
       ) : (
         <>
           {/* Job-level progress — rendered only once BOTH job_items and pieces
@@ -468,7 +447,7 @@ export function JobStatusTab({
                 {Math.round(jobPct * 100)}%
               </span>
             </div>
-            <ProgressBar pct={jobPct} testId="job-progress-bar" />
+            <ProgressBar pct={jobPct} testId="job-progress-bar" className="h-1.5 w-full" />
           </div>
 
           <div className="flex flex-col gap-3">
