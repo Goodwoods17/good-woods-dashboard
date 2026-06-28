@@ -2194,3 +2194,55 @@ test.describe("invoices QBO-H8 — reconnect nudge + actionable block link (gate
     await sb.from("invoices").delete().eq("id", inv.id);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO-H9 — bulk-push panel: real error state (stop the silent vanish) (#192)
+// ───────────────────────────────────────────────────────────────────────────
+// The panel used to collapse any transient GET failure to phase:"hidden", so a
+// 500 made the whole catch-up bar vanish — owner couldn't tell "no backlog"
+// from "service broken". We mock the GET endpoint to a transient 500 and assert
+// a VISIBLE, retryable error row renders instead of nothing. State-derivation
+// logic is unit-tested in qboBulkPushPanelState.test.ts (12 assertions).
+test.describe("invoices QBO-H9 — bulk-push panel surfaces a retryable error", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("a transient 500 on the bulk-push probe shows a retry row, not a vanished panel", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // Force the catch-up probe to fail transiently (5xx) on first load.
+    let hits = 0;
+    await page.route("**/api/invoices/qbo/bulk-push", async (route) => {
+      if (route.request().method() !== "GET") return route.continue();
+      hits += 1;
+      if (hits === 1) {
+        return route.fulfill({
+          status: 500,
+          contentType: "text/html",
+          body: "<html>boom</html>",
+        });
+      }
+      // The retry recovers cleanly → "no backlog" (idle, count 0): error clears.
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: true, count: 0, tokenHealth: null }),
+      });
+    });
+
+    await page.goto("/invoices");
+    await expect(page.getByText("Supplier invoices")).toBeVisible({ timeout: 15_000 });
+
+    // The bug fix: a visible, retryable error row — NOT a silent vanish.
+    const errorRow = page.getByTestId("qbo-bulk-push-error");
+    await expect(errorRow).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("qbo-bulk-push-retry-btn")).toBeVisible();
+
+    // Retrying recovers: the error row clears once the probe succeeds.
+    await page.getByTestId("qbo-bulk-push-retry-btn").click();
+    await expect(errorRow).toBeHidden({ timeout: 15_000 });
+
+    await page.unroute("**/api/invoices/qbo/bulk-push");
+  });
+});
