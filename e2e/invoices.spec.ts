@@ -940,3 +940,132 @@ test.describe("invoices QBO S4 — account + tax-code mapping (gated)", () => {
     expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S5 — material/subtrade kind resolution (issue #151)
+// ───────────────────────────────────────────────────────────────────────────
+// Posting used to hardcode kind="material", so subtrade bills mis-booked in
+// estimated-vs-actual. The match UI now tags each line material|subtrade and
+// posting threads that kind into job_cost_actuals.kind. This proves a line
+// tagged subtrade in the UI books to the subtrade bucket, while a sibling line
+// left at the material default keeps booking material (no regression).
+test.describe("invoices QBO S5 — material/subtrade kind resolution", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("a line tagged subtrade in the match UI books a subtrade actual; the material line stays material", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // The sentinel job seeded by scripts/seed-e2e.mjs.
+    const JOB_ID = "e2e-smoke-job";
+
+    // Clean slate from any prior attempt (actuals first — FK to the invoice).
+    const { data: priorInv } = await sb
+      .from("invoices")
+      .select("id")
+      .ilike("invoice_number", "E2E-KIND-001");
+    for (const row of priorInv ?? []) {
+      await sb.from("job_cost_actuals").delete().eq("source_invoice_id", row.id);
+    }
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-KIND-001");
+
+    // 1. Seed a reviewed invoice with two non-taxable lines, both assigned to
+    //    the job, both left untagged (line_kind null → defaults to material).
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-s5/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-kind-test.pdf",
+        supplier: "Toolpath CNC",
+        invoice_number: "E2E-KIND-001",
+        pre_tax_total: 300,
+        gst: 0,
+        pst: 0,
+        total: 300,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    const { data: lineRows, error: lineErr } = await sb
+      .from("invoice_lines")
+      .insert([
+        {
+          invoice_id: inv.id,
+          line_no: 1,
+          description: "CNC nesting — sub bill",
+          amount: 200,
+          tax_flag: false,
+          job_id: JOB_ID,
+        },
+        {
+          invoice_id: inv.id,
+          line_no: 2,
+          description: "Edge banding stock",
+          amount: 100,
+          tax_flag: false,
+          job_id: JOB_ID,
+        },
+      ])
+      .select("*")
+      .order("line_no", { ascending: true });
+    expect(lineErr).toBeNull();
+    const subtradeLine = lineRows!.find((l) => l.line_no === 1)!;
+
+    // 2. Login and open the match page (reviewed invoices route there).
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 3. Tag the first line (CNC nesting) as Subtrade; leave the second material.
+    const kindPicker = page.locator('[data-testid="line-kind-picker-0"]');
+    await expect(kindPicker).toBeVisible();
+    await kindPicker.selectOption("subtrade");
+
+    // 4. Post to actuals.
+    const postBtn = page.locator('[data-testid="post-actuals-btn"]');
+    await expect(postBtn).toBeVisible();
+    await postBtn.click();
+    await expect(page.locator('[data-testid="invoice-posted-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 5. The first line booked a SUBTRADE actual, not material; the second
+    //    line (untouched default) booked material.
+    const { data: actuals } = await sb
+      .from("job_cost_actuals")
+      .select("*")
+      .eq("source_invoice_id", inv.id);
+    expect(actuals).toHaveLength(2);
+
+    const subActual = actuals!.find((a) => a.source_invoice_line_id === subtradeLine.id);
+    expect(subActual?.kind).toBe("subtrade");
+    expect(Number(subActual?.amount)).toBeCloseTo(200, 2);
+
+    const materialActuals = actuals!.filter((a) => a.kind === "material");
+    expect(materialActuals).toHaveLength(1);
+    expect(Number(materialActuals[0].amount)).toBeCloseTo(100, 2);
+
+    // 6. The subtrade tag persisted on the line for auditability.
+    const { data: afterLine } = await sb
+      .from("invoice_lines")
+      .select("line_kind")
+      .eq("id", subtradeLine.id)
+      .single();
+    expect(afterLine?.line_kind).toBe("subtrade");
+
+    // 7. Clean up (actuals first — FK to the invoice).
+    await sb.from("job_cost_actuals").delete().eq("source_invoice_id", inv.id);
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});

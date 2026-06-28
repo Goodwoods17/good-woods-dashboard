@@ -22,7 +22,7 @@ import { useCatalog } from "@features/catalog/lib/catalogStore";
 import { saveInvoiceMatch, postInvoice } from "../lib/invoicesData";
 import { detectSupplier, suggestJob } from "../lib/invoiceMatch";
 import { buildSkuMatches, type LineSkuMatch } from "../lib/catalogPriceUpdate";
-import type { Invoice, InvoiceLine } from "../lib/types";
+import type { Invoice, InvoiceLine, InvoiceLineKind } from "../lib/types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -32,6 +32,9 @@ import type { Invoice, InvoiceLine } from "../lib/types";
 type LineAssignment = {
   lineId: string;
   jobId: string | null; // null = shop stock
+  // QBO S5 (#151): material (default) | subtrade. Routes the posted actual to
+  // the right BvA bucket + QBO account so a sub bill doesn't book as material.
+  lineKind: InvoiceLineKind;
 };
 
 // ---------------------------------------------------------------------------
@@ -84,6 +87,7 @@ export function InvoiceMatchView({
     lines.map((l) => ({
       lineId: l.id,
       jobId: l.jobId ?? autoSuggestedJobId,
+      lineKind: l.lineKind ?? "material",
     }))
   );
 
@@ -138,6 +142,10 @@ export function InvoiceMatchView({
 
   const setLineJob = useCallback((lineId: string, jobId: string | null) => {
     setLineAssignments((prev) => prev.map((a) => (a.lineId === lineId ? { ...a, jobId } : a)));
+  }, []);
+
+  const setLineKind = useCallback((lineId: string, lineKind: InvoiceLineKind) => {
+    setLineAssignments((prev) => prev.map((a) => (a.lineId === lineId ? { ...a, lineKind } : a)));
   }, []);
 
   // ── Slice 6: catalog price update (SKU match → delta → import) ───────────────
@@ -295,6 +303,7 @@ export function InvoiceMatchView({
                 const assignment = lineAssignments.find((a) => a.lineId === line.id);
                 const assignedJobId = assignment?.jobId ?? null;
                 const assignedJob = jobs.find((j) => j.id === assignedJobId) ?? null;
+                const lineKind: InvoiceLineKind = assignment?.lineKind ?? "material";
 
                 return (
                   <div
@@ -357,6 +366,21 @@ export function InvoiceMatchView({
                           {assignedJob.client}
                         </p>
                       )}
+                    </div>
+
+                    {/* Cost-kind picker (#151): material vs subtrade. Books the
+                        posted actual to the right BvA bucket + QBO account. */}
+                    <div className="w-full sm:w-36">
+                      <select
+                        aria-label={`Line ${line.lineNo} cost kind`}
+                        data-testid={`line-kind-picker-${idx}`}
+                        value={lineKind}
+                        onChange={(e) => setLineKind(line.id, e.target.value as InvoiceLineKind)}
+                        className="w-full rounded-md border border-border bg-surface px-2.5 py-1.5 text-sm text-text-primary outline-none transition-colors focus:border-accent focus:ring-1 focus:ring-accent"
+                      >
+                        <option value="material">Material</option>
+                        <option value="subtrade">Subtrade</option>
+                      </select>
                     </div>
                   </div>
                 );

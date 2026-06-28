@@ -7,7 +7,13 @@
  * never lost or created by rounding.
  */
 import { describe, it, expect } from "vitest";
-import { allocateLinePst, buildActualRows, canPostInvoice, postBlockedReason } from "./postInvoice";
+import {
+  allocateLinePst,
+  buildActualRows,
+  canPostInvoice,
+  postBlockedReason,
+  resolveActualKind,
+} from "./postInvoice";
 import type { InvoiceStatus } from "./types";
 
 // ---------------------------------------------------------------------------
@@ -117,6 +123,60 @@ describe("buildActualRows", () => {
     ]);
     expect(rows).toHaveLength(1);
     expect(rows[0].amountWithTax - rows[0].amount).toBeCloseTo(5, 10);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveActualKind — null/legacy defaults to material (#151)
+// ---------------------------------------------------------------------------
+
+describe("resolveActualKind", () => {
+  it("defaults null/undefined to material (historical behaviour unchanged)", () => {
+    expect(resolveActualKind(null)).toBe("material");
+    expect(resolveActualKind(undefined)).toBe("material");
+  });
+
+  it("passes through an explicit material tag", () => {
+    expect(resolveActualKind("material")).toBe("material");
+  });
+
+  it("resolves a subtrade tag", () => {
+    expect(resolveActualKind("subtrade")).toBe("subtrade");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildActualRows — per-line kind (#151)
+// ---------------------------------------------------------------------------
+
+describe("buildActualRows — material/subtrade kind", () => {
+  it("books an untagged line as material (no regression for existing rows)", () => {
+    const rows = buildActualRows(INVOICE, [
+      { id: "a", amount: 100, taxFlag: false, jobId: "job-1" },
+    ]);
+    expect(rows[0].kind).toBe("material");
+  });
+
+  it("books a subtrade-tagged line as subtrade, not material", () => {
+    const rows = buildActualRows(INVOICE, [
+      { id: "a", amount: 100, taxFlag: false, jobId: "job-1", lineKind: "subtrade" },
+    ]);
+    expect(rows[0].kind).toBe("subtrade");
+  });
+
+  it("books an explicit material-tagged line as material", () => {
+    const rows = buildActualRows(INVOICE, [
+      { id: "a", amount: 100, taxFlag: false, jobId: "job-1", lineKind: "material" },
+    ]);
+    expect(rows[0].kind).toBe("material");
+  });
+
+  it("resolves kind per line (a mixed bill books each line to its own bucket)", () => {
+    const rows = buildActualRows(INVOICE, [
+      { id: "a", amount: 60, taxFlag: false, jobId: "job-1", lineKind: "material" },
+      { id: "b", amount: 40, taxFlag: false, jobId: "job-1", lineKind: "subtrade" },
+    ]);
+    expect(rows.map((r) => r.kind)).toEqual(["material", "subtrade"]);
   });
 });
 

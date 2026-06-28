@@ -51,6 +51,8 @@ const lineRow: InvoiceLineRow = {
   job_id: null,
   // Slice 8: QBO account — null until owner assigns it.
   qbo_account: null,
+  // QBO S5 (#151): per-line cost kind — null = material until tagged.
+  line_kind: null,
   created_at: "2026-06-25T00:00:00Z",
 };
 
@@ -101,6 +103,22 @@ describe("rowToInvoiceLine", () => {
   it("maps qbo_account → qboAccount when set", () => {
     const line = rowToInvoiceLine({ ...lineRow, qbo_account: "5000-Materials" });
     expect(line.qboAccount).toBe("5000-Materials");
+  });
+
+  it("maps line_kind → lineKind (null = material/untagged by default, #151)", () => {
+    expect(rowToInvoiceLine(lineRow).lineKind).toBeNull();
+  });
+
+  it("maps a subtrade line_kind through", () => {
+    expect(rowToInvoiceLine({ ...lineRow, line_kind: "subtrade" }).lineKind).toBe("subtrade");
+  });
+
+  it("maps an explicit material line_kind through", () => {
+    expect(rowToInvoiceLine({ ...lineRow, line_kind: "material" }).lineKind).toBe("material");
+  });
+
+  it("coerces an unrecognised line_kind to null (defensive)", () => {
+    expect(rowToInvoiceLine({ ...lineRow, line_kind: "garbage" }).lineKind).toBeNull();
   });
 });
 

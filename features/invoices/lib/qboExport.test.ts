@@ -41,7 +41,7 @@ const baseInvoice: Pick<
 
 const baseLine: Pick<
   InvoiceLine,
-  "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount"
+  "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount" | "lineKind"
 > = {
   lineNo: 0,
   description: "Hard maple 3/4 sheet",
@@ -49,11 +49,12 @@ const baseLine: Pick<
   sku: "MAPLE-34",
   taxFlag: true,
   qboAccount: "5000-Materials",
+  lineKind: null,
 };
 
 const baseLine2: Pick<
   InvoiceLine,
-  "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount"
+  "lineNo" | "description" | "amount" | "sku" | "taxFlag" | "qboAccount" | "lineKind"
 > = {
   lineNo: 1,
   description: "Finishing supplies (GST only)",
@@ -61,6 +62,7 @@ const baseLine2: Pick<
   sku: "FIN-01",
   taxFlag: false,
   qboAccount: "5010-Supplies",
+  lineKind: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -168,6 +170,26 @@ describe("buildQboExport — lines", () => {
     const result = buildQboExport(baseInvoice, []);
     expect(result.lines).toEqual([]);
   });
+
+  // QBO S5 (#151): the line's kind tag threads onto the bill so a subtrade line
+  // books to the subtrade account/bucket, not material.
+  it("defaults an untagged line's kind to material", () => {
+    const result = buildQboExport(baseInvoice, [baseLine]);
+    expect(result.lines[0].kind).toBe("material");
+  });
+
+  it("threads a subtrade-tagged line's kind onto the bill", () => {
+    const result = buildQboExport(baseInvoice, [{ ...baseLine, lineKind: "subtrade" }]);
+    expect(result.lines[0].kind).toBe("subtrade");
+  });
+
+  it("resolves kind per line on a mixed bill", () => {
+    const result = buildQboExport(baseInvoice, [
+      { ...baseLine, lineKind: "material" },
+      { ...baseLine2, lineKind: "subtrade" },
+    ]);
+    expect(result.lines.map((l) => l.kind)).toEqual(["material", "subtrade"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -203,6 +225,7 @@ describe("QboBillExport shape completeness", () => {
     expect("accountRef" in line).toBe(true);
     expect("taxCodeRef" in line).toBe(true);
     expect("sku" in line).toBe(true);
+    expect("kind" in line).toBe(true);
   });
 
   // QBO S2 (issue #148): the central quickbooks_links mapping is the source of
