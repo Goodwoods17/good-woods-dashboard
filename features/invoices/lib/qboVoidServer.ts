@@ -16,8 +16,10 @@
  * Degrades gracefully when QBO is unconfigured / not connected (typed result,
  * never a throw, never a token leak) — mirrors `qboBillPushServer.ts`.
  */
-import { qboApiBaseUrl, type QboEnvironment } from "./qboOAuth";
-import { getFreshAccessToken } from "./qboConnectionServer";
+import { type QboEnvironment } from "./qboOAuth";
+import { qboFetch, qboMutate } from "./qboClient";
+import { withQboToken } from "./withQboToken";
+import { QBO_LOCAL_TYPE } from "./qboLinkTypes";
 import { getQuickbooksLink, deleteQuickbooksLink } from "./quickbooksLinksServer";
 import { qboBillDeepLink } from "./qboBillPush";
 import {
@@ -30,7 +32,7 @@ import {
 import { logPushAttempt } from "./qboPushAuditServer";
 import { isTransientHttpStatus } from "./qboPushAudit";
 
-const INVOICE_LOCAL_TYPE = "invoice";
+const INVOICE_LOCAL_TYPE = QBO_LOCAL_TYPE.invoice;
 
 // ---------------------------------------------------------------------------
 // QBO Bill read + delete helpers
@@ -48,10 +50,11 @@ async function readQboBill(
   environment: QboEnvironment,
   billId: string
 ): Promise<BillReadResult> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/bill/${encodeURIComponent(billId)}?minorversion=65`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
+  const res = await qboFetch({
+    accessToken,
+    realmId,
+    environment,
+    path: `bill/${encodeURIComponent(billId)}`,
   });
   // 404 (or 410): the bill no longer exists in QBO — treat as already gone so we
   // still clear the stale link below (self-healing un-push).
@@ -82,17 +85,12 @@ async function deleteQboBill(
   billId: string,
   syncToken: string
 ): Promise<BillDeleteResult> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/bill?operation=delete&minorversion=65`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(buildVoidDeleteBody({ id: billId, syncToken })),
-  });
+  const res = await qboMutate(
+    { accessToken, realmId, environment },
+    "bill",
+    buildVoidDeleteBody({ id: billId, syncToken }),
+    { operation: "delete" }
+  );
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     return {
@@ -133,114 +131,110 @@ export async function voidInvoiceBill(
   invoiceId: string,
   voidedBy?: string | null
 ): Promise<VoidResult> {
-  const tokenResult = await getFreshAccessToken();
-  if (!tokenResult.ok) {
-    return { status: tokenResult.reason === "unconfigured" ? "unconfigured" : "not_connected" };
-  }
-  const { accessToken, realmId, environment } = tokenResult;
+  return withQboToken<VoidResult>(async ({ accessToken, realmId, environment }) => {
+    // The pushed Bill link is the thing we're reversing. No link → nothing to void.
+    const existingLink = await getQuickbooksLink({
+      realmId,
+      localType: INVOICE_LOCAL_TYPE,
+      localId: invoiceId,
+    });
+    const billId = existingLink?.qboId ?? null;
 
-  // The pushed Bill link is the thing we're reversing. No link → nothing to void.
-  const existingLink = await getQuickbooksLink({
-    realmId,
-    localType: INVOICE_LOCAL_TYPE,
-    localId: invoiceId,
-  });
-  const billId = existingLink?.qboId ?? null;
+    const gate = evaluateBillVoid({ alreadyPushed: billId != null });
+    if (!gate.voidable || !billId) {
+      return { status: "not_pushed", gate };
+    }
 
-  const gate = evaluateBillVoid({ alreadyPushed: billId != null });
-  if (!gate.voidable || !billId) {
-    return { status: "not_pushed", gate };
-  }
+    try {
+      // 1. Read the Bill to recover its SyncToken (QBO delete requires it).
+      const read = await readQboBill(accessToken, realmId, environment, billId);
 
-  try {
-    // 1. Read the Bill to recover its SyncToken (QBO delete requires it).
-    const read = await readQboBill(accessToken, realmId, environment, billId);
+      // 1a. Already gone in QBO → just clear the stale link (self-healing un-push).
+      if (!read.ok && read.gone) {
+        await deleteQuickbooksLink({ realmId, localType: INVOICE_LOCAL_TYPE, localId: invoiceId });
+        await logPushAttempt({
+          invoiceId,
+          kind: "void",
+          status: "succeeded",
+          qboBillId: billId,
+          responseBody: { alreadyGone: true },
+          pushedBy: voidedBy ?? null,
+          realmId,
+          environment,
+        });
+        return {
+          status: "voided",
+          billId,
+          deepLink: qboBillDeepLink(environment, billId),
+        };
+      }
 
-    // 1a. Already gone in QBO → just clear the stale link (self-healing un-push).
-    if (!read.ok && read.gone) {
+      if (!read.ok) {
+        await logPushAttempt({
+          invoiceId,
+          kind: "void",
+          status: isTransientHttpStatus(read.httpStatus) ? "failed_transient" : "failed_permanent",
+          qboBillId: billId,
+          httpStatus: read.httpStatus,
+          errorMessage: read.message,
+          pushedBy: voidedBy ?? null,
+          realmId,
+          environment,
+        });
+        return { status: "qbo_error", message: read.message };
+      }
+
+      // 2. Delete the Bill in QBO.
+      const del = await deleteQboBill(accessToken, realmId, environment, billId, read.syncToken);
+      if (!del.ok) {
+        await logPushAttempt({
+          invoiceId,
+          kind: "void",
+          status: isTransientHttpStatus(del.httpStatus) ? "failed_transient" : "failed_permanent",
+          qboBillId: billId,
+          httpStatus: del.httpStatus,
+          responseBody: del.body,
+          errorMessage: del.message,
+          pushedBy: voidedBy ?? null,
+          realmId,
+          environment,
+        });
+        return { status: "qbo_error", message: del.message };
+      }
+
+      // 3. Clear the local link so the (corrected) invoice can be re-pushed.
       await deleteQuickbooksLink({ realmId, localType: INVOICE_LOCAL_TYPE, localId: invoiceId });
+
+      // 4. Record the successful void in the shared audit trail.
       await logPushAttempt({
         invoiceId,
         kind: "void",
         status: "succeeded",
         qboBillId: billId,
-        responseBody: { alreadyGone: true },
+        responseBody: { deleted: true },
         pushedBy: voidedBy ?? null,
         realmId,
         environment,
       });
+
       return {
         status: "voided",
         billId,
         deepLink: qboBillDeepLink(environment, billId),
       };
-    }
-
-    if (!read.ok) {
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
       await logPushAttempt({
         invoiceId,
         kind: "void",
-        status: isTransientHttpStatus(read.httpStatus) ? "failed_transient" : "failed_permanent",
+        status: "failed_transient",
         qboBillId: billId,
-        httpStatus: read.httpStatus,
-        errorMessage: read.message,
+        errorMessage: message,
         pushedBy: voidedBy ?? null,
         realmId,
         environment,
       });
-      return { status: "qbo_error", message: read.message };
+      return { status: "qbo_error", message };
     }
-
-    // 2. Delete the Bill in QBO.
-    const del = await deleteQboBill(accessToken, realmId, environment, billId, read.syncToken);
-    if (!del.ok) {
-      await logPushAttempt({
-        invoiceId,
-        kind: "void",
-        status: isTransientHttpStatus(del.httpStatus) ? "failed_transient" : "failed_permanent",
-        qboBillId: billId,
-        httpStatus: del.httpStatus,
-        responseBody: del.body,
-        errorMessage: del.message,
-        pushedBy: voidedBy ?? null,
-        realmId,
-        environment,
-      });
-      return { status: "qbo_error", message: del.message };
-    }
-
-    // 3. Clear the local link so the (corrected) invoice can be re-pushed.
-    await deleteQuickbooksLink({ realmId, localType: INVOICE_LOCAL_TYPE, localId: invoiceId });
-
-    // 4. Record the successful void in the shared audit trail.
-    await logPushAttempt({
-      invoiceId,
-      kind: "void",
-      status: "succeeded",
-      qboBillId: billId,
-      responseBody: { deleted: true },
-      pushedBy: voidedBy ?? null,
-      realmId,
-      environment,
-    });
-
-    return {
-      status: "voided",
-      billId,
-      deepLink: qboBillDeepLink(environment, billId),
-    };
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    await logPushAttempt({
-      invoiceId,
-      kind: "void",
-      status: "failed_transient",
-      qboBillId: billId,
-      errorMessage: message,
-      pushedBy: voidedBy ?? null,
-      realmId,
-      environment,
-    });
-    return { status: "qbo_error", message };
-  }
+  });
 }

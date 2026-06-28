@@ -18,8 +18,10 @@
  * Every entry point degrades gracefully when QBO is unconfigured / not connected
  * (typed result, never a throw) — mirrors `qboVendorSyncServer.ts`.
  */
-import { qboApiBaseUrl, type QboEnvironment } from "./qboOAuth";
-import { getFreshAccessToken } from "./qboConnectionServer";
+import { type QboEnvironment } from "./qboOAuth";
+import { qboQuery, qboMutate } from "./qboClient";
+import { withQboToken } from "./withQboToken";
+import { QBO_LOCAL_TYPE, QBO_TYPE } from "./qboLinkTypes";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import {
   rowToInvoice,
@@ -52,8 +54,8 @@ import type { LatestPushAttempt } from "./qboPushAudit";
 import type { Invoice, InvoiceLine } from "./types";
 
 /** `quickbooks_links.local_type` / `qbo_type` for the invoice → Bill mapping. */
-const INVOICE_LOCAL_TYPE = "invoice";
-const BILL_QBO_TYPE = "Bill";
+const INVOICE_LOCAL_TYPE = QBO_LOCAL_TYPE.invoice;
+const BILL_QBO_TYPE = QBO_TYPE.bill;
 
 // ---------------------------------------------------------------------------
 // QBO Bill API helpers
@@ -86,16 +88,11 @@ async function findQboBillByDocNumber(
   environment: QboEnvironment,
   docNumber: string
 ): Promise<QboBillRef | null> {
-  const base = qboApiBaseUrl(environment);
   // Escape single quotes per QBO query-language rules.
   const safe = docNumber.replace(/'/g, "\\'");
   const query = `SELECT * FROM Bill WHERE DocNumber = '${safe}'`;
-  const url = `${base}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`;
-  const res = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" },
-  });
-  if (!res.ok) throw new Error(`QBO bill query failed: ${res.status} ${res.statusText}`);
-  return parseQboBillQuery(await res.json());
+  const body = await qboQuery({ accessToken, realmId, environment }, query, "QBO bill query");
+  return parseQboBillQuery(body);
 }
 
 /** Typed result from a QBO Bill create attempt (replaces throwing on error). */
@@ -121,18 +118,8 @@ export async function createQboBill(
   requestBody: Record<string, unknown>,
   requestId: string
 ): Promise<QboBillCreateResult> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/bill?minorversion=65&requestid=${encodeURIComponent(
-    requestId
-  )}`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
+  const res = await qboMutate({ accessToken, realmId, environment }, "bill", requestBody, {
+    requestid: requestId,
   });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -174,73 +161,69 @@ type LoadedContext = {
 type LoadError = { status: "not_connected" | "unconfigured" | "not_found"; message?: string };
 
 async function loadPushContext(invoiceId: string): Promise<LoadedContext | LoadError> {
-  const tokenResult = await getFreshAccessToken();
-  if (!tokenResult.ok) {
-    return { status: tokenResult.reason === "unconfigured" ? "unconfigured" : "not_connected" };
-  }
-  const { accessToken, realmId, environment } = tokenResult;
+  return withQboToken<LoadedContext | LoadError>(async ({ accessToken, realmId, environment }) => {
+    const sb = getServiceRoleClient();
+    if (!sb) return { status: "unconfigured" };
 
-  const sb = getServiceRoleClient();
-  if (!sb) return { status: "unconfigured" };
+    const { data: invRow } = await sb
+      .from("invoices")
+      .select("*")
+      .eq("id", invoiceId)
+      .maybeSingle<InvoiceRow>();
+    if (!invRow) return { status: "not_found" };
 
-  const { data: invRow } = await sb
-    .from("invoices")
-    .select("*")
-    .eq("id", invoiceId)
-    .maybeSingle<InvoiceRow>();
-  if (!invRow) return { status: "not_found" };
+    const { data: lineRows } = await sb
+      .from("invoice_lines")
+      .select("*")
+      .eq("invoice_id", invoiceId)
+      .order("line_no", { ascending: true });
 
-  const { data: lineRows } = await sb
-    .from("invoice_lines")
-    .select("*")
-    .eq("invoice_id", invoiceId)
-    .order("line_no", { ascending: true });
+    const invoice = rowToInvoice(invRow);
+    const lines = ((lineRows as InvoiceLineRow[] | null) ?? []).map(rowToInvoiceLine);
 
-  const invoice = rowToInvoice(invRow);
-  const lines = ((lineRows as InvoiceLineRow[] | null) ?? []).map(rowToInvoiceLine);
+    // Central vendor link (ADR 0021) + account/tax maps. Shared with the export
+    // route (QBO-H6) so the pushed Bill and the JSON export can never drift on
+    // which QBO refs an invoice maps to.
+    const { centralVendorRef, maps } = await resolveInvoiceCentralLinks(invoice, realmId);
+    const { bill, reconciliation } = buildQboBill(invoice, lines, {
+      centralVendorRef,
+      maps,
+      taxMode: resolveQboTaxMode(),
+    });
 
-  // Central vendor link (ADR 0021) + account/tax maps. Shared with the export
-  // route (QBO-H6) so the pushed Bill and the JSON export can never drift on
-  // which QBO refs an invoice maps to.
-  const { centralVendorRef, maps } = await resolveInvoiceCentralLinks(invoice, realmId);
-  const { bill, reconciliation } = buildQboBill(invoice, lines, {
-    centralVendorRef,
-    maps,
-    taxMode: resolveQboTaxMode(),
+    // Existing Bill link → idempotent short-circuit signal.
+    const existingLink = await getQuickbooksLink({
+      realmId,
+      localType: INVOICE_LOCAL_TYPE,
+      localId: invoice.id,
+    });
+    const existingBillId = existingLink?.qboId ?? null;
+
+    // S9: pass reconciliation so the gate can flag total-mismatch before push.
+    const gate = evaluateBillPush({
+      invoiceStatus: invoice.status,
+      alreadyPushed: existingBillId != null,
+      vendorRef: bill.VendorRef?.value ?? null,
+      lines: lines.map((l) => ({
+        account: l.qboAccount,
+        taxKey: lineTaxKey(l.taxFlag, { gst: invoice.gst, pst: invoice.pst }),
+      })),
+      maps,
+      reconciliation,
+    });
+
+    return {
+      invoice,
+      lines,
+      bill,
+      reconciliation,
+      gate,
+      existingBillId,
+      realmId,
+      environment,
+      accessToken,
+    };
   });
-
-  // Existing Bill link → idempotent short-circuit signal.
-  const existingLink = await getQuickbooksLink({
-    realmId,
-    localType: INVOICE_LOCAL_TYPE,
-    localId: invoice.id,
-  });
-  const existingBillId = existingLink?.qboId ?? null;
-
-  // S9: pass reconciliation so the gate can flag total-mismatch before push.
-  const gate = evaluateBillPush({
-    invoiceStatus: invoice.status,
-    alreadyPushed: existingBillId != null,
-    vendorRef: bill.VendorRef?.value ?? null,
-    lines: lines.map((l) => ({
-      account: l.qboAccount,
-      taxKey: lineTaxKey(l.taxFlag, { gst: invoice.gst, pst: invoice.pst }),
-    })),
-    maps,
-    reconciliation,
-  });
-
-  return {
-    invoice,
-    lines,
-    bill,
-    reconciliation,
-    gate,
-    existingBillId,
-    realmId,
-    environment,
-    accessToken,
-  };
 }
 
 // ---------------------------------------------------------------------------

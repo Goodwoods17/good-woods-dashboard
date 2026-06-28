@@ -9,7 +9,10 @@
  * and `quickbooksLinksServer.ts`. SERVER-ROLE only; never import from a client
  * component.
  */
-import { qboApiBaseUrl, type QboEnvironment } from "./qboOAuth";
+import { type QboEnvironment } from "./qboOAuth";
+import { qboQuery, qboMutate } from "./qboClient";
+import { withQboToken } from "./withQboToken";
+import { QBO_LOCAL_TYPE, QBO_TYPE } from "./qboLinkTypes";
 import {
   parseQboVendorList,
   parseQboCreatedVendor,
@@ -19,7 +22,6 @@ import {
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { SUPPLIERS_TABLE } from "@features/catalog/lib/catalogRowMap";
 import { upsertQuickbooksLink, getQuickbooksLink } from "./quickbooksLinksServer";
-import { getFreshAccessToken } from "./qboConnectionServer";
 
 // ---------------------------------------------------------------------------
 // QBO API helpers
@@ -35,18 +37,12 @@ export async function listQboVendors(
   realmId: string,
   environment: QboEnvironment
 ): Promise<QboVendor[]> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/query?query=SELECT%20*%20FROM%20Vendor%20MAXRESULTS%20500&minorversion=65`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`QBO vendor query failed: ${res.status} ${res.statusText}`);
-  }
-  return parseQboVendorList(await res.json());
+  const body = await qboQuery(
+    { accessToken, realmId, environment },
+    "SELECT * FROM Vendor MAXRESULTS 500",
+    "QBO vendor query"
+  );
+  return parseQboVendorList(body);
 }
 
 /**
@@ -60,16 +56,8 @@ export async function createQboVendor(
   environment: QboEnvironment,
   displayName: string
 ): Promise<QboVendor> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/vendor?minorversion=65`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ DisplayName: displayName }),
+  const res = await qboMutate({ accessToken, realmId, environment }, "vendor", {
+    DisplayName: displayName,
   });
   if (!res.ok) {
     throw new Error(`QBO vendor create failed: ${res.status} ${res.statusText}`);
@@ -137,134 +125,128 @@ export async function resolveSupplierVendor(params: {
    */
   qboVendorId?: string | null;
 }): Promise<VendorResolveResult> {
-  // 1. Fresh access token.
-  const tokenResult = await getFreshAccessToken();
-  if (!tokenResult.ok) {
-    return {
-      status: tokenResult.reason === "unconfigured" ? "unconfigured" : "not_connected",
-    };
-  }
-  const { accessToken, realmId, environment } = tokenResult;
+  // 1. Fresh access token (or a typed unconfigured/not_connected short-circuit).
+  return withQboToken<VendorResolveResult>(async ({ accessToken, realmId, environment }) => {
+    // 2. Load the supplier.
+    const sb = getServiceRoleClient();
+    if (!sb) return { status: "unconfigured" };
 
-  // 2. Load the supplier.
-  const sb = getServiceRoleClient();
-  if (!sb) return { status: "unconfigured" };
+    const { data: sup } = await sb
+      .from(SUPPLIERS_TABLE)
+      .select("id, name")
+      .eq("id", params.supplierId)
+      .maybeSingle();
+    if (!sup) return { status: "supplier_not_found" };
 
-  const { data: sup } = await sb
-    .from(SUPPLIERS_TABLE)
-    .select("id, name")
-    .eq("id", params.supplierId)
-    .maybeSingle();
-  if (!sup) return { status: "supplier_not_found" };
+    const supplierName = (sup as { id: string; name: string }).name;
 
-  const supplierName = (sup as { id: string; name: string }).name;
+    // 3. Owner has chosen a specific QBO vendor (resolving a prior ambiguous result).
+    if (params.qboVendorId) {
+      await upsertQuickbooksLink({
+        localType: QBO_LOCAL_TYPE.vendor,
+        localId: params.supplierId,
+        qboType: QBO_TYPE.vendor,
+        qboId: params.qboVendorId,
+        realmId,
+        environment,
+        syncedAt: new Date().toISOString(),
+      });
+      // Fetch vendors so we can return the display name for the UI.
+      try {
+        const vendors = await listQboVendors(accessToken, realmId, environment);
+        const chosen = vendors.find((v) => v.id === params.qboVendorId);
+        return {
+          status: "mapped",
+          qboId: params.qboVendorId,
+          qboVendorName: chosen?.displayName ?? "",
+          created: false,
+        };
+      } catch {
+        // Non-fatal — we already persisted the link; display name is optional.
+        return { status: "mapped", qboId: params.qboVendorId, qboVendorName: "", created: false };
+      }
+    }
 
-  // 3. Owner has chosen a specific QBO vendor (resolving a prior ambiguous result).
-  if (params.qboVendorId) {
-    await upsertQuickbooksLink({
-      localType: "vendor",
-      localId: params.supplierId,
-      qboType: "Vendor",
-      qboId: params.qboVendorId,
+    // 4. Check for an existing mapping (cache hit — skip live QBO query).
+    const existing = await getQuickbooksLink({
       realmId,
-      environment,
-      syncedAt: new Date().toISOString(),
+      localType: QBO_LOCAL_TYPE.vendor,
+      localId: params.supplierId,
     });
-    // Fetch vendors so we can return the display name for the UI.
+    if (existing) {
+      // Refresh synced_at so consumers know this was confirmed recently.
+      await upsertQuickbooksLink({
+        localType: QBO_LOCAL_TYPE.vendor,
+        localId: params.supplierId,
+        qboType: QBO_TYPE.vendor,
+        qboId: existing.qboId,
+        realmId,
+        environment,
+        syncedAt: new Date().toISOString(),
+      });
+      return { status: "mapped", qboId: existing.qboId, qboVendorName: "", created: false };
+    }
+
+    // 5. List vendors + match by name.
+    let vendors: QboVendor[];
     try {
-      const vendors = await listQboVendors(accessToken, realmId, environment);
-      const chosen = vendors.find((v) => v.id === params.qboVendorId);
+      vendors = await listQboVendors(accessToken, realmId, environment);
+    } catch (e) {
+      return {
+        status: "qbo_error",
+        message: e instanceof Error ? e.message : String(e),
+      };
+    }
+
+    const match = matchVendors(supplierName, vendors);
+
+    if (match.kind === "exact") {
+      await upsertQuickbooksLink({
+        localType: QBO_LOCAL_TYPE.vendor,
+        localId: params.supplierId,
+        qboType: QBO_TYPE.vendor,
+        qboId: match.vendor.id,
+        realmId,
+        environment,
+        syncedAt: new Date().toISOString(),
+      });
       return {
         status: "mapped",
-        qboId: params.qboVendorId,
-        qboVendorName: chosen?.displayName ?? "",
+        qboId: match.vendor.id,
+        qboVendorName: match.vendor.displayName,
         created: false,
       };
-    } catch {
-      // Non-fatal — we already persisted the link; display name is optional.
-      return { status: "mapped", qboId: params.qboVendorId, qboVendorName: "", created: false };
     }
-  }
 
-  // 4. Check for an existing mapping (cache hit — skip live QBO query).
-  const existing = await getQuickbooksLink({
-    realmId,
-    localType: "vendor",
-    localId: params.supplierId,
-  });
-  if (existing) {
-    // Refresh synced_at so consumers know this was confirmed recently.
+    if (match.kind === "ambiguous") {
+      return { status: "ambiguous", candidates: match.candidates };
+    }
+
+    // 6. No match → create a new Vendor in QBO.
+    let created: QboVendor;
+    try {
+      created = await createQboVendor(accessToken, realmId, environment, supplierName);
+    } catch (e) {
+      return {
+        status: "qbo_error",
+        message: e instanceof Error ? e.message : String(e),
+      };
+    }
+
     await upsertQuickbooksLink({
-      localType: "vendor",
+      localType: QBO_LOCAL_TYPE.vendor,
       localId: params.supplierId,
-      qboType: "Vendor",
-      qboId: existing.qboId,
-      realmId,
-      environment,
-      syncedAt: new Date().toISOString(),
-    });
-    return { status: "mapped", qboId: existing.qboId, qboVendorName: "", created: false };
-  }
-
-  // 5. List vendors + match by name.
-  let vendors: QboVendor[];
-  try {
-    vendors = await listQboVendors(accessToken, realmId, environment);
-  } catch (e) {
-    return {
-      status: "qbo_error",
-      message: e instanceof Error ? e.message : String(e),
-    };
-  }
-
-  const match = matchVendors(supplierName, vendors);
-
-  if (match.kind === "exact") {
-    await upsertQuickbooksLink({
-      localType: "vendor",
-      localId: params.supplierId,
-      qboType: "Vendor",
-      qboId: match.vendor.id,
+      qboType: QBO_TYPE.vendor,
+      qboId: created.id,
       realmId,
       environment,
       syncedAt: new Date().toISOString(),
     });
     return {
       status: "mapped",
-      qboId: match.vendor.id,
-      qboVendorName: match.vendor.displayName,
-      created: false,
+      qboId: created.id,
+      qboVendorName: created.displayName,
+      created: true,
     };
-  }
-
-  if (match.kind === "ambiguous") {
-    return { status: "ambiguous", candidates: match.candidates };
-  }
-
-  // 6. No match → create a new Vendor in QBO.
-  let created: QboVendor;
-  try {
-    created = await createQboVendor(accessToken, realmId, environment, supplierName);
-  } catch (e) {
-    return {
-      status: "qbo_error",
-      message: e instanceof Error ? e.message : String(e),
-    };
-  }
-
-  await upsertQuickbooksLink({
-    localType: "vendor",
-    localId: params.supplierId,
-    qboType: "Vendor",
-    qboId: created.id,
-    realmId,
-    environment,
-    syncedAt: new Date().toISOString(),
   });
-  return {
-    status: "mapped",
-    qboId: created.id,
-    qboVendorName: created.displayName,
-    created: true,
-  };
 }

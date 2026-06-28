@@ -2246,3 +2246,44 @@ test.describe("invoices QBO-H9 — bulk-push panel surfaces a retryable error", 
     await page.unroute("**/api/invoices/qbo/bulk-push");
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO-H10 — consolidation (qboClient + withQboToken + qboRoute), issue #193
+// ───────────────────────────────────────────────────────────────────────────
+// Behaviour-preserving de-dup: the three per-invoice QBO write routes (push /
+// void / attach) now share ONE `requireQboEnabled` flag guard and ONE
+// `statusForReason` map. So under the SAME condition (flag on in CI, no real QBO
+// creds → not_connected/unconfigured) they must agree on the HTTP status, never
+// 5xx-crash, and never leak a token. This locks the consolidation's contract.
+test.describe("invoices QBO-H10 — consolidated route helpers (gated, degradation)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("push / void / attach routes share one status mapping + never 5xx or leak a token", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const id = "00000000-0000-4000-8000-000000193a01";
+    const responses = await Promise.all([
+      page.request.post(`/api/invoices/${id}/push-qbo`),
+      page.request.post(`/api/invoices/${id}/void-qbo`),
+      page.request.post(`/api/invoices/${id}/attach-qbo`),
+    ]);
+
+    for (const res of responses) {
+      // Shared statusForReason: flag-off 404 / not_connected 400 / unconfigured
+      // 503 / not_pushed 409. A 5xx crash is NOT acceptable.
+      expect([400, 404, 409, 503]).toContain(res.status());
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+      expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+    }
+
+    // All three ride the SAME flag guard, so they agree on whether QBO is dark
+    // (all 404) or live-but-degraded (none 404) — never a mix.
+    const statuses = responses.map((r) => r.status());
+    const all404 = statuses.every((s) => s === 404);
+    const none404 = statuses.every((s) => s !== 404);
+    expect(all404 || none404).toBe(true);
+  });
+});

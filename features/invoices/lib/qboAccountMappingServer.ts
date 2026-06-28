@@ -9,7 +9,10 @@
  * missing — mirrors `qboVendorSyncServer.ts` (S3). SERVICE-ROLE only; never
  * import from a client component.
  */
-import { qboApiBaseUrl, type QboEnvironment } from "./qboOAuth";
+import { type QboEnvironment } from "./qboOAuth";
+import { qboQuery } from "./qboClient";
+import { withQboToken } from "./withQboToken";
+import { QBO_LOCAL_TYPE, QBO_TYPE } from "./qboLinkTypes";
 import {
   parseQboAccountList,
   parseQboTaxCodeList,
@@ -23,43 +26,18 @@ import {
   type UnmappedState,
   type AccountRequirement,
 } from "./qboAccountMapping";
-import { getFreshAccessToken } from "./qboConnectionServer";
 import { upsertQuickbooksLink, listQuickbooksLinks } from "./quickbooksLinksServer";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 
 /** `quickbooks_links.local_type` values this slice owns. */
-export const ACCOUNT_LOCAL_TYPE = "account";
-export const TAXCODE_LOCAL_TYPE = "taxcode";
+export const ACCOUNT_LOCAL_TYPE = QBO_LOCAL_TYPE.account;
+export const TAXCODE_LOCAL_TYPE = QBO_LOCAL_TYPE.taxcode;
 /**
  * QBO **TaxRate** ids (issue #186) — DISTINCT from TAXCODE_LOCAL_TYPE. Feeds a
  * manual TxnTaxDetail TaxLine's TaxRateRef; a TaxCode id must never be used
  * there. Same `quickbooks_links` table, additive — no migration.
  */
-export const TAXRATE_LOCAL_TYPE = "taxrate";
-
-// ---------------------------------------------------------------------------
-// QBO API helpers
-// ---------------------------------------------------------------------------
-
-async function qboQuery(
-  accessToken: string,
-  realmId: string,
-  environment: QboEnvironment,
-  query: string
-): Promise<unknown> {
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/query?query=${encodeURIComponent(query)}&minorversion=65`;
-  const res = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-    },
-  });
-  if (!res.ok) {
-    throw new Error(`QBO query failed: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
-}
+export const TAXRATE_LOCAL_TYPE = QBO_LOCAL_TYPE.taxrate;
 
 /** Fetch every Account from the connected QBO company. */
 export async function listQboAccounts(
@@ -68,9 +46,7 @@ export async function listQboAccounts(
   environment: QboEnvironment
 ): Promise<QboAccount[]> {
   const body = await qboQuery(
-    accessToken,
-    realmId,
-    environment,
+    { accessToken, realmId, environment },
     "SELECT * FROM Account MAXRESULTS 1000"
   );
   return parseQboAccountList(body);
@@ -83,9 +59,7 @@ export async function listQboTaxCodes(
   environment: QboEnvironment
 ): Promise<QboTaxCode[]> {
   const body = await qboQuery(
-    accessToken,
-    realmId,
-    environment,
+    { accessToken, realmId, environment },
     "SELECT * FROM TaxCode MAXRESULTS 1000"
   );
   return parseQboTaxCodeList(body);
@@ -193,70 +167,64 @@ export async function listRequiredAccountKeys(): Promise<string[]> {
 export async function getMappingState(
   requiredAccountKeys: string[] = []
 ): Promise<MappingStateResult> {
-  const tokenResult = await getFreshAccessToken();
-  if (!tokenResult.ok) {
+  return withQboToken<MappingStateResult>(async ({ accessToken, realmId, environment }) => {
+    let accounts: QboAccount[];
+    let taxCodes: QboTaxCode[];
+    try {
+      [accounts, taxCodes] = await Promise.all([
+        listQboAccounts(accessToken, realmId, environment),
+        listQboTaxCodes(accessToken, realmId, environment),
+      ]);
+    } catch (e) {
+      return { status: "qbo_error", message: e instanceof Error ? e.message : String(e) };
+    }
+
+    const accountLinks = await listQuickbooksLinks({
+      realmId,
+      localType: ACCOUNT_LOCAL_TYPE,
+    });
+    const taxLinks = await listQuickbooksLinks({ realmId, localType: TAXCODE_LOCAL_TYPE });
+
+    const accountByLocal: Record<string, string> = {};
+    for (const link of accountLinks) accountByLocal[link.localId] = link.qboId;
+
+    const taxByLocal: Record<string, string> = {};
+    for (const link of taxLinks) taxByLocal[link.localId] = link.qboId;
+
+    // No explicit keys → harvest the account labels every posted invoice carries,
+    // so the panel can draw a mapping row for each (the dead-end fix, #187).
+    const accountKeys =
+      requiredAccountKeys.length > 0 ? requiredAccountKeys : await listRequiredAccountKeys();
+    const accountRequirements = buildAccountRequirements(accountKeys, accountByLocal);
+
+    const taxSuggestions: TaxSuggestion[] = LOCAL_TAX_TYPES.map((localType) => {
+      const suggestion = suggestTaxCode(localType, taxCodes);
+      return {
+        localType,
+        suggestedQboId: suggestion?.id ?? null,
+        suggestedQboName: suggestion?.name ?? null,
+        mappedQboId: taxByLocal[localType] ?? null,
+      };
+    });
+
+    const unmapped = detectUnmappedMappings({
+      requiredAccountKeys: accountKeys,
+      requiredTaxKeys: [...LOCAL_TAX_TYPES],
+      accountByLocal,
+      taxByLocal,
+    });
+
     return {
-      status: tokenResult.reason === "unconfigured" ? "unconfigured" : "not_connected",
-    };
-  }
-  const { accessToken, realmId, environment } = tokenResult;
-
-  let accounts: QboAccount[];
-  let taxCodes: QboTaxCode[];
-  try {
-    [accounts, taxCodes] = await Promise.all([
-      listQboAccounts(accessToken, realmId, environment),
-      listQboTaxCodes(accessToken, realmId, environment),
-    ]);
-  } catch (e) {
-    return { status: "qbo_error", message: e instanceof Error ? e.message : String(e) };
-  }
-
-  const accountLinks = await listQuickbooksLinks({
-    realmId,
-    localType: ACCOUNT_LOCAL_TYPE,
-  });
-  const taxLinks = await listQuickbooksLinks({ realmId, localType: TAXCODE_LOCAL_TYPE });
-
-  const accountByLocal: Record<string, string> = {};
-  for (const link of accountLinks) accountByLocal[link.localId] = link.qboId;
-
-  const taxByLocal: Record<string, string> = {};
-  for (const link of taxLinks) taxByLocal[link.localId] = link.qboId;
-
-  // No explicit keys → harvest the account labels every posted invoice carries,
-  // so the panel can draw a mapping row for each (the dead-end fix, #187).
-  const accountKeys =
-    requiredAccountKeys.length > 0 ? requiredAccountKeys : await listRequiredAccountKeys();
-  const accountRequirements = buildAccountRequirements(accountKeys, accountByLocal);
-
-  const taxSuggestions: TaxSuggestion[] = LOCAL_TAX_TYPES.map((localType) => {
-    const suggestion = suggestTaxCode(localType, taxCodes);
-    return {
-      localType,
-      suggestedQboId: suggestion?.id ?? null,
-      suggestedQboName: suggestion?.name ?? null,
-      mappedQboId: taxByLocal[localType] ?? null,
+      status: "ok",
+      accounts,
+      taxCodes,
+      accountByLocal,
+      taxByLocal,
+      accountRequirements,
+      taxSuggestions,
+      unmapped,
     };
   });
-
-  const unmapped = detectUnmappedMappings({
-    requiredAccountKeys: accountKeys,
-    requiredTaxKeys: [...LOCAL_TAX_TYPES],
-    accountByLocal,
-    taxByLocal,
-  });
-
-  return {
-    status: "ok",
-    accounts,
-    taxCodes,
-    accountByLocal,
-    taxByLocal,
-    accountRequirements,
-    taxSuggestions,
-    unmapped,
-  };
 }
 
 /**
@@ -308,27 +276,21 @@ export async function saveMapping(params: {
     return { status: "invalid", message: "localId and qboId are required" };
   }
 
-  const tokenResult = await getFreshAccessToken();
-  if (!tokenResult.ok) {
-    return {
-      status: tokenResult.reason === "unconfigured" ? "unconfigured" : "not_connected",
-    };
-  }
-  const { realmId, environment } = tokenResult;
+  return withQboToken<SaveMappingResult>(async ({ realmId, environment }) => {
+    const localType = params.kind === "account" ? ACCOUNT_LOCAL_TYPE : TAXCODE_LOCAL_TYPE;
+    const qboType = params.kind === "account" ? QBO_TYPE.account : QBO_TYPE.taxCode;
 
-  const localType = params.kind === "account" ? ACCOUNT_LOCAL_TYPE : TAXCODE_LOCAL_TYPE;
-  const qboType = params.kind === "account" ? "Account" : "TaxCode";
+    const result = await upsertQuickbooksLink({
+      localType,
+      localId: params.localId,
+      qboType,
+      qboId: params.qboId,
+      realmId,
+      environment,
+      syncedAt: new Date().toISOString(),
+    });
 
-  const result = await upsertQuickbooksLink({
-    localType,
-    localId: params.localId,
-    qboType,
-    qboId: params.qboId,
-    realmId,
-    environment,
-    syncedAt: new Date().toISOString(),
+    if (!result.ok) return { status: "unconfigured" };
+    return { status: "saved", localType, localId: params.localId, qboId: params.qboId };
   });
-
-  if (!result.ok) return { status: "unconfigured" };
-  return { status: "saved", localType, localId: params.localId, qboId: params.qboId };
 }

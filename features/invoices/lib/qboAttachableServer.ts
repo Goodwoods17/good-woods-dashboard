@@ -14,7 +14,8 @@
  * status, but a failed attachment does NOT undo a successful bill push.
  */
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
-import { qboApiBaseUrl, type QboEnvironment } from "./qboOAuth";
+import { type QboEnvironment } from "./qboOAuth";
+import { qboFetch } from "./qboClient";
 import { INVOICES_BUCKET } from "./storage";
 import {
   buildAttachableMetadata,
@@ -69,16 +70,14 @@ async function uploadQboAttachable(
   // Part 2: raw file bytes (filename hint helps QBO set FileName on its side).
   formData.append("file_content_01", fileBlob, fileName);
 
-  const base = qboApiBaseUrl(environment);
-  const url = `${base}/v3/company/${realmId}/upload?minorversion=65`;
-  const res = await fetch(url, {
+  // A FormData body is passed straight through so `fetch` sets the multipart
+  // boundary itself; `qboFetch` deliberately omits Content-Type for it.
+  const res = await qboFetch({
+    accessToken,
+    realmId,
+    environment,
+    path: "upload",
     method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      Accept: "application/json",
-      // Do NOT set Content-Type manually — fetch auto-sets it with the boundary
-      // when the body is a FormData instance.
-    },
     body: formData,
   });
 

@@ -13,33 +13,17 @@
  * or the invoice was never pushed.
  */
 import { NextResponse } from "next/server";
-import { invoicesQboEnabled } from "@features/invoices/lib/featureFlag";
+import { requireQboEnabled, statusForReason } from "@features/invoices/lib/qboRoute";
 import { voidInvoiceBill } from "@features/invoices/lib/qboVoidServer";
 import { getAuthedUserId } from "@shared/lib/authedUserServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function statusForReason(reason: string): number {
-  switch (reason) {
-    case "unconfigured":
-      return 503;
-    case "not_connected":
-      return 400;
-    case "not_found":
-      return 404;
-    case "qbo_error":
-      return 502;
-    default:
-      return 400;
-  }
-}
-
 // POST — confirm + void (guarded reversal).
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
-  if (!invoicesQboEnabled()) {
-    return NextResponse.json({ ok: false, reason: "not_found" }, { status: 404 });
-  }
+  const off = requireQboEnabled();
+  if (off) return off;
   if (!params.id) {
     return NextResponse.json({ ok: false, reason: "missing_id" }, { status: 400 });
   }
