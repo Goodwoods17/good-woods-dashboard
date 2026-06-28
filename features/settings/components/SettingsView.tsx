@@ -12,6 +12,7 @@ import { ResetSection } from "./ResetSection";
 import { TradeRegistryEditor } from "@features/partners/components/TradeRegistryEditor";
 import { invoicesQboEnabled } from "@features/invoices/lib/featureFlag";
 import { ConnectQuickBooksPanel } from "@features/invoices/components/ConnectQuickBooksPanel";
+import { QboMappingPanel } from "@features/invoices/components/QboMappingPanel";
 
 export function SettingsView() {
   const { error } = useJobs();
@@ -37,6 +38,14 @@ export function SettingsView() {
             description="Connect your QuickBooks company so posted invoices can sync as bills."
           >
             <ConnectQuickBooksPanel />
+          </Section>
+        )}
+        {invoicesQboEnabled() && (
+          <Section
+            title="QuickBooks accounts & taxes"
+            description="Map your expense accounts and confirm the per-company GST/PST tax codes so posted invoices can sync as bills."
+          >
+            <QboMappingPanel />
           </Section>
         )}
         <ResetSection />

@@ -863,4 +863,80 @@ test.describe("invoices QBO S3 — vendor mapping endpoints (gated)", () => {
     expect(body.ok).toBe(false);
     expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
   });
-})
+});
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S4 — Account + tax-code mapping (settings + GST/PST wizard)
+// ───────────────────────────────────────────────────────────────────────────
+// The mapping endpoints + Settings panel ride the same NEXT_PUBLIC_INVOICES_QBO
+// gate as QBO S1–S3. With no QBO OAuth creds in CI the GET/POST must degrade
+// gracefully (not_connected / unconfigured, never a 5xx crash) and never leak a
+// token. The pure mapping/suggest/resolve logic is covered by the unit tests in
+// qboAccountMapping.test.ts.
+test.describe("invoices QBO S4 — account + tax-code mapping (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("the Settings page shows the QBO mapping panel; unconnected it asks to connect first", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/settings");
+
+    const panel = page.getByTestId("qbo-mapping-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // No QBO connection in CI → the GET returns not_connected, so the panel
+    // resolves to the "connect first" state (no tax wizard rows).
+    await expect(page.getByTestId("qbo-mapping-not-connected")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("qbo-tax-row-GST")).toHaveCount(0);
+  });
+
+  test("GET /api/invoices/qbo/mappings degrades gracefully without real QBO creds", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.get("/api/invoices/qbo/mappings");
+
+    // Flag off (prod default) → 404. Flag on in CI but no real QBO creds → 400
+    // (not_connected) or 503 (unconfigured). Never a 5xx crash.
+    expect([400, 404, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(typeof body.reason).toBe("string");
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+
+  test("POST /api/invoices/qbo/mappings rejects an invalid kind", async ({ page }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/mappings", {
+      data: { kind: "nonsense", localId: "GST", qboId: "4" },
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // Flag off → 404; flag on + bad kind → 400.
+    expect([400, 404]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+
+  test("POST /api/invoices/qbo/mappings with a valid shape degrades gracefully (no creds)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/mappings", {
+      data: { kind: "taxcode", localId: "GST", qboId: "4" },
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // Flag off → 404. Flag on but unconfigured → 503. Flag on but no token →
+    // 400 (not_connected). A 5xx "crash" (500) is NOT acceptable.
+    expect([400, 404, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+});
