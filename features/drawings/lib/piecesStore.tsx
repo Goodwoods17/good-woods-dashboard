@@ -6,6 +6,7 @@ import {
 import { JOB_PIECES_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
 import type { JobPiece } from "@shared/lib/types";
 import { rowToPiece, pieceToRow, type PieceRow } from "./piecesRowMap";
+import { optimistic } from "@shared/lib/optimistic";
 
 const STORAGE_KEY = "gw_job_pieces_v1";
 type Backend = "supabase" | "localStorage";
@@ -44,6 +45,18 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   const piecesRef = useRef<JobPiece[]>([]);
   useEffect(() => { piecesRef.current = pieces; }, [pieces]);
 
+  // Per-instance channel suffix. supabase-js returns the *existing* channel for a
+  // duplicate name, so a second <PiecesProvider> would call `.on()` on an
+  // already-subscribed channel and throw, blanking the page. A unique suffix
+  // keeps each subscriber independent. (Mirrors the job-status stores.)
+  const channelKeyRef = useRef<string | null>(null);
+  if (channelKeyRef.current === null) {
+    channelKeyRef.current =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `r${Math.random().toString(36).slice(2)}`;
+  }
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -70,7 +83,7 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
     if (backend !== "supabase") return;
     const sb = getSupabase();
     const channel = sb
-      .channel("job_pieces_changes")
+      .channel(`job_pieces_changes_${channelKeyRef.current}`)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: JOB_PIECES_TABLE },
@@ -96,45 +109,50 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   }, [backend]);
 
   const createPiece = useCallback(async (p: JobPiece) => {
-    piecesRef.current = [...piecesRef.current, p];
-    setPieces(piecesRef.current);
-    if (backend === "supabase") {
-      const { error } = await getSupabase().from(JOB_PIECES_TABLE).insert(pieceToRow(p));
-      if (error) {
-        piecesRef.current = piecesRef.current.filter((x) => x.id !== p.id);
-        setPieces(piecesRef.current);
-        throw error;
-      }
-    }
+    await optimistic({
+      ref: piecesRef,
+      setState: setPieces,
+      apply: (cur) => [...cur, p],
+      rollback: (cur) => cur.filter((x) => x.id !== p.id),
+      persist: async () => {
+        if (backend !== "supabase") return;
+        const { error } = await getSupabase().from(JOB_PIECES_TABLE).insert(pieceToRow(p));
+        if (error) throw error;
+      },
+    });
   }, [backend]);
 
   const updatePiece = useCallback(async (id: string, patch: Partial<JobPiece>) => {
     const prev = piecesRef.current.find((x) => x.id === id);
     if (!prev) return;
     const merged = { ...prev, ...patch };
-    piecesRef.current = piecesRef.current.map((x) => (x.id === id ? merged : x));
-    setPieces(piecesRef.current);
-    if (backend === "supabase") {
-      const { error } = await getSupabase().from(JOB_PIECES_TABLE).update(pieceToRow(merged)).eq("id", id);
-      if (error) {
-        piecesRef.current = piecesRef.current.map((x) => (x.id === id ? prev : x));
-        setPieces(piecesRef.current);
-        throw error;
-      }
-    }
+    await optimistic({
+      ref: piecesRef,
+      setState: setPieces,
+      apply: (cur) => cur.map((x) => (x.id === id ? merged : x)),
+      rollback: (cur) => cur.map((x) => (x.id === id ? prev : x)),
+      persist: async () => {
+        if (backend !== "supabase") return;
+        const { error } = await getSupabase().from(JOB_PIECES_TABLE).update(pieceToRow(merged)).eq("id", id);
+        if (error) throw error;
+      },
+    });
   }, [backend]);
 
   const deletePiece = useCallback(async (id: string) => {
     const removed = piecesRef.current.find((x) => x.id === id);
-    piecesRef.current = piecesRef.current.filter((x) => x.id !== id);
-    setPieces(piecesRef.current);
-    if (backend === "supabase") {
-      const { error } = await getSupabase().from(JOB_PIECES_TABLE).delete().eq("id", id);
-      if (error) {
-        if (removed) { piecesRef.current = [...piecesRef.current, removed]; setPieces(piecesRef.current); }
-        throw error;
-      }
-    }
+    if (!removed) return;
+    await optimistic({
+      ref: piecesRef,
+      setState: setPieces,
+      apply: (cur) => cur.filter((x) => x.id !== id),
+      rollback: (cur) => [...cur, removed],
+      persist: async () => {
+        if (backend !== "supabase") return;
+        const { error } = await getSupabase().from(JOB_PIECES_TABLE).delete().eq("id", id);
+        if (error) throw error;
+      },
+    });
   }, [backend]);
 
   const value = useMemo<PiecesContextValue>(
