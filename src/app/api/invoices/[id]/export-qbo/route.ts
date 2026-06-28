@@ -16,7 +16,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { buildQboExport, buildQboBill } from "@features/invoices/lib/qboExport";
+import { buildQboExport, buildQboBill, resolveQboTaxMode } from "@features/invoices/lib/qboExport";
 import {
   rowToInvoice,
   rowToInvoiceLine,
@@ -78,7 +78,9 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
   // No central account/tax maps are threaded here yet (the sync layer that
   // consumes /quickbooks_links will pass them) — without maps the bill carries
   // the raw local labels, so the shape is still complete + inspectable.
-  const { bill, reconciliation } = buildQboBill(invoice, lines);
+  const { bill, reconciliation } = buildQboBill(invoice, lines, {
+    taxMode: resolveQboTaxMode(),
+  });
 
   return NextResponse.json({ ok: true, export: exportShape, bill, reconciliation });
 }

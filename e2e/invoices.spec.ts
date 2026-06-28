@@ -1197,6 +1197,25 @@ test.describe("invoices QBO S6 — QB Bill payload", () => {
       // Total reconciliation: 1000 + 50 + 35 = 1085.
       expect(body.reconciliation.balanced).toBe(true);
       expect(Number(body.reconciliation.computedTotal)).toBeCloseTo(1085, 2);
+
+      // QBO-H3 (#186): TaxRateRef must NOT carry a TaxCode id or a placeholder
+      // label. With no TaxRate mapping threaded it resolves to null — never the
+      // local label "GST"/"PST" the old code leaked. (The line TaxCodeRef, by
+      // contrast, legitimately falls back to the local label pre-mapping.)
+      for (const tl of bill.TxnTaxDetail.TaxLine as Array<{
+        TaxLineDetail: { TaxRateRef: { value: string } | null; NetAmountTaxable: number };
+        _component: string;
+      }>) {
+        expect(tl.TaxLineDetail.TaxRateRef).toBeNull();
+      }
+      // The GST/PST taxable bases stay auditable on the reconciliation (#186):
+      // GST base spans every taxable line; PST base spans only the PST lines, so
+      // GST base is the larger (or equal) of the two.
+      expect(Number(body.reconciliation.gstBase)).toBeGreaterThan(0);
+      expect(Number(body.reconciliation.pstBase)).toBeGreaterThan(0);
+      expect(Number(body.reconciliation.gstBase)).toBeGreaterThanOrEqual(
+        Number(body.reconciliation.pstBase)
+      );
     }
 
     // 3. Clean up.

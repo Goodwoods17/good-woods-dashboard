@@ -27,6 +27,12 @@ import { upsertQuickbooksLink, listQuickbooksLinks } from "./quickbooksLinksServ
 /** `quickbooks_links.local_type` values this slice owns. */
 export const ACCOUNT_LOCAL_TYPE = "account";
 export const TAXCODE_LOCAL_TYPE = "taxcode";
+/**
+ * QBO **TaxRate** ids (issue #186) — DISTINCT from TAXCODE_LOCAL_TYPE. Feeds a
+ * manual TxnTaxDetail TaxLine's TaxRateRef; a TaxCode id must never be used
+ * there. Same `quickbooks_links` table, additive — no migration.
+ */
+export const TAXRATE_LOCAL_TYPE = "taxrate";
 
 // ---------------------------------------------------------------------------
 // QBO API helpers
@@ -202,16 +208,20 @@ export async function getMappingState(
 export async function loadMappingLookups(realmId: string): Promise<{
   accountByLocal: Record<string, string>;
   taxByLocal: Record<string, string>;
+  taxRateByLocal: Record<string, string>;
 }> {
-  const [accountLinks, taxLinks] = await Promise.all([
+  const [accountLinks, taxLinks, taxRateLinks] = await Promise.all([
     listQuickbooksLinks({ realmId, localType: ACCOUNT_LOCAL_TYPE }),
     listQuickbooksLinks({ realmId, localType: TAXCODE_LOCAL_TYPE }),
+    listQuickbooksLinks({ realmId, localType: TAXRATE_LOCAL_TYPE }),
   ]);
   const accountByLocal: Record<string, string> = {};
   for (const link of accountLinks) accountByLocal[link.localId] = link.qboId;
   const taxByLocal: Record<string, string> = {};
   for (const link of taxLinks) taxByLocal[link.localId] = link.qboId;
-  return { accountByLocal, taxByLocal };
+  const taxRateByLocal: Record<string, string> = {};
+  for (const link of taxRateLinks) taxRateByLocal[link.localId] = link.qboId;
+  return { accountByLocal, taxByLocal, taxRateByLocal };
 }
 
 // ---------------------------------------------------------------------------
