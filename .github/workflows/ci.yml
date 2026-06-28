@@ -61,6 +61,11 @@ jobs:
       # the e2e job so the capture-tracer smoke can reach /invoices. Inlined at
       # build time (NEXT_PUBLIC_*), so it must be set before the build step.
       NEXT_PUBLIC_INVOICES_ENABLED: "true"
+      # QBO sync (issue #147+) rides a separate dark-ship sub-flag, OFF in prod.
+      # Turn it ON for the e2e job so the Connect QuickBooks settings panel
+      # renders under test. With no QBO OAuth creds present it degrades to a clean
+      # "not configured" state with no live Intuit call.
+      NEXT_PUBLIC_INVOICES_QBO_ENABLED: "true"
       # Job Status (milestone #5) is likewise flag-gated OFF in prod; turn it ON
       # for the e2e job so the live-status-cycle smoke can reach /status.
       NEXT_PUBLIC_JOB_STATUS_ENABLED: "true"

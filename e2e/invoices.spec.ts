@@ -601,9 +601,9 @@ test.describe("invoices slice 7 — camera capture (PWA)", () => {
     await page.locator('[data-testid="camera-page-input"]').setInputFiles(SAMPLE_PDF);
 
     // 4. A page preview thumbnail appears.
-    await expect(
-      panel.locator('[data-testid="camera-page-preview"]').first()
-    ).toBeVisible({ timeout: 5_000 });
+    await expect(panel.locator('[data-testid="camera-page-preview"]').first()).toBeVisible({
+      timeout: 5_000,
+    });
 
     // 5. The upload button is shown and shows the page count.
     const uploadBtn = panel.locator('[data-testid="camera-upload-btn"]');
@@ -709,6 +709,49 @@ test.describe("invoices slice 8 — QBO export stub", () => {
 
     // 3. Clean up.
     await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// QBO S1 — Connect QuickBooks (OAuth + encrypted token store), settings panel
+// ---------------------------------------------------------------------------
+
+// The "Connect QuickBooks" panel in Settings is dark-shipped behind
+// NEXT_PUBLIC_INVOICES_QBO_ENABLED (separate from NEXT_PUBLIC_INVOICES_ENABLED);
+// CI turns the QBO flag on. With no QBO OAuth creds present in CI, the status
+// probe reports configured:false and the panel must degrade to a clean "not
+// configured" state — never a dead Connect button, never a crash.
+test.describe("invoices QBO S1 — Connect QuickBooks panel (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("the Settings page shows the QuickBooks connect panel, gracefully unconfigured", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/settings");
+
+    const panel = page.getByTestId("qbo-connect-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // No OAuth creds in CI → the status probe returns configured:false, so the
+    // panel resolves to the "not configured" state (not a connect button).
+    await expect(page.getByTestId("qbo-not-configured")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("qbo-connect")).toHaveCount(0);
+    await expect(page.getByTestId("qbo-disconnect")).toHaveCount(0);
+  });
+
+  test("the QBO status endpoint reports unconfigured without leaking a token", async ({ page }) => {
+    // Use the logged-in browser context (page.request shares its auth cookies);
+    // the route is behind the auth middleware.
+    await login(page);
+    const res = await page.request.get("/api/invoices/qbo/status");
+    expect(res.status()).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+    expect(body.configured).toBe(false);
+    expect(body.connected).toBe(false);
+    // The probe never returns any token field.
+    expect(JSON.stringify(body)).not.toMatch(/refresh_token|access_token/i);
   });
 });
 
