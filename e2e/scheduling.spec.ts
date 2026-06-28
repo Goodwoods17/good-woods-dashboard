@@ -1775,3 +1775,92 @@ test.describe("scheduling slice 24 — P&L revenue forecast panel (P6, gated)", 
     await expect(panel).toBeVisible({ timeout: 15_000 });
   });
 });
+
+// Scheduling S25 (P6) — PPC + on-time-delivery reliability scorecard + public
+// reliability stat (issue #113). The /pnl page gains a ReliabilityScorecardPanel
+// when NEXT_PUBLIC_SCHEDULING_P6_ENABLED is on. The S13 seed provides the ledger
+// data (3 rows: 1 missed phase + 1 kept phase + 1 kept client) and the S14 seed
+// provides one attributable re-commit (sub_delay). Expected scorecard:
+//   - PPC: 1 kept / 2 resolved phase = 50%
+//   - On-time delivery: 1 kept / 1 resolved client = 100%
+//   - Variance: 1 × sub_delay (dings_reliability=true)
+//   - Public stat: absent (< 3 resolved client rows in the seed)
+test.describe("scheduling slice 25 — PPC + on-time delivery scorecard (P6, gated)", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the /pnl page shows the reliability scorecard panel when P6 is enabled", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/pnl");
+
+    // The reliability scorecard panel renders (P6 flag is on in CI).
+    const panel = page.getByTestId("reliability-scorecard-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("the scorecard shows PPC from the seeded phase ledger rows", async ({ page }) => {
+    await login(page);
+    await page.goto("/pnl");
+
+    const panel = page.getByTestId("reliability-scorecard-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // S13 seed: 1 kept phase + 1 missed phase → PPC tile renders with data.
+    // The tile exposes data-rate (whole-number percentage) so we assert the
+    // attribute rather than text — avoids typographic/encoding issues.
+    const ppcTile = panel.getByTestId("scorecard-ppc");
+    await expect(ppcTile).toBeVisible({ timeout: 10_000 });
+    // 1 kept / 2 total = 50%
+    await expect(ppcTile).toHaveAttribute("data-rate", "50");
+  });
+
+  test("the scorecard shows on-time delivery from the seeded client ledger row", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/pnl");
+
+    const panel = page.getByTestId("reliability-scorecard-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // S13 seed: 1 kept client row → OTD tile renders.
+    const otdTile = panel.getByTestId("scorecard-otd");
+    await expect(otdTile).toBeVisible({ timeout: 10_000 });
+    // 1 kept / 1 total = 100%
+    await expect(otdTile).toHaveAttribute("data-rate", "100");
+  });
+
+  test("the scorecard surfaces the seeded sub_delay variance reason", async ({ page }) => {
+    await login(page);
+    await page.goto("/pnl");
+
+    const panel = page.getByTestId("reliability-scorecard-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    const variance = panel.getByTestId("scorecard-variance");
+    await expect(variance).toBeVisible({ timeout: 10_000 });
+
+    // S14 seed: 1 re-commit with reason_code=sub_delay, dings_reliability=true.
+    // The row data-testid is variance-reason-<reasonCode>.
+    const subDelayRow = panel.getByTestId("variance-reason-sub_delay");
+    await expect(subDelayRow).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("the public stat is absent when fewer than 3 resolved client rows exist", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/pnl");
+
+    const panel = page.getByTestId("reliability-scorecard-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // S13 seed has only 1 resolved client row — below the 3-row minimum threshold.
+    // The public stat must NOT render (too small a sample to quote reliably).
+    await expect(panel.getByTestId("reliability-public-stat")).not.toBeVisible();
+  });
+});
