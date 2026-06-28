@@ -16,6 +16,7 @@ import {
   type InvoiceLineRow,
 } from "./invoiceRowMaps";
 import { buildActualRows, postBlockedReason } from "./postInvoice";
+import { buildSaveReviewedArgs, buildSaveMatchArgs } from "./invoiceSaveRpc";
 import type { Invoice, InvoiceLine, InvoiceLineKind } from "./types";
 
 /** Material/subtrade actuals ledger (job-costing). No shared const exists yet. */
@@ -111,11 +112,13 @@ export async function getInvoiceWithLines(
 /**
  * Slice 3: persist a human-corrected invoice and flip its status to `reviewed`.
  *
- * Updates the header row and all line cells in a single-round-trip pair. The
- * lines are updated individually since Supabase PostgREST doesn't support
- * heterogeneous bulk updates (different values per row). Each line update is
- * fired in parallel; a failure will throw and the caller should surface the
- * error without retrying automatically.
+ * The header flip + all line cell writes go through a single Postgres function
+ * (`save_reviewed_invoice`), so they run in ONE transaction — either every row
+ * lands or none do. The previous version fired the header update + N per-line
+ * updates as separate round-trips (Promise.all); a mid-batch failure left the
+ * invoice half-saved (header flipped, only some lines persisted) with no
+ * rollback (issue #171). A failure now throws with nothing committed; the caller
+ * surfaces it and the owner can retry cleanly.
  */
 export async function saveReviewedInvoice(
   id: string,
@@ -143,43 +146,10 @@ export async function saveReviewedInvoice(
 ): Promise<Invoice> {
   const sb = getSupabase();
 
-  const { data: updated, error: headerErr } = await sb
-    .from(INVOICES_TABLE)
-    .update({
-      status: "reviewed",
-      supplier: header.supplier,
-      invoice_number: header.invoiceNumber,
-      issue_date: header.issueDate,
-      due_date: header.dueDate,
-      po_ref: header.poRef,
-      pre_tax_total: header.preTaxTotal,
-      gst: header.gst,
-      pst: header.pst,
-      total: header.total,
-    })
-    .eq("id", id)
-    .select("*")
+  const { data: updated, error } = await sb
+    .rpc("save_reviewed_invoice", buildSaveReviewedArgs(id, header, lines))
     .single<InvoiceRow>();
-  if (headerErr) throw headerErr;
-
-  // Parallel line updates — each line has different values.
-  await Promise.all(
-    lines.map(async (line) => {
-      const { error } = await sb
-        .from(INVOICE_LINES_TABLE)
-        .update({
-          qty: line.qty,
-          sku: line.sku,
-          description: line.description,
-          unit: line.unit,
-          unit_price: line.unitPrice,
-          amount: line.amount,
-          tax_flag: line.taxFlag,
-        })
-        .eq("id", line.id);
-      if (error) throw error;
-    })
-  );
+  if (error) throw error;
 
   return rowToInvoice(updated);
 }
@@ -189,8 +159,11 @@ export async function saveReviewedInvoice(
  *
  * Writes `invoices.supplier_id` and each `invoice_lines.job_id` (null = shop
  * stock) + `invoice_lines.line_kind` (material | subtrade — null = material,
- * #151). Does NOT change the invoice status — the invoice stays `reviewed`
- * until the owner posts it in slice 5. Updates are fired in parallel for lines.
+ * #151) through a single Postgres function (`save_invoice_match`), so the
+ * supplier write + all line assignments commit in ONE transaction (issue #171).
+ * Does NOT change the invoice status — the invoice stays `reviewed` until the
+ * owner posts it in slice 5. A mid-batch failure now rolls the whole save back
+ * rather than leaving some lines assigned and others stale.
  */
 export async function saveInvoiceMatch(
   invoiceId: string,
@@ -203,23 +176,10 @@ export async function saveInvoiceMatch(
 ): Promise<Invoice> {
   const sb = getSupabase();
 
-  const { data: updated, error: headerErr } = await sb
-    .from(INVOICES_TABLE)
-    .update({ supplier_id: supplierId })
-    .eq("id", invoiceId)
-    .select("*")
+  const { data: updated, error } = await sb
+    .rpc("save_invoice_match", buildSaveMatchArgs(invoiceId, supplierId, lineAssignments))
     .single<InvoiceRow>();
-  if (headerErr) throw headerErr;
-
-  await Promise.all(
-    lineAssignments.map(async ({ lineId, jobId, lineKind }) => {
-      const { error } = await sb
-        .from(INVOICE_LINES_TABLE)
-        .update({ job_id: jobId, line_kind: lineKind ?? null })
-        .eq("id", lineId);
-      if (error) throw error;
-    })
-  );
+  if (error) throw error;
 
   return rowToInvoice(updated);
 }
