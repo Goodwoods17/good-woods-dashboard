@@ -19,7 +19,8 @@ import type { Invoice } from "../lib/types";
 /**
  * /invoices — upload + list view. Slice 2 adds:
  *   - Pending count + "last run at" status bar (derived from the invoices table).
- *   - "Process now" button (POST /api/invoices/process, CRON_SECRET-protected).
+ *   - "Process now" button (POST /api/invoices/process; authenticated via the
+ *     logged-in session — no cron secret in the browser, see #169).
  *   - Per-invoice extraction error message surfaced inline.
  */
 export function InvoicesView() {
@@ -77,18 +78,16 @@ export function InvoicesView() {
     setProcessing(true);
     setError(null);
     try {
+      // No Authorization header (#169): the route authenticates the logged-in
+      // browser session server-side via @supabase/ssr cookies, so the cron
+      // secret is never shipped in the client bundle.
       const res = await fetch("/api/invoices/process", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET ?? ""}`,
-        },
+        headers: { "Content-Type": "application/json" },
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        throw new Error(
-          typeof body.error === "string" ? body.error : `HTTP ${res.status}`
-        );
+        throw new Error(typeof body.error === "string" ? body.error : `HTTP ${res.status}`);
       }
       await refresh();
     } catch (e) {
@@ -151,10 +150,7 @@ export function InvoicesView() {
             className="mb-5 flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3 shadow-resting"
           >
             <span className="text-sm text-text-secondary">
-              <span
-                data-testid="pending-count"
-                className="font-semibold text-text-primary"
-              >
+              <span data-testid="pending-count" className="font-semibold text-text-primary">
                 {processorStatus.pendingCount}
               </span>{" "}
               pending

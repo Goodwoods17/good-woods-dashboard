@@ -803,6 +803,39 @@ test.describe("invoices slice 2 — processor status + manual trigger", () => {
 });
 
 // ---------------------------------------------------------------------------
+// #169 — process route accepts the logged-in session WITHOUT a cron bearer
+// ---------------------------------------------------------------------------
+
+// The "Process now" button must NOT carry the cron secret (it would have to be
+// NEXT_PUBLIC_, leaking into the browser bundle). Instead the route trusts the
+// authenticated Supabase session via @supabase/ssr cookies. This proves that an
+// authenticated browser POST with NO Authorization header is accepted (not a
+// 401, not bounced to /login) — i.e. the secret is no longer needed client-side.
+test.describe("invoices #169 — process route honours the logged-in session", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("POST /api/invoices/process with the session cookie but NO bearer is authorised", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // page.request shares the browser's auth cookies; deliberately send NO
+    // Authorization header — the way the button now calls the route.
+    const res = await page.request.post("/api/invoices/process", {
+      headers: { "content-type": "application/json" },
+      data: {},
+    });
+
+    // The session must satisfy auth: never 401 (the pre-fix failure), and never
+    // a 3xx bounce to /login. The sweep itself returns 200 (the `claude` engine
+    // is absent in CI, so each pending invoice is marked `error` — still a 200
+    // result envelope) or 500 if the sweep wrapper throws. Crucially: NOT 401.
+    expect(res.status()).not.toBe(401);
+    expect([200, 500]).toContain(res.status());
+  });
+});
+
+// ---------------------------------------------------------------------------
 // QBO S3 — Vendor mapping (supplier ↔ QB vendor, auto-create + dedupe)
 // ---------------------------------------------------------------------------
 
