@@ -1473,3 +1473,37 @@ test.describe("invoices QBO S9 — retry-queue drain endpoint", () => {
     }
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S10 — un-push / void path (issue #156)
+// ───────────────────────────────────────────────────────────────────────────
+// Voiding deletes a wrongly-pushed Bill in QBO and clears the local link so the
+// invoice can be re-pushed. The pure gate + parse logic is unit-tested in
+// qboVoid.test.ts. Here we prove the endpoint wires up and degrades cleanly:
+// the void endpoint (POST /api/invoices/[id]/void-qbo) rides the same
+// NEXT_PUBLIC_INVOICES_QBO gate as the push route. With no QBO OAuth creds in CI
+// it must degrade gracefully (404 flag-off / 400 not_connected / 503
+// unconfigured, never a 5xx crash) and never leak a token. A 409 (not_pushed) is
+// also acceptable if a connection existed but the invoice was never pushed.
+test.describe("invoices QBO S10 — void endpoint (gated, degradation)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("POST void-qbo degrades gracefully without real QBO creds + never leaks a token", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post(
+      "/api/invoices/00000000-0000-4000-8000-0000000010a1/void-qbo"
+    );
+
+    // Flag off (prod default) → 404. Flag on in CI but no real QBO creds → 400
+    // (not_connected) or 503 (unconfigured). 409 (not_pushed) is fine if a
+    // connection existed but nothing was pushed. A 5xx crash is NOT acceptable.
+    expect([400, 404, 409, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+});
