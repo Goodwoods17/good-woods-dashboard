@@ -34,7 +34,7 @@ import {
   type QboBill,
   type QboBillReconciliation,
 } from "./qboExport";
-import { loadMappingLookups } from "./qboAccountMappingServer";
+import { resolveInvoiceCentralLinks } from "./qboExportServer";
 import { getQuickbooksLink, upsertQuickbooksLink } from "./quickbooksLinksServer";
 import {
   evaluateBillPush,
@@ -51,7 +51,6 @@ import type { Invoice, InvoiceLine } from "./types";
 /** `quickbooks_links.local_type` / `qbo_type` for the invoice → Bill mapping. */
 const INVOICE_LOCAL_TYPE = "invoice";
 const BILL_QBO_TYPE = "Bill";
-const VENDOR_LOCAL_TYPE = "vendor";
 
 // ---------------------------------------------------------------------------
 // QBO Bill API helpers
@@ -197,18 +196,10 @@ async function loadPushContext(invoiceId: string): Promise<LoadedContext | LoadE
   const invoice = rowToInvoice(invRow);
   const lines = ((lineRows as InvoiceLineRow[] | null) ?? []).map(rowToInvoiceLine);
 
-  // Central vendor link (ADR 0021) wins over the embedded qbo_vendor_id.
-  let centralVendorRef: string | null = null;
-  if (invoice.supplierId) {
-    const vendorLink = await getQuickbooksLink({
-      realmId,
-      localType: VENDOR_LOCAL_TYPE,
-      localId: invoice.supplierId,
-    });
-    centralVendorRef = vendorLink?.qboId ?? null;
-  }
-
-  const maps = await loadMappingLookups(realmId);
+  // Central vendor link (ADR 0021) + account/tax maps. Shared with the export
+  // route (QBO-H6) so the pushed Bill and the JSON export can never drift on
+  // which QBO refs an invoice maps to.
+  const { centralVendorRef, maps } = await resolveInvoiceCentralLinks(invoice, realmId);
   const { bill, reconciliation } = buildQboBill(invoice, lines, {
     centralVendorRef,
     maps,
