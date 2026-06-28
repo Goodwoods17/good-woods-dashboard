@@ -1,4 +1,5 @@
 import type { HealthStatus, JobBlocker } from "@shared/lib/types";
+import { workDaysBetween } from "@shared/lib/workdays";
 
 /**
  * S6 — Buffer consumption + fever chart + recovery flag (issue #94). Pure +
@@ -16,27 +17,6 @@ import type { HealthStatus, JobBlocker } from "@shared/lib/types";
  *  5. `deriveHealthFromFever` — the fever signal now powers the unified health
  *     band, replacing the crude STAGE_LEAD_DAYS heuristic (jobs/lib/health.ts).
  */
-
-// ── Work-day counting helper ────────────────────────────────────────────────
-
-/**
- * Number of work days (Mon–Fri, UTC) between two ISO date strings.
- * Positive = forward in time (to > from), negative = backward, 0 = same day.
- * Mirrors `addWorkDays` semantics: workDaysBetween(from, addWorkDays(from, n)) = n.
- */
-function workDaysBetween(fromISO: string, toISO: string): number {
-  const from = new Date(`${fromISO.slice(0, 10)}T00:00:00.000Z`);
-  const to = new Date(`${toISO.slice(0, 10)}T00:00:00.000Z`);
-  const sign = to >= from ? 1 : -1;
-  let count = 0;
-  const cursor = new Date(from.getTime());
-  while (sign > 0 ? cursor < to : cursor > to) {
-    cursor.setUTCDate(cursor.getUTCDate() + sign);
-    const dow = cursor.getUTCDay();
-    if (dow !== 0 && dow !== 6) count += sign;
-  }
-  return count;
-}
 
 // ── 1. Buffer burn ──────────────────────────────────────────────────────────
 

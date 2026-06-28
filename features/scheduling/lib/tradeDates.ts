@@ -15,6 +15,7 @@
  */
 
 import type { JobBlocker } from "@shared/lib/types";
+import { workDaysBetween } from "@shared/lib/workdays";
 import type { PhaseTargetDates } from "./schedule";
 import type { JobTradeStatus } from "@features/partners/lib/types";
 
@@ -29,26 +30,6 @@ export type SubtradeReliabilityRecord = {
   missed: boolean;
   recordedAt: string;
 };
-
-// ── Work-day helper ────────────────────────────────────────────────────────────
-
-/**
- * Count of work days (Mon–Fri, UTC) from `fromISO` to `toISO`. Positive when
- * `to` is in the future relative to `from`. Mirrors the semantics in bufferBurn.ts.
- */
-function workDaysBetween(fromISO: string, toISO: string): number {
-  const from = new Date(`${fromISO.slice(0, 10)}T00:00:00.000Z`);
-  const to = new Date(`${toISO.slice(0, 10)}T00:00:00.000Z`);
-  const sign = to >= from ? 1 : -1;
-  let count = 0;
-  const cursor = new Date(from.getTime());
-  while (sign > 0 ? cursor < to : cursor > to) {
-    cursor.setUTCDate(cursor.getUTCDate() + sign);
-    const dow = cursor.getUTCDay();
-    if (dow !== 0 && dow !== 6) count += sign;
-  }
-  return count;
-}
 
 // ── 1. Blocker phase burn ──────────────────────────────────────────────────────
 

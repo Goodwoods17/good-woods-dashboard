@@ -1,6 +1,12 @@
 import type { MilestoneStage } from "@shared/lib/types";
 import { MILESTONE_STAGES } from "@shared/lib/types";
+import { businessWeekWindow } from "@shared/lib/workdays";
 import type { PhaseTargetDates } from "./schedule";
+
+// Re-export so existing importers (kickoffArtifact, tests) keep resolving
+// businessWeekWindow from clientPortal; the canonical definition lives in
+// @shared/lib/workdays.
+export { businessWeekWindow };
 
 /**
  * Pure derivation for the read-only CLIENT schedule portal (S18, issue #106).
@@ -124,25 +130,6 @@ export function buildClientActionItems(blocker: string | null | undefined): Clie
   const trimmed = blocker?.trim();
   if (!trimmed) return [];
   return [{ text: trimmed }];
-}
-
-/**
- * The Mon–Fri work-week window containing an ISO date. Used to present a
- * mid-phase as a soft RANGE rather than the precise internal target day — the
- * client gets a sense of timing without the shop over-committing to a date.
- */
-export function businessWeekWindow(iso: string): { start: string; end: string } {
-  const d = new Date(`${iso}T00:00:00Z`);
-  const dow = (d.getUTCDay() + 6) % 7; // 0 = Monday
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() - dow);
-  const friday = new Date(monday);
-  friday.setUTCDate(monday.getUTCDate() + 4);
-  return { start: toIsoDate(monday), end: toIsoDate(friday) };
-}
-
-function toIsoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
 }
 
 export type ClientPhaseState = "done" | "current" | "upcoming";

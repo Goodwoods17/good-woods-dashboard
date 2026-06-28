@@ -355,3 +355,20 @@ When introducing a domain term in code, add it here first.
   a backfill. **Not built yet** — flagged during the Drawings Slice 0 grill
   (2026-06-23); will get its own ADR when built. Until then, attribution is by
   login email only.
+- **Work day** — a day the shop actually works: **Mon–Fri, minus BC statutory
+  holidays, minus any shop closures**. All schedule arithmetic counts in work
+  days, not calendar days — a 3-work-day phase that starts Thursday lands the
+  following Tuesday, and skips Canada Day. (Plain **calendar days** still appear
+  in places like the "3 days left" shop-floor countdown — a different grain.)
+- **Work calendar** — the single source of truth for what a **work day** is,
+  owned by `shared/lib/workdays.ts` (pure, ISO-date in/out): work-day arithmetic
+  (`addWorkDays` / `workDaysBetween`, the inverse pair), work-week bucketing
+  (`weekMondayOf` / `businessWeekWindow`), and `bcStatHolidays(year)` computed for
+  any year. Shop-specific closures (Boxing Day, a summer shutdown week) layer in
+  via an optional `extraClosures` set without changing call sites. Deepened out of
+  five copies of the "skip weekends" rule during the 2026-06-27 architecture review.
+- **BC statutory holiday** — one of the 11 legal BC stat holidays the **work
+  calendar** treats as non-working: New Year's, Family Day (3rd Mon Feb), Good
+  Friday, Victoria Day (Mon before May 25), Canada Day, BC Day (1st Mon Aug),
+  Labour Day (1st Mon Sep), Truth & Reconciliation (Sep 30), Thanksgiving (2nd Mon
+  Oct), Remembrance Day, Christmas. Computed, not stored.

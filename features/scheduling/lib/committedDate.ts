@@ -1,4 +1,5 @@
 import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { addWorkDays } from "@shared/lib/workdays";
 import {
   HOURS_PER_WORK_DAY,
   sessionActiveHours,
@@ -42,25 +43,6 @@ export const DAYS_PER_SUB_DEPENDENCY = 3;
  */
 export const MAX_CAPACITY_STRETCH = 3.0;
 
-// ── Helpers ────────────────────────────────────────────────────────────────
-
-/** ISO `YYYY-MM-DD` of a Date in UTC (date is a date, not an instant). */
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-/** Advance `n` work days (Mon–Fri, UTC) from a UTC-anchored date. */
-function addWorkDays(start: Date, n: number): Date {
-  const d = new Date(start.getTime());
-  let added = 0;
-  while (added < n) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const day = d.getUTCDay();
-    if (day !== 0 && day !== 6) added += 1;
-  }
-  return d;
-}
-
 // ── 1. Capacity-aware schedule ─────────────────────────────────────────────
 
 /**
@@ -97,7 +79,7 @@ export function computeCapacityAwareSchedule(
   phaseRows: PhaseCapacityRow[]
 ): CapacityAwareSchedule {
   const ratioFor = new Map(phaseRows.map((r) => [r.phase, r.ratio]));
-  let cursor = new Date(`${startDate}T00:00:00.000Z`);
+  let cursor = startDate.slice(0, 10);
   const phaseTargetDates = {} as Record<MilestoneStage, string>;
   let totalWorkDays = 0;
 
@@ -109,10 +91,10 @@ export function computeCapacityAwareSchedule(
     if (adjusted > 0) {
       cursor = addWorkDays(cursor, adjusted);
     }
-    phaseTargetDates[phase] = isoDate(cursor);
+    phaseTargetDates[phase] = cursor;
   }
 
-  return { phaseTargetDates, internalTargetDate: isoDate(cursor), totalWorkDays };
+  return { phaseTargetDates, internalTargetDate: cursor, totalWorkDays };
 }
 
 // ── 2. Risk-tiered buffer ──────────────────────────────────────────────────
@@ -209,8 +191,7 @@ export function computeRiskTieredBuffer(input: RiskBufferInput): RiskBufferBreak
  */
 export function capacityAwareCommittedDate(internalTargetDate: string, bufferDays: number): string {
   if (bufferDays <= 0) return internalTargetDate;
-  const start = new Date(`${internalTargetDate}T00:00:00.000Z`);
-  return isoDate(addWorkDays(start, bufferDays));
+  return addWorkDays(internalTargetDate, bufferDays);
 }
 
 // ── 3. Phase-variance nudge ────────────────────────────────────────────────

@@ -1,4 +1,5 @@
 import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { addWorkDays } from "@shared/lib/workdays";
 
 /**
  * Phase-level CAPACITY / LOAD model for the Scheduling & Client-Commitment
@@ -201,38 +202,22 @@ export function seedPhaseDurationsFromHistory(
   return out;
 }
 
-/** ISO `YYYY-MM-DD` of a Date in UTC. */
-function isoDate(d: Date): string {
-  return d.toISOString().slice(0, 10);
-}
-
-/** Advance `n` work days (skipping Sat/Sun) from a UTC-anchored date. */
-function addWorkDays(start: Date, n: number): Date {
-  const d = new Date(start.getTime());
-  let added = 0;
-  while (added < n) {
-    d.setUTCDate(d.getUTCDate() + 1);
-    const day = d.getUTCDay();
-    if (day !== 0 && day !== 6) added += 1;
-  }
-  return d;
-}
-
 /**
  * Chain per-phase durations (work days) from a start date into per-phase
  * INTERNAL target dates (the S1 `phase_target_dates` shape). Each phase's
- * target is the running cursor advanced by that phase's duration, weekends
- * skipped — so seeding a new job from history produces honest internal dates.
+ * target is the running cursor advanced by that phase's duration, non-working
+ * days skipped — so seeding a new job from history produces honest internal
+ * dates.
  */
 export function phaseTargetDatesFromDurations(
   startDate: string,
   durations: Record<MilestoneStage, number>
 ): Record<MilestoneStage, string> {
-  let cursor = new Date(`${startDate}T00:00:00.000Z`);
+  let cursor = startDate.slice(0, 10);
   const out = {} as Record<MilestoneStage, string>;
   for (const phase of PHASES) {
     cursor = addWorkDays(cursor, Math.max(0, durations[phase] ?? 0));
-    out[phase] = isoDate(cursor);
+    out[phase] = cursor;
   }
   return out;
 }

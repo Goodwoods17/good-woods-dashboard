@@ -1,4 +1,5 @@
 import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { weekMondayOf, weekLabel } from "@shared/lib/workdays";
 import {
   buildCapacityModel,
   HOURS_PER_WORK_DAY,
@@ -6,6 +7,10 @@ import {
   type PhaseCapacityRow,
   type PhaseHours,
 } from "./capacity";
+
+// Re-export the work-calendar week helpers so existing importers of these from
+// freeCapacity keep working; the canonical definitions live in @shared/lib/workdays.
+export { weekMondayOf, weekLabel };
 
 /**
  * S15 — Free-capacity finder (issue #103).
@@ -38,39 +43,11 @@ export const DEFAULT_LOOKAHEAD_WEEKS = 8;
  */
 export const MIN_BOOKABLE_HOURS = HOURS_PER_WORK_DAY; // 8h
 
-/** Month abbreviations for the week label. */
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /** ISO `YYYY-MM-DD` of a UTC Date. */
 function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10);
-}
-
-/**
- * Monday (UTC) of the ISO-week that contains `dateStr`. If the date is
- * already Monday it is returned unchanged.
- *
- * UTC day numbers: 0 = Sun, 1 = Mon … 6 = Sat.
- * Distance-to-Monday: (day + 6) % 7  (0→6→Sun, 1→0→Mon, …, 6→5→Sat)
- */
-export function weekMondayOf(dateStr: string): string {
-  const d = new Date(`${dateStr}T00:00:00.000Z`);
-  const day = d.getUTCDay(); // 0 = Sun
-  const toMonday = (day + 6) % 7; // days to subtract to reach Monday
-  d.setUTCDate(d.getUTCDate() - toMonday);
-  return isoDate(d);
-}
-
-/**
- * Human-readable label for a week: "Week of Aug 4".
- * Input must be the Monday ISO date of the week.
- */
-export function weekLabel(weekStart: string): string {
-  const d = new Date(`${weekStart}T00:00:00.000Z`);
-  const month = MONTHS[d.getUTCMonth()];
-  return `Week of ${month} ${d.getUTCDate()}`;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -160,7 +137,12 @@ export function buildWeeklyWindows(
     const saturdayDate = new Date(mondayDate.getTime() + 5 * 24 * 3_600_000);
     const windowEnd = saturdayDate.toISOString();
 
-    const model = buildCapacityModel(sessions, capacityByPhase, `${weekStart}T00:00:00.000Z`, windowEnd);
+    const model = buildCapacityModel(
+      sessions,
+      capacityByPhase,
+      `${weekStart}T00:00:00.000Z`,
+      windowEnd
+    );
     const freeHoursByPhase = phaseAvailableHours(model);
 
     const isBookable = PHASES.every((p) => freeHoursByPhase[p] >= MIN_BOOKABLE_HOURS);
