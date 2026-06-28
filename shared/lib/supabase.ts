@@ -44,3 +44,5 @@ export const COMMITMENT_LEDGER_TABLE = "commitment_ledger";
 export const COMMITMENT_REVISIONS_TABLE = "commitment_revisions";
 export const PRIORITY_BUMPS_TABLE = "priority_bumps";
 export const SCHEDULE_SHARE_LINKS_TABLE = "schedule_share_links";
+export const SCHEDULING_GOOGLE_CONNECTIONS_TABLE = "scheduling_google_connections";
+export const SCHEDULING_GOOGLE_EVENTS_TABLE = "scheduling_google_events";

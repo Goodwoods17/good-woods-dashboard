@@ -419,6 +419,53 @@ URL from the Schedule tab. Testids: `contact-committed-install-<jobId>`,
 auto_sent / cancelled), `sent_at`, `resend_email_id`, `created_at`, `created_by`.
 RLS authenticated_all + anon_none.
 
+## What's here (S23 one-way Google Calendar push — OAuth, P6-gated, issue #111)
+
+```
+features/scheduling/
+├── lib/
+│   ├── googlePush.ts            pure: GOOGLE_CALENDAR_SCOPE / buildJobCalendarEvents /
+│   │                            diffCalendarSync (idempotent create/update/delete) (+ test)
+│   ├── googleTokenCrypto.ts     server: AES-256-GCM encrypt/decrypt of the refresh token (+ test)
+│   ├── googleOAuth.ts           server: consent-URL / token-exchange / refresh; configured-check (+ test)
+│   └── googleCalendarServer.ts  server: service-role data access + Calendar REST push executor
+└── components/
+    └── GoogleCalendarPanel.tsx  Schedule-tab "Connect Google / Push" panel (P6-gated)
+src/app/api/scheduling/google/{status,connect,callback,push,disconnect}/route.ts
+supabase/migrations/
+└── 20260708000000_scheduling_google_calendar.sql  connections + per-target event map
+```
+
+**Dark-shipped behind a SEPARATE P6 sub-flag** `schedulingP6Enabled()`
+(`NEXT_PUBLIC_SCHEDULING_P6_ENABLED`, off in prod; CI sets it on). The live
+scheduling feature is untouched; this panel only appears when P6 is flipped.
+
+**One-way only** (ADR 0020): the app is the source of truth — we push the
+schedule INTO the owner's Google Calendar and never read back, dodging the
+two-way "410 Gone" sync dragon. `buildJobCalendarEvents` emits one all-day event
+per internal phase target plus the frozen committed install, each with a stable
+`syncKey` (`<jobId>:phase:<phase>` / `<jobId>:committed-install`).
+`diffCalendarSync` produces an **idempotent** create/update/delete plan against
+the stored event map (`scheduling_google_events`); re-pushing an unchanged
+schedule is a no-op, a moved date PATCHes in place, a removed target deletes, and
+a PATCH that 404s (deleted in Google) is recreated by the route.
+
+**OAuth (user-consent, NOT service-account):** minimal `calendar.events` scope
+only. The long-lived refresh token is encrypted at rest with AES-256-GCM
+(`googleTokenCrypto`, keyed by server-only `GOOGLE_TOKEN_ENC_KEY`); plaintext
+never hits the DB. `scheduling_google_connections` holds the encrypted blob;
+both tables are RLS authenticated-only + anon-none.
+
+**Degrades gracefully** when creds are absent (mirrors the Forms Resend
+fallback): `googleOAuthConfigured()` requires client id + secret + enc key; with
+any missing the status route reports `configured:false`, the panel shows a clean
+"not configured" card, and every live Google call is skipped — so CI / preview /
+unconfigured prod stay green and never crash. Env needed to actually reach
+Google: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`,
+`GOOGLE_TOKEN_ENC_KEY`. Testids: `google-push-panel`, `google-push-not-configured`,
+`google-push-connect`, `google-push-connected`, `google-push-sync`,
+`google-push-disconnect`, `google-push-result`.
+
 ## Non-goals (S1–S5, S10)
 
 No per-machine / per-person capacity (phase-level only in v1), no auto-write
