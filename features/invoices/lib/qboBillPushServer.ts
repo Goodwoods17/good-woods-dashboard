@@ -34,6 +34,7 @@ import {
   toQboBillRequestBody,
   type BillPushGate,
 } from "./qboBillPush";
+import { attachInvoicePdfToQboBill, type AttachmentResult } from "./qboAttachableServer";
 import type { Invoice, InvoiceLine } from "./types";
 
 /** `quickbooks_links.local_type` / `qbo_type` for the invoice → Bill mapping. */
@@ -237,10 +238,21 @@ export async function previewInvoicePush(invoiceId: string): Promise<PushPreview
 // ---------------------------------------------------------------------------
 
 export type PushResult =
-  | { status: "pushed"; billId: string; docNumber: string | null; deepLink: string }
+  | {
+      status: "pushed";
+      billId: string;
+      docNumber: string | null;
+      deepLink: string;
+      /** Non-blocking attachment outcome. A failed attachment does NOT undo the bill. */
+      attachment: AttachmentResult;
+    }
   | { status: "already_pushed"; billId: string; deepLink: string }
   | { status: "blocked"; gate: BillPushGate }
   | { status: "not_connected" | "unconfigured" | "not_found" | "qbo_error"; message?: string };
+
+// Re-export so the API route can include the shape in its response without
+// importing from qboAttachableServer (which is server-only).
+export type { AttachmentResult };
 
 /**
  * Push the invoice's Bill to QBO, exactly once.
@@ -315,11 +327,23 @@ export async function pushInvoiceBill(invoiceId: string): Promise<PushResult> {
       syncedAt: new Date().toISOString(),
     });
 
+    // 6. Attach the source PDF to the new Bill (S8, non-blocking). A failure
+    //    surfaces in the result but does NOT undo the bill — the owner can retry.
+    const attachment = await attachInvoicePdfToQboBill({
+      storagePath: c.invoice.storagePath,
+      mime: c.invoice.mime,
+      billId: created.id,
+      realmId: c.realmId,
+      environment: c.environment,
+      accessToken: c.accessToken,
+    });
+
     return {
       status: "pushed",
       billId: created.id,
       docNumber: created.docNumber,
       deepLink: qboBillDeepLink(c.environment, created.id),
+      attachment,
     };
   } catch (e) {
     return { status: "qbo_error", message: e instanceof Error ? e.message : String(e) };

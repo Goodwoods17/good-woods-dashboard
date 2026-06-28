@@ -74,6 +74,9 @@ export async function POST(_req: Request, { params }: { params: { id: string } }
         billId: result.billId,
         docNumber: result.docNumber,
         deepLink: result.deepLink,
+        // Non-blocking attachment result (S8). Never omit — callers rely on its
+        // presence to know whether the PDF was attached and can surface a retry.
+        attachment: result.attachment,
       });
     case "already_pushed":
       return NextResponse.json({
