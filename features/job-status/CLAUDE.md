@@ -75,6 +75,25 @@ trackable ──┤                                            ├─→ one liv
 - Optimistic writes roll back + toast on error (no silent failure). Unknown
   status/visibility → safe read-only fallback (Forms field-registry rule).
 
+## Known follow-ups (owner-review backlog)
+
+- **Piece status-change timeline events.** `cycleItem` records a `status_change`
+  event for job_items (the timeline's status history). `cyclePiece` does NOT yet,
+  because a piece's status is a Drawings lifecycle string that the event model's
+  `to_status` (typed `JobItemStatus`, coerced to `null` on unknown — see
+  `eventRowMap.coerceStatus` + its test) would drop on read. Recording piece
+  status changes needs a `to_status` model decision (free-text vs typed union)
+  before wiring it through.
+- **Attribution (`worker_id` / `status_updated_by`).** Columns exist and default
+  null; nothing populates them yet. The auth user id is available via
+  `useAuth()`, but in a shared-shop login it may not identify the individual crew
+  member — so the identity source (auth user vs a picked crew member) is a
+  product decision, not an automatic plumbing job.
+- **`JobProgressRepo` two-adapter seam (deferred refactor).** The Supabase vs
+  localStorage branch is still inline in the stores. A `JobProgressRepo` interface
+  with two adapters would make `useJobProgress` testable via a fake repo. Heaviest
+  of the consolidation candidates; do it when the hook needs to be under test.
+
 ## Non-goals (this milestone — all ride on this same model, built later)
 
 - **Client portal** (token route `/j/<token>`) — its own slice/milestone, a 🛑
