@@ -1702,3 +1702,122 @@ test.describe("invoices QBO-H1 — concurrent push idempotency (gated, degradati
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// QBO-H2 — RLS least-privilege on the encrypted-token tables (issue #185)
+//
+// The corrective migration (20260714000000_qbo_rls_least_privilege) drops the
+// `FOR ALL TO authenticated USING (true)` policy on quickbooks_connection,
+// quickbooks_links, and qbo_push_attempts, and REVOKEs their default grants —
+// so a logged-in BROWSER session can no longer read the encrypted token
+// ciphertext off the anon REST API. All legit access is server-side (service
+// role, RLS-bypassing). This smoke proves the live property against the seeded
+// local Postgres: seed a row with sentinel ciphertext via service role, then an
+// authenticated anon-key client sees ZERO rows + no ciphertext, while service
+// role still reads it back (server path intact).
+// ---------------------------------------------------------------------------
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+test.describe("invoices QBO-H2 — token-table RLS least-privilege", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey || !anonKey,
+    "needs E2E creds + SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_ANON_KEY"
+  );
+
+  test("an authenticated browser client cannot read encrypted-token rows; service role still can", async () => {
+    const SENTINEL = "E2E-185-SENTINEL-CIPHERTEXT";
+    const REALM = "E2E-185-REALM";
+
+    // 1. Seed via service role (bypasses RLS) across all three token tables.
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean any leftovers from a prior failed run.
+    await sb.from("quickbooks_connection").delete().eq("realm_id", REALM);
+    await sb.from("quickbooks_links").delete().eq("realm_id", REALM);
+    await sb.from("invoices").delete().eq("storage_path", "e2e-185/seed.pdf");
+
+    const { error: connErr } = await sb.from("quickbooks_connection").insert({
+      realm_id: REALM,
+      environment: "sandbox",
+      company_name: "E2E 185 Co",
+      encrypted_refresh_token: SENTINEL,
+      encrypted_access_token: SENTINEL,
+    });
+    expect(connErr).toBeNull();
+
+    const { error: linkErr } = await sb.from("quickbooks_links").insert({
+      local_type: "invoice",
+      local_id: "e2e-185-inv",
+      qbo_type: "Bill",
+      qbo_id: "e2e-185-bill",
+      realm_id: REALM,
+      environment: "sandbox",
+    });
+    expect(linkErr).toBeNull();
+
+    // qbo_push_attempts needs a real invoice FK — seed a throwaway one.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({ status: "pending", storage_path: "e2e-185/seed.pdf" })
+      .select("id");
+    expect(invErr).toBeNull();
+    const invoiceId = invRows![0].id;
+
+    const { error: attErr } = await sb.from("qbo_push_attempts").insert({
+      invoice_id: invoiceId,
+      status: "succeeded",
+      realm_id: REALM,
+      environment: "sandbox",
+    });
+    expect(attErr).toBeNull();
+
+    try {
+      // 2. An authenticated BROWSER-grade client (anon key + signed-in user).
+      const authed = createClient(supabaseUrl!, anonKey!, {
+        auth: { persistSession: false },
+      });
+      const { error: signInErr } = await authed.auth.signInWithPassword({
+        email: email!,
+        password: password!,
+      });
+      expect(signInErr).toBeNull();
+
+      // 3. Each token table must be unreadable: RLS denies (empty) or the
+      //    REVOKE denies (error). Either way: NO rows, NO ciphertext leak.
+      for (const table of [
+        "quickbooks_connection",
+        "quickbooks_links",
+        "qbo_push_attempts",
+      ] as const) {
+        const { data } = await authed.from(table).select("*");
+        expect(data ?? []).toHaveLength(0);
+        expect(JSON.stringify(data ?? [])).not.toContain(SENTINEL);
+      }
+
+      // The most direct ciphertext exfil attempt must also come back empty.
+      const { data: tokenData } = await authed
+        .from("quickbooks_connection")
+        .select("encrypted_refresh_token, encrypted_access_token")
+        .eq("realm_id", REALM);
+      expect(tokenData ?? []).toHaveLength(0);
+
+      await authed.auth.signOut();
+
+      // 4. Service role still reads the row back — the server path is intact.
+      const { data: svcData, error: svcErr } = await sb
+        .from("quickbooks_connection")
+        .select("encrypted_refresh_token")
+        .eq("realm_id", REALM)
+        .single();
+      expect(svcErr).toBeNull();
+      expect(svcData?.encrypted_refresh_token).toBe(SENTINEL);
+    } finally {
+      // 5. Clean up the seeded rows (invoice cascade removes the push attempt).
+      await sb.from("quickbooks_connection").delete().eq("realm_id", REALM);
+      await sb.from("quickbooks_links").delete().eq("realm_id", REALM);
+      await sb.from("invoices").delete().eq("id", invoiceId);
+    }
+  });
+});
