@@ -1,9 +1,15 @@
 /**
  * POST /api/invoices/process — manual "process now" trigger for slice 2.
  *
- * Protected by the same CRON_SECRET used for other cron endpoints.  The body
- * may include an optional `invoiceId` to process a single invoice; omitting it
- * processes all `pending`.
+ * Auth (issue #169): accepts EITHER
+ *   - the CRON_SECRET bearer token (headless home-machine sweep), OR
+ *   - an authenticated Supabase user session (the "Process now" button — the
+ *     user is already logged in behind RLS).
+ * The button therefore sends NO Authorization header, so the cron secret never
+ * has to be `NEXT_PUBLIC_`-exposed in the browser bundle.
+ *
+ * The body may include an optional `invoiceId` to process a single invoice;
+ * omitting it processes all `pending`.
  *
  * This route runs the home-machine engine (`extractInvoice` → `claude -p`).
  * It works when the dev server is running on the home machine (where the
@@ -16,12 +22,9 @@ import { mkdtemp, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { extractInvoice } from "@features/invoices/lib/engine";
-import {
-  runSweep,
-  type SweepDeps,
-  type PendingRow,
-} from "@features/invoices/lib/processor";
+import { runSweep, type SweepDeps, type PendingRow } from "@features/invoices/lib/processor";
 import type { ExtractedInvoice } from "@features/invoices/lib/types";
+import { getAuthedUserId } from "@shared/lib/authedUserServer";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +33,19 @@ export const maxDuration = 300;
 
 const INVOICES_BUCKET = "invoices";
 
+/** True when the request carries the configured CRON_SECRET bearer token. */
+function hasCronAuth(req: Request): boolean {
+  const cronSecret = process.env.CRON_SECRET;
+  if (!cronSecret) return false;
+  const auth = req.headers.get("authorization") ?? "";
+  return auth === `Bearer ${cronSecret}`;
+}
+
 export async function POST(req: Request) {
-  const auth = req.headers.get("authorization");
-  const expected = `Bearer ${process.env.CRON_SECRET}`;
-  if (!process.env.CRON_SECRET || auth !== expected) {
+  // Accept the headless cron bearer OR a logged-in browser session. The cron
+  // path short-circuits so the button (no bearer) only pays for the session
+  // lookup when it actually needs it.
+  if (!hasCronAuth(req) && !(await getAuthedUserId())) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
@@ -73,7 +85,11 @@ export async function POST(req: Request) {
       return Buffer.from(await blob.arrayBuffer());
     },
 
-    async extract(input: { id: string; filePath: string; mime: string }): Promise<ExtractedInvoice> {
+    async extract(input: {
+      id: string;
+      filePath: string;
+      mime: string;
+    }): Promise<ExtractedInvoice> {
       // Download to a fresh temp dir so the engine can read the file.
       const bytes = await deps.downloadFile(input.filePath);
       const tmp = await mkdtemp(join(tmpdir(), "gw-invoice-"));
