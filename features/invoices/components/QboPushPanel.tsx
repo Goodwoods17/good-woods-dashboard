@@ -273,7 +273,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
           {phase.data.alreadyPushed && phase.data.billId ? (
             <div
               data-testid="qbo-push-badge-sent"
-              className="flex flex-wrap items-center gap-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700"
+              className="flex flex-wrap items-center gap-2 rounded-md border border-status-on-track-soft bg-status-on-track-soft px-3 py-2 text-sm text-status-on-track"
             >
               <CheckCircle2 className="h-4 w-4" />
               <span>
@@ -288,7 +288,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
                   href={phase.data.deepLink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 font-medium text-emerald-800 underline hover:text-emerald-900"
+                  className="inline-flex items-center gap-1 font-medium text-status-on-track underline hover:opacity-80"
                 >
                   View in QuickBooks <ExternalLink className="h-3.5 w-3.5" />
                 </a>
@@ -311,7 +311,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
               ) : (
                 <div
                   data-testid="qbo-void-confirm"
-                  className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                  className="space-y-2 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft p-3 text-sm text-status-at-risk"
                 >
                   <p className="flex items-center gap-1.5">
                     <AlertTriangle className="h-4 w-4" /> This deletes the Bill in QuickBooks and
@@ -323,7 +323,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
                       data-testid="qbo-void-confirm-btn"
                       onClick={voidBill}
                       disabled={voiding}
-                      className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex items-center gap-1.5 rounded-md bg-status-blocked px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <Undo2 className="h-4 w-4" /> {voiding ? "Voiding…" : "Void the bill"}
                     </button>
@@ -398,7 +398,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
                   </dl>
 
                   {!phase.data.reconciliation.balanced && (
-                    <p className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                    <p className="flex items-center gap-1.5 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft px-3 py-2 text-xs text-status-at-risk">
                       <AlertTriangle className="h-3.5 w-3.5" /> Bill total doesn&rsquo;t reconcile
                       to the invoice — re-check the lines before sending.
                     </p>
@@ -432,14 +432,15 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
           {notice && (
             <div
               data-testid="qbo-push-notice"
-              className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+              role="status"
+              className="space-y-1.5 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft px-3 py-2 text-sm text-status-at-risk"
             >
               <p>{notice.message}</p>
               {notice.settingsLabel && (
                 <Link
                   href={QBO_SETTINGS_HREF}
                   data-testid="qbo-push-notice-link"
-                  className="inline-flex items-center gap-1.5 font-medium text-amber-800 underline hover:text-amber-900"
+                  className="inline-flex items-center gap-1.5 font-medium text-status-at-risk underline hover:opacity-80"
                 >
                   <RefreshCcw className="h-3.5 w-3.5" /> {notice.settingsLabel}
                 </Link>
@@ -483,20 +484,20 @@ function PushHistoryCard({
   return (
     <div
       data-testid={testid}
-      className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+      className="space-y-2 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft p-3 text-sm text-status-at-risk"
     >
       <p className="flex items-center gap-1.5 font-medium">
         <AlertTriangle className="h-4 w-4" />{" "}
         <span data-testid="qbo-push-failed-label">{badge.label}</span>
       </p>
-      <p className="text-xs text-amber-700">{badge.detail}</p>
+      <p className="text-xs text-status-at-risk">{badge.detail}</p>
       {badge.kind === "failed_retry" && (
         <button
           type="button"
           data-testid="qbo-push-retry-now"
           onClick={onRetryNow}
           disabled={retrying}
-          className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-md border border-status-at-risk bg-surface px-3 py-1.5 text-sm font-medium text-status-at-risk hover:bg-status-at-risk-soft disabled:cursor-not-allowed disabled:opacity-50"
         >
           <RefreshCw className="h-4 w-4" /> {retrying ? "Retrying…" : "Retry now"}
         </button>
@@ -522,7 +523,7 @@ function AttachmentMissingBanner({
   return (
     <div
       data-testid="qbo-attachment-failed"
-      className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+      className="space-y-2 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft p-3 text-sm text-status-at-risk"
     >
       <p className="flex items-center gap-1.5 font-medium">
         <Paperclip className="h-4 w-4" /> {message}
@@ -532,7 +533,7 @@ function AttachmentMissingBanner({
         data-testid="qbo-attachment-retry"
         onClick={onRetry}
         disabled={retrying}
-        className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-1.5 rounded-md border border-status-at-risk bg-surface px-3 py-1.5 text-sm font-medium text-status-at-risk hover:bg-status-at-risk-soft disabled:cursor-not-allowed disabled:opacity-50"
       >
         <RefreshCw className="h-4 w-4" /> {retrying ? "Attaching…" : "Retry attachment"}
       </button>
@@ -549,7 +550,7 @@ function BlockMessage({ gate }: { gate: Gate }) {
   return (
     <div
       data-testid="qbo-push-blocked"
-      className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+      className="space-y-1.5 rounded-md border border-status-at-risk-soft bg-status-at-risk-soft px-3 py-2 text-sm text-status-at-risk"
     >
       <p className="flex items-center gap-1.5">
         <AlertTriangle className="h-4 w-4" /> {message}
@@ -558,7 +559,7 @@ function BlockMessage({ gate }: { gate: Gate }) {
         <Link
           href={QBO_SETTINGS_HREF}
           data-testid="qbo-push-blocked-link"
-          className="inline-flex items-center gap-1.5 font-medium text-amber-800 underline hover:text-amber-900"
+          className="inline-flex items-center gap-1.5 font-medium text-status-at-risk underline hover:opacity-80"
         >
           <ExternalLink className="h-3.5 w-3.5" /> Open QuickBooks settings
         </Link>
@@ -578,8 +579,8 @@ function ReconnectBanner({ health }: { health: TokenHealth }) {
       data-testid="qbo-push-token-health-banner"
       className={`flex flex-wrap items-start gap-3 rounded-md border px-3 py-2 text-sm ${
         critical
-          ? "border-red-200 bg-red-50 text-red-800"
-          : "border-amber-200 bg-amber-50 text-amber-800"
+          ? "border-status-blocked-soft bg-status-blocked-soft text-status-blocked"
+          : "border-status-at-risk-soft bg-status-at-risk-soft text-status-at-risk"
       }`}
     >
       <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />

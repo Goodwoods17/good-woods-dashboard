@@ -691,26 +691,22 @@ test.describe("invoices slice 8 — QBO export stub", () => {
     if (resp.status === 200) {
       const body = await resp.json();
       expect(body.ok).toBe(true);
-      const exp = body.export;
-      // QBO header fields present.
-      expect(exp.invoiceId).toBe(inv.id);
-      // No QBO connection in CI → the central link can't resolve, so the export
+      // QBO-H11: the legacy flat `export` shape was removed — the route now
+      // returns ONLY the real v3 Bill (built via the same central-link path as
+      // the push route) + its reconciliation.
+      expect(body.export).toBeUndefined();
+      const bill = body.bill;
+      // No QBO connection in CI → the central link can't resolve, so the Bill
       // falls back to the embedded qbo_vendor_id (identical to the push path).
-      expect(exp.vendorRef).toBe("qbo-vendor-e2e");
-      expect(exp.vendorName).toBe("Reimer Hardwoods");
-      expect(exp.docNumber).toBe("E2E-QBO-001");
-      // Split taxes never collapsed.
-      expect(Number(exp.gst)).toBeCloseTo(25, 2);
-      expect(Number(exp.pst)).toBeCloseTo(35, 2);
-      expect(Number(exp.totalTax)).toBeCloseTo(60, 2);
-      // Lines with QBO account + tax code.
-      expect(exp.lines).toHaveLength(1);
-      expect(exp.lines[0].accountRef).toBe("5000-Materials");
-      expect(exp.lines[0].taxCodeRef).toBe("TAX");
-      // QBO-H6: the thin route now also delegates the real v3 Bill + its
-      // reconciliation (built via the same central-link path as the push route).
-      expect(body.bill.VendorRef.value).toBe("qbo-vendor-e2e");
-      expect(body.bill.Line).toHaveLength(1);
+      expect(bill.VendorRef.value).toBe("qbo-vendor-e2e");
+      expect(bill.VendorRef.name).toBe("Reimer Hardwoods");
+      expect(bill.DocNumber).toBe("E2E-QBO-001");
+      // Split taxes are never collapsed — GST + PST as two separate TaxLines.
+      expect(Number(body.reconciliation.gst)).toBeCloseTo(25, 2);
+      expect(Number(body.reconciliation.pst)).toBeCloseTo(35, 2);
+      // One expense line, carrying the (unmapped, raw-label) account ref.
+      expect(bill.Line).toHaveLength(1);
+      expect(bill.Line[0].AccountBasedExpenseLineDetail.AccountRef.value).toBe("5000-Materials");
       expect(body.reconciliation.balanced).toBe(true);
     }
 

@@ -95,8 +95,8 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
           data-testid="qbo-token-health-banner"
           className={`flex flex-wrap items-start gap-3 rounded-lg border px-4 py-3 text-sm ${
             tokenHealth.level === "critical"
-              ? "border-red-200 bg-red-50 text-red-800"
-              : "border-amber-200 bg-amber-50 text-amber-800"
+              ? "border-status-blocked-soft bg-status-blocked-soft text-status-blocked"
+              : "border-status-at-risk-soft bg-status-at-risk-soft text-status-at-risk"
           }`}
         >
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -124,7 +124,7 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
       {state.phase === "error" && (
         <div
           data-testid="qbo-bulk-push-error"
-          className="flex flex-wrap items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 shadow-resting"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-status-blocked-soft bg-status-blocked-soft px-4 py-3 text-sm text-status-blocked shadow-resting"
         >
           <WifiOff className="h-4 w-4 shrink-0" />
           <span data-testid="qbo-bulk-push-error-message" className="flex-1">
@@ -179,7 +179,7 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
       {state.phase === "done" && (
         <div
           data-testid="qbo-bulk-push-result"
-          className="flex flex-wrap items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 shadow-resting"
+          className="flex flex-wrap items-center gap-3 rounded-lg border border-status-on-track-soft bg-status-on-track-soft px-4 py-3 text-sm text-status-on-track shadow-resting"
         >
           <span className="font-medium">
             {state.summary.pushed > 0
@@ -187,15 +187,17 @@ export function QboBulkPushPanel({ onPushed }: { onPushed?: () => void }) {
               : "No new bills sent"}
           </span>
           {state.summary.alreadyPushed > 0 && (
-            <span className="text-emerald-600">· {state.summary.alreadyPushed} already sent</span>
+            <span className="text-status-on-track">
+              · {state.summary.alreadyPushed} already sent
+            </span>
           )}
           {state.summary.blocked > 0 && (
-            <span data-testid="qbo-bulk-push-blocked" className="text-amber-600">
+            <span data-testid="qbo-bulk-push-blocked" className="text-status-at-risk">
               · {state.summary.blocked} blocked (missing mapping)
             </span>
           )}
           {state.summary.failed > 0 && (
-            <span data-testid="qbo-bulk-push-failed" className="text-red-600">
+            <span data-testid="qbo-bulk-push-failed" className="text-status-blocked">
               · {state.summary.failed} failed
             </span>
           )}

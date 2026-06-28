@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isCronExemptPath } from "@shared/lib/cronRoutes";
 
 // Routes that don't require auth. `/f` = the public tokenized form-fill portal
 // (Forms P2); `/s` = the public tokenized client schedule portal (Scheduling
@@ -36,8 +37,11 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isPublic = PUBLIC_ROUTES.some((p) => path === p || path.startsWith(`${p}/`));
+  // Cron/M2M routes carry a CRON_SECRET bearer (no session) and enforce it
+  // themselves — don't bounce them to /login (QBO-H11).
+  const isCron = isCronExemptPath(path);
 
-  if (!user && !isPublic) {
+  if (!user && !isPublic && !isCron) {
     const loginUrl = new URL("/login", request.url);
     if (path !== "/") loginUrl.searchParams.set("next", path);
     return NextResponse.redirect(loginUrl);

@@ -102,4 +102,29 @@ describe("checkCutoverReadiness", () => {
       expect(encItem.detail).toContain("openssl");
     });
   });
+
+  describe("encryption key length (≥32 chars / 256-bit)", () => {
+    const encItemOf = (key: string) =>
+      checkCutoverReadiness({ ...PROD_FULL, QBO_TOKEN_ENC_KEY: key }).items.find((i) =>
+        i.label.includes("ENC_KEY")
+      )!;
+
+    it("fails a non-empty but too-short key (31 chars)", () => {
+      const short = "a".repeat(31);
+      expect(encItemOf(short).pass).toBe(false);
+      expect(checkCutoverReadiness({ ...PROD_FULL, QBO_TOKEN_ENC_KEY: short }).ready).toBe(false);
+    });
+
+    it("passes a key of exactly 32 chars", () => {
+      expect(encItemOf("a".repeat(32)).pass).toBe(true);
+    });
+
+    it("passes a 64-char hex key (openssl rand -hex 32)", () => {
+      expect(encItemOf("a".repeat(64)).pass).toBe(true);
+    });
+
+    it("does not count leading/trailing whitespace toward the length", () => {
+      expect(encItemOf(`  ${"a".repeat(31)}  `).pass).toBe(false);
+    });
+  });
 });

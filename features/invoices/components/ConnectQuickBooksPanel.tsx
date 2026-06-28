@@ -23,7 +23,12 @@ type Status =
   | { phase: "loading" }
   | { phase: "not_configured"; configuredEnvironment: string }
   | { phase: "disconnected"; configuredEnvironment: string }
-  | { phase: "connected"; companyName: string | null; environment: string | null; configuredEnvironment: string }
+  | {
+      phase: "connected";
+      companyName: string | null;
+      environment: string | null;
+      configuredEnvironment: string;
+    }
   | { phase: "error" };
 
 const REDIRECT_MESSAGES: Record<string, string> = {
@@ -74,19 +79,40 @@ export function ConnectQuickBooksPanel() {
     void loadStatus();
   }, [loadStatus]);
 
-  // Surface the callback result (e.g. ?qbo=connected) as a one-line notice.
+  // Surface the callback result (e.g. ?qbo=connected) as a one-line notice, then
+  // strip the param from the URL so a refresh / back-nav doesn't replay the
+  // stale notice (and the address bar stays clean).
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const qbo = new URLSearchParams(window.location.search).get("qbo");
+    const params = new URLSearchParams(window.location.search);
+    const qbo = params.get("qbo");
     if (qbo && REDIRECT_MESSAGES[qbo]) setNotice(REDIRECT_MESSAGES[qbo]);
+    if (qbo) {
+      params.delete("qbo");
+      const search = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`
+      );
+    }
   }, []);
 
   const disconnect = useCallback(async () => {
     setBusy(true);
     setNotice(null);
     try {
-      await fetch("/api/invoices/qbo/disconnect", { method: "POST" });
+      const res = await fetch("/api/invoices/qbo/disconnect", { method: "POST" });
+      if (!res.ok) {
+        // Don't swallow a failed disconnect — the owner needs to know the
+        // connection is still live rather than silently assume it's gone.
+        setNotice("Couldn't disconnect QuickBooks. Please try again.");
+        return;
+      }
+      setNotice("QuickBooks disconnected.");
       await loadStatus();
+    } catch {
+      setNotice("Couldn't reach QuickBooks to disconnect. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -109,10 +135,7 @@ export function ConnectQuickBooksPanel() {
           <>
             {" "}
             Targeting the{" "}
-            <span
-              data-testid="qbo-configured-env"
-              className="font-medium text-text-primary"
-            >
+            <span data-testid="qbo-configured-env" className="font-medium text-text-primary">
               {configuredEnvironment}
             </span>{" "}
             environment.

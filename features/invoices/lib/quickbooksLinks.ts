@@ -63,14 +63,20 @@ export type QuickbooksLinkInput = {
   syncedAt?: string | null;
 };
 
-/** Insertable row (snake_case) for supabase-js `.upsert()` / `.insert()`. */
+/**
+ * Insertable row (snake_case) for supabase-js `.upsert()` / `.insert()`.
+ *
+ * `environment` is OPTIONAL and omitted entirely when the caller doesn't supply
+ * one — the column is `NOT NULL DEFAULT 'sandbox'`, so sending an explicit `null`
+ * would violate the constraint. Leaving the key out lets the DB default apply.
+ */
 export type QuickbooksLinkInsert = {
   local_type: string;
   local_id: string;
   qbo_type: string;
   qbo_id: string;
   realm_id: string;
-  environment: string | null;
+  environment?: string;
   synced_at: string | null;
 };
 
@@ -102,17 +108,26 @@ export function linkToRow(link: QuickbooksLink): QuickbooksLinkRow {
   };
 }
 
-/** Create/replace input → insertable row. */
+/**
+ * Create/replace input → insertable row.
+ *
+ * Omits `environment` unless the caller provides a real value so the column's
+ * `NOT NULL DEFAULT 'sandbox'` applies — never sends an explicit `null` (which
+ * the constraint would reject).
+ */
 export function linkToInsert(input: QuickbooksLinkInput): QuickbooksLinkInsert {
-  return {
+  const insert: QuickbooksLinkInsert = {
     local_type: input.localType,
     local_id: input.localId,
     qbo_type: input.qboType,
     qbo_id: input.qboId,
     realm_id: input.realmId,
-    environment: input.environment ?? null,
     synced_at: input.syncedAt ?? null,
   };
+  if (input.environment != null && input.environment !== "") {
+    insert.environment = input.environment;
+  }
+  return insert;
 }
 
 /**

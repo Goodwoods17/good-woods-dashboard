@@ -18,10 +18,8 @@ import { getFreshAccessToken } from "./qboConnectionServer";
 import { getQuickbooksLink } from "./quickbooksLinksServer";
 import { loadMappingLookups } from "./qboAccountMappingServer";
 import {
-  buildQboExport,
   buildQboBill,
   resolveQboTaxMode,
-  type QboBillExport,
   type QboBill,
   type QboBillReconciliation,
 } from "./qboExport";
@@ -71,11 +69,10 @@ export async function resolveInvoiceCentralLinks(
   return { centralVendorRef, maps };
 }
 
-/** The export route's delegate result: the flat export shape + the v3 Bill. */
+/** The export route's delegate result: the v3 Bill + its reconciliation. */
 export type InvoiceQboExportResult =
   | {
       status: "ok";
-      export: QboBillExport;
       bill: QboBill;
       reconciliation: QboBillReconciliation;
     }
@@ -83,9 +80,9 @@ export type InvoiceQboExportResult =
   | { status: "unconfigured" };
 
 /**
- * Load an invoice + its lines and build the QBO export shape + v3 Bill payload,
- * resolving vendor/account/tax through `quickbooks_links` identically to the
- * push path. The route is left thin (flag-gate + auth + delegate).
+ * Load an invoice + its lines and build the QBO v3 Bill payload, resolving
+ * vendor/account/tax through `quickbooks_links` identically to the push path.
+ * The route is left thin (flag-gate + auth + delegate).
  */
 export async function buildInvoiceQboExport(invoiceId: string): Promise<InvoiceQboExportResult> {
   const sb = getServiceRoleClient();
@@ -119,12 +116,11 @@ export async function buildInvoiceQboExport(invoiceId: string): Promise<InvoiceQ
     maps = resolved.maps;
   }
 
-  const exportShape = buildQboExport(invoice, lines, centralVendorRef);
   const { bill, reconciliation } = buildQboBill(invoice, lines, {
     centralVendorRef,
     maps,
     taxMode: resolveQboTaxMode(),
   });
 
-  return { status: "ok", export: exportShape, bill, reconciliation };
+  return { status: "ok", bill, reconciliation };
 }

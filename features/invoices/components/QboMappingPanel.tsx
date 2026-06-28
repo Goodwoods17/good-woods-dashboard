@@ -181,6 +181,7 @@ export function QboMappingPanel() {
   }
 
   const { data } = phase;
+  const noActiveTaxCodes = data.taxCodes.filter((t) => t.active).length === 0;
 
   return (
     <div data-testid="qbo-mapping-panel" className="space-y-5">
@@ -213,6 +214,15 @@ export function QboMappingPanel() {
 
       {/* GST/PST wizard. */}
       <div className="space-y-3" data-testid="qbo-tax-wizard">
+        {noActiveTaxCodes && (
+          <p
+            data-testid="qbo-tax-empty-hint"
+            className="rounded-lg bg-status-at-risk-soft px-4 py-3 text-sm text-status-at-risk"
+          >
+            No active sales-tax codes were found in your QuickBooks company. Set up your GST and PST
+            tax codes in QuickBooks first, then reload this page to map them.
+          </p>
+        )}
         {data.taxSuggestions.map((s) => (
           <div
             key={s.localType}

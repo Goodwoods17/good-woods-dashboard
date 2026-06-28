@@ -41,7 +41,6 @@ export async function GET(req: Request, { params }: { params: { id: string } }) 
     case "ok":
       return NextResponse.json({
         ok: true,
-        export: result.export,
         bill: result.bill,
         reconciliation: result.reconciliation,
       });

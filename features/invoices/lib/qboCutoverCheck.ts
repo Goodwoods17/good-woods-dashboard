@@ -52,7 +52,10 @@ export function checkCutoverReadiness(overrides: CutoverEnvInput = {}): CutoverR
   const qboFlag = get("NEXT_PUBLIC_INVOICES_QBO_ENABLED");
 
   const credsPresent = Boolean(clientId?.trim() && clientSecret?.trim());
-  const encKeyPresent = Boolean(encKey?.trim());
+  // A 256-bit key is 32 bytes; require at least 32 chars so a weak/placeholder
+  // secret can't pass the go-live gate. (The crypto layer SHA-256-stretches any
+  // length, but a short secret has too little entropy for a production key.)
+  const encKeyPresent = (encKey?.trim().length ?? 0) >= 32;
   const isProduction = environment === "production";
   const flagEnabled = qboFlag === "true";
 
@@ -63,16 +66,16 @@ export function checkCutoverReadiness(overrides: CutoverEnvInput = {}): CutoverR
       detail: "Add the production app client id and secret to Vercel env vars",
     },
     {
-      label: "QBO_TOKEN_ENC_KEY set (32-byte hex key)",
+      label: "QBO_TOKEN_ENC_KEY set (≥32 chars / 256-bit)",
       pass: encKeyPresent,
-      detail: "Generate a fresh key for prod: openssl rand -hex 32",
+      detail: "Generate a fresh key for prod (≥32 chars): openssl rand -hex 32",
     },
     {
       label: "QBO_ENVIRONMENT=production",
       pass: isProduction,
       detail:
         `Currently targeting: ${environment}. ` +
-        'Set QBO_ENVIRONMENT=production in Vercel env vars and redeploy.',
+        "Set QBO_ENVIRONMENT=production in Vercel env vars and redeploy.",
     },
     {
       label: "NEXT_PUBLIC_INVOICES_QBO_ENABLED=true",
