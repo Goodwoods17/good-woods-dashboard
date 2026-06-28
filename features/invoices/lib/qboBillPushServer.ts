@@ -27,7 +27,13 @@ import {
   type InvoiceRow,
   type InvoiceLineRow,
 } from "./invoiceRowMaps";
-import { buildQboBill, lineTaxKey, type QboBill, type QboBillReconciliation } from "./qboExport";
+import {
+  buildQboBill,
+  lineTaxKey,
+  resolveQboTaxMode,
+  type QboBill,
+  type QboBillReconciliation,
+} from "./qboExport";
 import { loadMappingLookups } from "./qboAccountMappingServer";
 import { getQuickbooksLink, upsertQuickbooksLink } from "./quickbooksLinksServer";
 import {
@@ -203,7 +209,11 @@ async function loadPushContext(invoiceId: string): Promise<LoadedContext | LoadE
   }
 
   const maps = await loadMappingLookups(realmId);
-  const { bill, reconciliation } = buildQboBill(invoice, lines, { centralVendorRef, maps });
+  const { bill, reconciliation } = buildQboBill(invoice, lines, {
+    centralVendorRef,
+    maps,
+    taxMode: resolveQboTaxMode(),
+  });
 
   // Existing Bill link → idempotent short-circuit signal.
   const existingLink = await getQuickbooksLink({

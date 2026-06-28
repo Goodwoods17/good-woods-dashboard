@@ -160,6 +160,19 @@ export type QboRef = { value: string; name?: string };
  */
 export type LineTaxKey = "GST" | "PST" | "GST_PST" | null;
 
+/**
+ * A line's EXPLICIT Canadian tax treatment (issue #186). The extractor only
+ * captures a per-line PST boolean (`taxFlag`), which can't tell a genuinely
+ * tax-exempt line apart from a GST-only line — both arrive as `false`/`null`.
+ * This explicit class lets a caller that DOES know the difference state it, so
+ * an exempt line is never silently keyed to GST:
+ *
+ *  - "gst_pst"  → the line carries both taxes (subject to what the bill charges)
+ *  - "gst_only" → GST applies, PST does not (the "(GST only)" line)
+ *  - "exempt"   → NEITHER tax applies — always non-taxable, even on a GST bill
+ */
+export type LineTaxClass = "gst_pst" | "gst_only" | "exempt";
+
 /** One QBO Bill expense line (AccountBasedExpenseLineDetail). */
 export type QboBillLine = {
   LineNum: number;
@@ -194,7 +207,12 @@ export type QboTaxLine = {
   TaxLineDetail: {
     /** Pre-tax base this component was charged on. */
     NetAmountTaxable: number;
-    /** Per-company QBO tax-rate ref, when the mapping resolves one. */
+    /**
+     * Per-company QBO **TaxRate**.Id (issue #186). A TaxLine's TaxRateRef takes a
+     * TaxRate id — NOT a TaxCode id (those are different objects; crossing them
+     * is the #1 tax-misbooking risk). Sourced from `maps.taxRateByLocal`; null
+     * when no real TaxRate id is mapped, never a TaxCode id or a placeholder.
+     */
     TaxRateRef: QboRef | null;
   };
   /** Which Canadian tax this line is — keeps the split auditable. */
@@ -211,7 +229,14 @@ export type QboBill = {
   /** Line Amounts are pre-tax; we supply the tax explicitly below. */
   GlobalTaxCalculation: "TaxExcluded";
   Line: QboBillLine[];
-  TxnTaxDetail: {
+  /**
+   * The manual tax split (issue #186). Present in `"manual"` tax mode only. In
+   * `"automatic"` mode it is OMITTED so an Automatic-Sales-Tax (AST) company lets
+   * QBO compute the tax from each line's TaxCodeRef — AST companies routinely
+   * reject/ignore a hand-supplied TxnTaxDetail. The GST/PST split stays auditable
+   * regardless via `QboBillReconciliation` (gst/pst + gstBase/pstBase).
+   */
+  TxnTaxDetail?: {
     /** GST + PST. The split lives in TaxLine[] — this is only the sum. */
     TotalTax: number | null;
     TaxLine: QboTaxLine[];
@@ -223,11 +248,37 @@ export type QboBillReconciliation = {
   lineSubtotal: number;
   gst: number;
   pst: number;
+  /** Pre-tax base GST was charged on (sum of GST + GST_PST lines). #186 */
+  gstBase: number;
+  /** Pre-tax base PST was charged on (sum of PST + GST_PST lines). #186 */
+  pstBase: number;
   computedTotal: number;
   statedTotal: number | null;
   /** True when computedTotal is within a cent of the invoice's stated total. */
   balanced: boolean;
 };
+
+/**
+ * QBO tax representation mode (issue #186):
+ *  - "automatic" — AST-safe: omit the manual TxnTaxDetail; QBO computes tax from
+ *    each line's TaxCodeRef. The right mode for a Canadian Automatic-Sales-Tax
+ *    company (which rejects a hand-supplied TaxLine).
+ *  - "manual" — emit an explicit TxnTaxDetail with one TaxLine per component, the
+ *    TaxRateRef sourced from a real TaxRate query (`maps.taxRateByLocal`).
+ */
+export type QboTaxMode = "automatic" | "manual";
+
+/**
+ * Resolve the active tax mode from the environment (issue #186). Defaults to
+ * `"manual"` (the historical shape) so the choice stays explicit and is flipped
+ * to `"automatic"` only once the manual QBO-sandbox issue confirms AST rejects
+ * the hand-supplied TaxLine. Set `QBO_TAX_MODE=automatic` to switch.
+ */
+export function resolveQboTaxMode(
+  env: { QBO_TAX_MODE?: string } = process.env as { QBO_TAX_MODE?: string }
+): QboTaxMode {
+  return env.QBO_TAX_MODE === "automatic" ? "automatic" : "manual";
+}
 
 /** What buildQboBill returns: the postable bill + its reconciliation. */
 export type QboBillResult = {
@@ -251,6 +302,12 @@ export type BuildQboBillOptions = {
    * is still complete and inspectable.
    */
   maps?: MappingLookups;
+  /**
+   * Tax representation mode (issue #186). Defaults to `"manual"` (historical
+   * shape). Pass `"automatic"` — or set `QBO_TAX_MODE=automatic` and thread
+   * {@link resolveQboTaxMode} — to drop the manual TxnTaxDetail for AST files.
+   */
+  taxMode?: QboTaxMode;
 };
 
 /** Cents-accurate rounding (mirrors postInvoice.round2). */
@@ -259,28 +316,45 @@ function round2(n: number): number {
 }
 
 /**
- * Classify a line's Canadian tax from its PST flag and the header's tax totals.
+ * Normalise a legacy per-line PST flag into an explicit {@link LineTaxClass}.
  *
- * The extractor only captures a per-line PST flag (`taxFlag`), so GST is
- * inferred: a line that isn't non-taxable carries GST whenever the BILL carries
- * GST. The header totals therefore gate the result — we never invent a GST or
- * PST component the bill didn't actually charge.
+ *  - true  → "gst_pst"  (PST charged ⇒ GST too, subject to the bill)
+ *  - false → "gst_only" (no PST ⇒ the documented "(GST only)" line)
+ *  - null  → "exempt"   (unknown ⇒ conservatively non-taxable)
+ */
+function classFromFlag(taxFlag: boolean | null): LineTaxClass {
+  if (taxFlag == null) return "exempt";
+  return taxFlag === true ? "gst_pst" : "gst_only";
+}
+
+/**
+ * Classify a line's Canadian tax into the per-company tax key (issue #186).
  *
- *  - taxFlag true  + bill has GST + PST → "GST_PST"
- *  - taxFlag true  + bill has PST only → "PST"
- *  - taxFlag false + bill has GST      → "GST"   (the "(GST only)" line)
- *  - taxFlag null  (unknown)           → null    (non-taxable)
- *  - bill charges neither tax           → null
+ * Accepts EITHER the legacy per-line PST flag (`boolean | null`) OR an explicit
+ * {@link LineTaxClass}. The header totals gate the result either way — we never
+ * invent a GST or PST component the bill didn't actually charge:
+ *
+ *  - "gst_pst"  + bill has GST + PST → "GST_PST"
+ *  - "gst_pst"  + bill has PST only  → "PST"
+ *  - "gst_only" + bill has GST       → "GST"   (the "(GST only)" line)
+ *  - "exempt"                        → null    (NEVER keyed to a tax — the fix)
+ *  - bill charges neither tax        → null
+ *
+ * The fix vs. the old behaviour: an EXEMPT line is now modelled explicitly and
+ * is never silently keyed to GST just because the bill carries GST — which kept
+ * a non-taxable line out of the GST `NetAmountTaxable` base.
  */
 export function lineTaxKey(
-  taxFlag: boolean | null,
+  flagOrClass: boolean | null | LineTaxClass,
   header: { gst: number | null; pst: number | null }
 ): LineTaxKey {
-  if (taxFlag == null) return null;
+  const cls: LineTaxClass =
+    typeof flagOrClass === "string" ? flagOrClass : classFromFlag(flagOrClass);
+  if (cls === "exempt") return null;
   const billHasGst = (header.gst ?? 0) > 0;
   const billHasPst = (header.pst ?? 0) > 0;
-  const pst = taxFlag === true && billHasPst;
-  // A taxable line (flag not null) carries GST whenever the bill does.
+  const pst = cls === "gst_pst" && billHasPst;
+  // GST applies to a taxable line (gst_pst or gst_only) whenever the bill does.
   const gst = billHasGst;
   if (gst && pst) return "GST_PST";
   if (pst) return "PST";
@@ -296,6 +370,20 @@ function resolveRef(
   if (localKey == null) return null;
   const id = lookup?.[localKey];
   return { value: id ?? localKey };
+}
+
+/**
+ * Resolve a TaxRateRef from the TaxRate lookup (issue #186). UNLIKE
+ * {@link resolveRef}, this NEVER falls back to the local label — a TaxRateRef
+ * must be a real QBO TaxRate id or absent (null). Returning a label/TaxCode id
+ * here is exactly the misbooking the fix removes.
+ */
+function resolveTaxRateRef(
+  localKey: string,
+  taxRateByLocal: Record<string, string> | undefined
+): QboRef | null {
+  const id = taxRateByLocal?.[localKey];
+  return id != null ? { value: id } : null;
 }
 
 /**
@@ -328,7 +416,7 @@ export function buildQboBill(
   >[],
   options: BuildQboBillOptions = {}
 ): QboBillResult {
-  const { centralVendorRef, maps } = options;
+  const { centralVendorRef, maps, taxMode = "manual" } = options;
 
   const vendorRefValue = resolveVendorRef(centralVendorRef, invoice.qboVendorId);
   const vendorRef: QboRef | null =
@@ -385,7 +473,11 @@ export function buildQboBill(
     taxLine.push({
       Amount: gst,
       DetailType: "TaxLineDetail",
-      TaxLineDetail: { NetAmountTaxable: gstBase, TaxRateRef: resolveRef("GST", maps?.taxByLocal) },
+      // TaxRateRef ← a real TaxRate id (NOT a TaxCode id from taxByLocal). #186
+      TaxLineDetail: {
+        NetAmountTaxable: gstBase,
+        TaxRateRef: resolveTaxRateRef("GST", maps?.taxRateByLocal),
+      },
       _component: "GST",
     });
   }
@@ -393,7 +485,10 @@ export function buildQboBill(
     taxLine.push({
       Amount: pst,
       DetailType: "TaxLineDetail",
-      TaxLineDetail: { NetAmountTaxable: pstBase, TaxRateRef: resolveRef("PST", maps?.taxByLocal) },
+      TaxLineDetail: {
+        NetAmountTaxable: pstBase,
+        TaxRateRef: resolveTaxRateRef("PST", maps?.taxRateByLocal),
+      },
       _component: "PST",
     });
   }
@@ -406,10 +501,11 @@ export function buildQboBill(
     PrivateNote: invoice.poRef,
     GlobalTaxCalculation: "TaxExcluded",
     Line: billLines,
-    TxnTaxDetail: {
-      TotalTax: addNullable(gst, pst),
-      TaxLine: taxLine,
-    },
+    // "automatic" (AST) omits the manual TxnTaxDetail — QBO computes from each
+    // line's TaxCodeRef. "manual" hands QBO the explicit GST/PST split. #186
+    ...(taxMode === "manual"
+      ? { TxnTaxDetail: { TotalTax: addNullable(gst, pst), TaxLine: taxLine } }
+      : {}),
   };
 
   // --- Reconciliation: Σ pre-tax lines + GST + PST === stated total ----------
@@ -422,6 +518,10 @@ export function buildQboBill(
     lineSubtotal,
     gst: gstAmt,
     pst: pstAmt,
+    // The per-component taxable bases keep the GST/PST split auditable even in
+    // "automatic" mode where the bill carries no manual TxnTaxDetail. #186
+    gstBase,
+    pstBase,
     computedTotal,
     statedTotal,
     balanced: statedTotal != null && Math.abs(computedTotal - statedTotal) < 0.01,

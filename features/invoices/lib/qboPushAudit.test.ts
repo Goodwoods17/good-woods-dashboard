@@ -9,7 +9,12 @@
  *   3. Transient vs permanent HTTP-status classification.
  */
 import { describe, it, expect } from "vitest";
-import { nextRetryDelayMs, nextRetryAt, isTransientHttpStatus, isPermanentHttpStatus } from "./qboPushAudit";
+import {
+  nextRetryDelayMs,
+  nextRetryAt,
+  isTransientHttpStatus,
+  isPermanentHttpStatus,
+} from "./qboPushAudit";
 import { evaluateBillPush, billPushBlockMessage, type LineGateInput } from "./qboBillPush";
 import type { QboBillReconciliation } from "./qboExport";
 import type { MappingLookups } from "./qboAccountMapping";
@@ -26,6 +31,8 @@ const balancedRec: QboBillReconciliation = {
   lineSubtotal: 100,
   gst: 5,
   pst: 0,
+  gstBase: 100,
+  pstBase: 0,
   computedTotal: 105,
   statedTotal: 105,
   balanced: true,
@@ -35,6 +42,8 @@ const mismatchedRec: QboBillReconciliation = {
   lineSubtotal: 100,
   gst: 5,
   pst: 0,
+  gstBase: 100,
+  pstBase: 0,
   computedTotal: 105,
   statedTotal: 110, // 5-cent mismatch (e.g. rounding diff)
   balanced: false,
