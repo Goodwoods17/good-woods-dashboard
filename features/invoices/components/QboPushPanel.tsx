@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, ExternalLink, Send } from "lucide-react";
+import { CheckCircle2, AlertTriangle, ExternalLink, Send, Undo2 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
 
 /**
@@ -90,6 +90,8 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [confirmVoid, setConfirmVoid] = useState(false);
+  const [voiding, setVoiding] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -140,6 +142,32 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
     }
   }, [invoiceId, load]);
 
+  // S10: un-push / void a Bill pushed in error. Confirm-gated (two-step), then
+  // POSTs the void; on success the link is cleared server-side so reloading the
+  // preview re-opens the "Send to QuickBooks" flow (re-push permitted).
+  const voidBill = useCallback(async () => {
+    setVoiding(true);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/void-qbo`, { method: "POST" });
+      const body = (await res.json()) as { ok: boolean; status?: string; message?: string };
+      if (body.ok && body.status === "voided") {
+        setConfirmVoid(false);
+        setShowPreview(false);
+        await load();
+      } else if (body.status === "not_pushed") {
+        setNotice("This invoice isn't in QuickBooks anymore.");
+        await load();
+      } else {
+        setNotice(body.message ?? "Couldn't void in QuickBooks. Try again.");
+      }
+    } catch {
+      setNotice("Couldn't void in QuickBooks. Try again.");
+    } finally {
+      setVoiding(false);
+    }
+  }, [invoiceId, load]);
+
   return (
     <section
       data-testid="qbo-push-panel"
@@ -186,7 +214,53 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
                 </a>
               )}
             </div>
-          ) : (
+          ) : null}
+
+          {/* S10: un-push / void — only offered once a Bill exists. */}
+          {phase.data.alreadyPushed && phase.data.billId && (
+            <div className="space-y-2" data-testid="qbo-void">
+              {!confirmVoid ? (
+                <button
+                  type="button"
+                  data-testid="qbo-void-btn"
+                  onClick={() => setConfirmVoid(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-1.5 text-sm font-medium text-text-secondary hover:text-text-primary"
+                >
+                  <Undo2 className="h-4 w-4" /> Pushed by mistake? Void in QuickBooks
+                </button>
+              ) : (
+                <div
+                  data-testid="qbo-void-confirm"
+                  className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+                >
+                  <p className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-4 w-4" /> This deletes the Bill in QuickBooks and
+                    lets you re-send a corrected invoice. It can&rsquo;t be undone.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      data-testid="qbo-void-confirm-btn"
+                      onClick={voidBill}
+                      disabled={voiding}
+                      className="inline-flex items-center gap-1.5 rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <Undo2 className="h-4 w-4" /> {voiding ? "Voiding…" : "Void the bill"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmVoid(false)}
+                      className="rounded-md px-3 py-1.5 text-sm text-text-secondary hover:text-text-primary"
+                    >
+                      Keep it
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {!phase.data.alreadyPushed && (
             <div
               data-testid="qbo-push-badge-unsent"
               className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary"

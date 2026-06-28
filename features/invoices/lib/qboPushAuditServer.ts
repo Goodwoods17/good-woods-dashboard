@@ -13,6 +13,8 @@ import type { PushAttemptStatus, PushAttemptRow } from "./qboPushAudit";
 export type PushAttemptInsert = {
   invoiceId: string;
   status: PushAttemptStatus;
+  /** Which QBO Bill operation this records: 'push' (default) or 'void' (S10). */
+  kind?: "push" | "void";
   qboBillId?: string | null;
   requestBody?: Record<string, unknown> | null;
   responseBody?: unknown;
@@ -35,6 +37,7 @@ export async function logPushAttempt(insert: PushAttemptInsert): Promise<string 
     .insert({
       invoice_id: insert.invoiceId,
       status: insert.status,
+      kind: insert.kind ?? "push",
       qbo_bill_id: insert.qboBillId ?? null,
       request_body: insert.requestBody ?? null,
       response_body: insert.responseBody != null ? (insert.responseBody as object) : null,
