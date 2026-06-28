@@ -2283,3 +2283,93 @@ test.describe("invoices QBO-H10 — consolidated route helpers (gated, degradati
     expect(all404 || none404).toBe(true);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// #170 — duplicate + math guards on the POST screen (InvoiceMatchView)
+// ───────────────────────────────────────────────────────────────────────────
+// Phase-C audit #2: the post button lives on the match screen, but the
+// duplicate-invoice guard + math-validation banner only rendered on the review
+// screen — so a known-duplicate / math-mismatched bill could be posted with no
+// on-screen warning. The match view now surfaces BOTH read-only banners
+// (reusing validateMath + checkDuplicateInvoice). This seeds a reviewed invoice
+// whose lines don't sum to its pre-tax total AND a duplicate sibling, then
+// proves both banners render on the match screen before posting.
+test.describe("invoices #170 — duplicate + math guards on the match screen", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("the match screen shows read-only duplicate + math banners before posting", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate from any prior attempt.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-GUARD-001");
+
+    // 1. Seed a reviewed invoice whose single line ($900) does NOT sum to its
+    //    stated pre-tax total ($1000) → validateMath check-1 fires.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-170/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-guard-test.pdf",
+        supplier: "Guard Supplier Ltd",
+        invoice_number: "E2E-GUARD-001",
+        pre_tax_total: 1000,
+        gst: 50,
+        pst: 70,
+        total: 1120,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert({
+      invoice_id: inv.id,
+      line_no: 1,
+      qty: 1,
+      sku: "GUARD-1",
+      description: "Mismatched line",
+      unit: "ea",
+      unit_price: 900,
+      amount: 900, // ≠ pre_tax_total 1000 → math banner
+      tax_flag: true,
+      confidence: 0.95,
+    });
+
+    // 2. Seed a duplicate sibling (same supplier + invoice #) → duplicate banner.
+    await sb.from("invoices").insert({
+      status: "posted",
+      storage_path: "e2e-170/dup.pdf",
+      mime: "application/pdf",
+      original_filename: "e2e-guard-dup.pdf",
+      supplier: "Guard Supplier Ltd",
+      invoice_number: "E2E-GUARD-001",
+    });
+
+    // 3. Login and open the match page (reviewed invoices route there).
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // 4. Both read-only guards render on the post screen.
+    await expect(page.locator('[data-testid="match-duplicate-warning"]')).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.locator('[data-testid="match-math-banner"]')).toBeVisible();
+
+    // 5. The post button is still present — these are advisory, not a hard block.
+    await expect(page.locator('[data-testid="post-actuals-btn"]')).toBeVisible();
+
+    // 6. Clean up.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-GUARD-001");
+  });
+});
