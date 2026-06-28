@@ -16,7 +16,7 @@
  */
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { buildQboExport } from "@features/invoices/lib/qboExport";
+import { buildQboExport, buildQboBill } from "@features/invoices/lib/qboExport";
 import {
   rowToInvoice,
   rowToInvoiceLine,
@@ -27,10 +27,7 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET(
-  req: Request,
-  { params }: { params: { id: string } }
-) {
+export async function GET(req: Request, { params }: { params: { id: string } }) {
   // Auth: require the same CRON_SECRET used by the process route.
   const auth = req.headers.get("authorization");
   const expected = `Bearer ${process.env.CRON_SECRET}`;
@@ -77,6 +74,11 @@ export async function GET(
   const invoice = rowToInvoice(invRow);
   const lines = (lineRows as InvoiceLineRow[]).map(rowToInvoiceLine);
   const exportShape = buildQboExport(invoice, lines);
+  // QBO S6 (#152): the real QBO v3 Bill payload + its total reconciliation.
+  // No central account/tax maps are threaded here yet (the sync layer that
+  // consumes /quickbooks_links will pass them) — without maps the bill carries
+  // the raw local labels, so the shape is still complete + inspectable.
+  const { bill, reconciliation } = buildQboBill(invoice, lines);
 
-  return NextResponse.json({ ok: true, export: exportShape });
+  return NextResponse.json({ ok: true, export: exportShape, bill, reconciliation });
 }
