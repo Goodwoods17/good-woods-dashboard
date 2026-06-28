@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import {
   isLowConfidence,
   validateMath,
+  describeMathError,
   CONFIDENCE_THRESHOLD,
   MATH_TOLERANCE,
 } from "./reviewInvoice";
@@ -136,5 +137,34 @@ describe("validateMath — edge cases", () => {
     // 100 + 0 + 0 = 100 ≠ 200
     const errors = validateMath(header, lines);
     expect(errors.some((e) => e.kind === "pretax_plus_tax_vs_total")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// describeMathError — shared phrasing for the review + match (post) screens
+// ---------------------------------------------------------------------------
+
+describe("describeMathError", () => {
+  it("phrases a lines-vs-pretax mismatch with both figures + the difference", () => {
+    const msg = describeMathError({
+      kind: "lines_vs_pretax",
+      expected: 1000,
+      actual: 900,
+    });
+    expect(msg).toContain("Lines sum to");
+    expect(msg).toContain("pre-tax total");
+    // formatCAD renders the $100 gap.
+    expect(msg).toContain("100");
+  });
+
+  it("phrases a tax-vs-total mismatch with the computed total + difference", () => {
+    const msg = describeMathError({
+      kind: "pretax_plus_tax_vs_total",
+      expected: 1120,
+      actual: 1100,
+    });
+    expect(msg).toContain("Pre-tax + GST + PST");
+    expect(msg).toContain("stated total");
+    expect(msg).toContain("20");
   });
 });

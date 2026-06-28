@@ -7,6 +7,8 @@
  * Taxes are NEVER collapsed (CLAUDE.md + feature spec invariant).
  */
 
+import { formatCAD } from "@shared/lib/format";
+
 /** Lines with confidence below this get amber highlighting. */
 export const CONFIDENCE_THRESHOLD = 0.8;
 
@@ -87,4 +89,19 @@ export function validateMath(header: HeaderForMath, lines: LineForMath[]): MathE
   }
 
   return errors;
+}
+
+/**
+ * Plain-English description of a single math error, shared by the review screen
+ * (where it's editable) and the match/post screen (read-only guard). Extracted
+ * here so both surfaces phrase the mismatch identically.
+ */
+export function describeMathError(err: MathError): string {
+  const diff = (a: number, b: number) => formatCAD(Math.abs(a - b));
+  switch (err.kind) {
+    case "lines_vs_pretax":
+      return `Lines sum to ${formatCAD(err.actual)} but pre-tax total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
+    case "pretax_plus_tax_vs_total":
+      return `Pre-tax + GST + PST = ${formatCAD(err.actual)} but stated total is ${formatCAD(err.expected)} (difference: ${diff(err.expected, err.actual)})`;
+  }
 }

@@ -19,8 +19,9 @@ import { formatCAD } from "@shared/lib/format";
 import { formatError } from "@shared/lib/formatError";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useCatalog } from "@features/catalog/lib/catalogStore";
-import { saveInvoiceMatch, postInvoice } from "../lib/invoicesData";
+import { saveInvoiceMatch, postInvoice, checkDuplicateInvoice } from "../lib/invoicesData";
 import { detectSupplier, suggestJob } from "../lib/invoiceMatch";
+import { validateMath, describeMathError } from "../lib/reviewInvoice";
 import { buildSkuMatches, type LineSkuMatch } from "../lib/catalogPriceUpdate";
 import type { Invoice, InvoiceLine, InvoiceLineKind } from "../lib/types";
 
@@ -103,6 +104,48 @@ export function InvoiceMatchView({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, invoice.poRef]);
+
+  // ── Pre-post guards (#170): duplicate + math, read-only ─────────────────────
+  // The post button lives on this screen, but the duplicate + math checks only
+  // rendered on the review screen — so a known-duplicate / math-mismatched bill
+  // could be posted with no on-screen warning. Surface the same two checks here
+  // (display-only; reuses validateMath + checkDuplicateInvoice — no money math).
+  const mathErrors = useMemo(
+    () =>
+      validateMath(
+        {
+          preTaxTotal: invoice.preTaxTotal,
+          gst: invoice.gst,
+          pst: invoice.pst,
+          total: invoice.total,
+        },
+        lines.map((l) => ({ amount: l.amount }))
+      ),
+    [invoice.preTaxTotal, invoice.gst, invoice.pst, invoice.total, lines]
+  );
+
+  const [duplicate, setDuplicate] = useState<Invoice | null>(null);
+
+  useEffect(() => {
+    const sup = invoice.supplier?.trim();
+    const num = invoice.invoiceNumber?.trim();
+    if (!sup || !num) {
+      setDuplicate(null);
+      return;
+    }
+    let active = true;
+    checkDuplicateInvoice(sup, num, invoice.id)
+      .then((found) => {
+        if (active) setDuplicate(found);
+      })
+      .catch((e) => {
+        // Advisory check — a failed probe must not look like "no duplicate".
+        console.warn("[invoices] duplicate check failed:", e);
+      });
+    return () => {
+      active = false;
+    };
+  }, [invoice.supplier, invoice.invoiceNumber, invoice.id]);
 
   // ── Save / Post ───────────────────────────────────────────────────────────
   const [saving, setSaving] = useState(false);
@@ -205,6 +248,48 @@ export function InvoiceMatchView({
           >
             {saveError}
           </p>
+        )}
+
+        {/* ── Pre-post guards (#170): duplicate + math, read-only ────────── */}
+        {/* Duplicate-invoice warning — read-only mirror of the review screen so
+            a known duplicate can't be posted with no on-screen warning. */}
+        {duplicate && (
+          <div
+            data-testid="match-duplicate-warning"
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 p-4"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div>
+              <p className="text-sm font-medium text-amber-800">Possible duplicate invoice</p>
+              <p className="mt-0.5 text-sm text-amber-700">
+                Another invoice from{" "}
+                <strong>{duplicate.supplier ?? "this supplier"}</strong> with number{" "}
+                <strong>#{duplicate.invoiceNumber}</strong> already exists at status{" "}
+                <strong>{duplicate.status}</strong>. Check before posting to avoid
+                double-counting.
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Math validation — read-only mirror of the review screen. */}
+        {mathErrors.length > 0 && (
+          <div
+            data-testid="match-math-banner"
+            className="flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 p-4"
+          >
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-red-800">
+                Math mismatch — verify before posting
+              </p>
+              <ul className="list-disc pl-4 text-sm text-red-700">
+                {mathErrors.map((err) => (
+                  <li key={err.kind}>{describeMathError(err)}</li>
+                ))}
+              </ul>
+            </div>
+          </div>
         )}
 
         {/* ── Supplier section ──────────────────────────────────────────── */}
