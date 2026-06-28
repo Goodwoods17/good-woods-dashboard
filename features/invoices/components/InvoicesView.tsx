@@ -10,8 +10,10 @@ import { hasSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import { captureInvoice, isAcceptedInvoiceFile, listInvoices } from "../lib/invoicesData";
 import { CameraCapture } from "./CameraCapture";
+import { QboBulkPushPanel } from "./QboBulkPushPanel";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
 import { getProcessorStatus, type ProcessorStatus } from "../lib/processorStatus";
+import { invoicesQboEnabled } from "../lib/featureFlag";
 import type { Invoice } from "../lib/types";
 
 /**
@@ -174,6 +176,11 @@ export function InvoicesView() {
               {processing ? "Processing…" : "Process now"}
             </button>
           </div>
+        )}
+
+        {/* QBO S11: bulk catch-up push + token health nudge (gated by sub-flag). */}
+        {hasSupabase() && invoicesQboEnabled() && (
+          <QboBulkPushPanel onPushed={() => void refresh()} />
         )}
 
         {loading ? (
