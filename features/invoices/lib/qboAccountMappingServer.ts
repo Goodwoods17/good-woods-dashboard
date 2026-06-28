@@ -193,6 +193,27 @@ export async function getMappingState(
   };
 }
 
+/**
+ * Load JUST the persisted account + tax lookups for a company from
+ * `quickbooks_links` — no QBO API calls. This is what the S7 push path needs to
+ * resolve a bill's AccountRefs/TaxCodeRefs and run the block-until-mapped gate
+ * without round-tripping the (slow) Account/TaxCode queries.
+ */
+export async function loadMappingLookups(realmId: string): Promise<{
+  accountByLocal: Record<string, string>;
+  taxByLocal: Record<string, string>;
+}> {
+  const [accountLinks, taxLinks] = await Promise.all([
+    listQuickbooksLinks({ realmId, localType: ACCOUNT_LOCAL_TYPE }),
+    listQuickbooksLinks({ realmId, localType: TAXCODE_LOCAL_TYPE }),
+  ]);
+  const accountByLocal: Record<string, string> = {};
+  for (const link of accountLinks) accountByLocal[link.localId] = link.qboId;
+  const taxByLocal: Record<string, string> = {};
+  for (const link of taxLinks) taxByLocal[link.localId] = link.qboId;
+  return { accountByLocal, taxByLocal };
+}
+
 // ---------------------------------------------------------------------------
 // Persist one mapping
 // ---------------------------------------------------------------------------

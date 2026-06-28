@@ -9,9 +9,11 @@ import { formatCAD, formatDate } from "@shared/lib/format";
 import { hasSupabase } from "@shared/lib/supabase";
 import { formatError } from "@shared/lib/formatError";
 import { getInvoiceWithLines } from "../lib/invoicesData";
+import { invoicesQboEnabled } from "../lib/featureFlag";
 import { INVOICE_STATUS_LABELS, invoiceStatusTone } from "../lib/statusPill";
 import { InvoiceReviewView } from "./InvoiceReviewView";
 import { InvoiceMatchView } from "./InvoiceMatchView";
+import { QboPushPanel } from "./QboPushPanel";
 import type { Invoice, InvoiceLine } from "../lib/types";
 
 /**
@@ -99,6 +101,11 @@ export function InvoiceDetailView({ id }: { id: string }) {
             estimated-vs-actual for the assigned job(s); each actual links back here. Re-posting is
             blocked so it can&rsquo;t double-count.
           </div>
+        )}
+
+        {/* QBO S7: send the posted bill to QuickBooks (idempotent, gated). */}
+        {invoice.status === "posted" && invoicesQboEnabled() && (
+          <QboPushPanel invoiceId={invoice.id} />
         )}
 
         {invoice.errorMessage && (

@@ -1203,3 +1203,111 @@ test.describe("invoices QBO S6 — QB Bill payload", () => {
     await sb.from("invoices").delete().eq("id", inv.id);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S7 — push (idempotent) + preview/confirm + status badge + block-until-mapped
+// ───────────────────────────────────────────────────────────────────────────
+// The push endpoint (/api/invoices/[id]/push-qbo) rides the same
+// NEXT_PUBLIC_INVOICES_QBO gate as S1–S6. With no QBO OAuth creds in CI it must
+// degrade gracefully (404 flag-off / 400 not_connected / 503 unconfigured, never
+// a 5xx crash) and never leak a token. The idempotency + block-until-mapped
+// logic itself is exhaustively unit-tested in qboBillPush.test.ts. Here we prove
+// the surfaces wire up: the endpoints degrade cleanly, and a POSTED invoice's
+// detail page renders the "Send to QuickBooks" panel (which, unconnected in CI,
+// resolves to the "connect first" state — proving the badge surface exists).
+test.describe("invoices QBO S7 — push endpoints (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("GET preview degrades gracefully without real QBO creds + never leaks a token", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.get(
+      "/api/invoices/00000000-0000-4000-8000-0000000007a1/push-qbo"
+    );
+
+    // Flag off (prod default) → 404. Flag on in CI but no real QBO creds → 400
+    // (not_connected) or 503 (unconfigured). A 5xx crash is NOT acceptable.
+    expect([400, 404, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+
+  test("POST push degrades gracefully without real QBO creds + never leaks a token", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post(
+      "/api/invoices/00000000-0000-4000-8000-0000000007a1/push-qbo"
+    );
+
+    // Same degradation contract as the GET. 409 (blocked) is also fine if a real
+    // connection existed; the point is no 5xx crash.
+    expect([400, 404, 409, 503]).toContain(res.status());
+
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+});
+
+test.describe("invoices QBO S7 — posted invoice push panel", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("a POSTED invoice's detail page shows the QuickBooks push panel + a status badge", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate from any prior attempt.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-PUSH-001");
+
+    // Seed a POSTED invoice (the only status the push panel renders for).
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "posted",
+        storage_path: "e2e-s7/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-push.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-PUSH-001",
+        pre_tax_total: 100,
+        gst: 5,
+        pst: 7,
+        total: 112,
+        qbo_vendor_id: "qbo-vendor-push",
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+
+    // The posted read-only view + the QBO push panel both render.
+    await expect(page.locator('[data-testid="invoice-posted-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(page.locator('[data-testid="qbo-push-panel"]')).toBeVisible({ timeout: 15_000 });
+
+    // Unconnected in CI → the preview reports not_connected, so the panel shows
+    // the "connect first" state (no Bill badge yet). This proves the badge
+    // surface exists without needing a live sandbox.
+    await expect(page.locator('[data-testid="qbo-push-not-connected"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Clean up.
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
