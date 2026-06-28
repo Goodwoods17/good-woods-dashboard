@@ -1748,13 +1748,15 @@ test.describe("scheduling slice 24 — P&L revenue forecast panel (P6, gated)", 
     const burnList = panel.getByTestId("buffer-burn-list");
     await expect(burnList).toBeVisible({ timeout: 10_000 });
 
-    // The Buffer Burn Demo job row should be present.
-    const burnRow = panel.getByTestId("buffer-burn-row-buffer-burn-demo");
+    // The Buffer Burn Demo job row should be present. The seed job id is
+    // "s8-buffer-burn-demo" (scripts/seed-e2e.mjs), and the row data-testid is
+    // derived from that job id (buffer-burn-row-${job.id}).
+    const burnRow = panel.getByTestId("buffer-burn-row-s8-buffer-burn-demo");
     await expect(burnRow).toBeVisible({ timeout: 5_000 });
 
     // It should show a severity of medium or high (buffer is well past exhausted).
     const severity = await burnRow
-      .getByTestId("buffer-burn-severity-buffer-burn-demo")
+      .getByTestId("buffer-burn-severity-s8-buffer-burn-demo")
       .getAttribute("class");
     // The severity pill should NOT be "On track" (none severity).
     expect(severity).not.toContain("On track");
