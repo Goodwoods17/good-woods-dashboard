@@ -1,10 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { CheckCircle2, AlertCircle, Circle, ShieldCheck, Loader2 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { formatDate } from "@shared/lib/format";
-import { hasSupabase, getSupabase, COMMITMENT_LEDGER_TABLE } from "@shared/lib/supabase";
 import type { Job } from "@shared/lib/types";
 import {
   buildCommitmentLedger,
@@ -12,19 +10,8 @@ import {
   ownerReliabilityBufferDays,
   type LedgerEntry,
   type CommitmentStatus,
-  type OwnerReliabilityRecord,
 } from "../lib/commitmentLedger";
-
-// ─── DB row shape (subset we read) ────────────────────────────────────────────
-
-type LedgerRow = {
-  owner_kind: OwnerReliabilityRecord["ownerKind"];
-  owner_id: string | null;
-  owner_name: string;
-  committed_date: string;
-  actual_date: string | null;
-  missed: boolean;
-};
+import { useCommitmentLedger } from "../lib/commitmentLedgerStore";
 
 // ─── Status pill ──────────────────────────────────────────────────────────────
 
@@ -102,41 +89,9 @@ function LedgerRowView({ entry }: { entry: LedgerEntry }) {
  * flag is on, so it renders unconditionally once slotted in.
  */
 export function CommitmentLedgerPanel({ job }: { job: Job }) {
-  const [records, setRecords] = useState<OwnerReliabilityRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        let rows: LedgerRow[] = [];
-        if (hasSupabase()) {
-          const { data, error } = await getSupabase()
-            .from(COMMITMENT_LEDGER_TABLE)
-            .select("owner_kind, owner_id, owner_name, committed_date, actual_date, missed");
-          if (!error && data) rows = data as LedgerRow[];
-        }
-        if (cancelled) return;
-        setRecords(
-          rows.map((r) => ({
-            ownerKind: r.owner_kind,
-            ownerId: r.owner_id,
-            ownerName: r.owner_name,
-            committedDate: r.committed_date,
-            actualDate: r.actual_date,
-            missed: r.missed,
-          }))
-        );
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Reliability history loads behind the store seam; the ledger itself is derived
+  // purely from the Job below — this component is render-of-state.
+  const { records, loading } = useCommitmentLedger();
 
   const ledger = buildCommitmentLedger(job, new Date());
   const clientEntries = ledger.filter((e) => e.level === "client");

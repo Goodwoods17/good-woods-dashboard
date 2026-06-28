@@ -1,15 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Check, Copy, Link2, X } from "lucide-react";
 import type { Job, ScheduleShareLink } from "@shared/lib/types";
-import { getSupabase, hasSupabase, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
-import { generateCapabilityToken } from "@shared/lib/utils";
-import {
-  rowToScheduleShareLink,
-  scheduleShareLinkToRow,
-  type ScheduleShareLinkRow,
-} from "../lib/scheduleShareLinksRowMap";
+import { hasSupabase } from "@shared/lib/supabase";
+import { useScheduleShareLinks } from "../lib/scheduleShareLinksStore";
 
 /**
  * Owner-only panel in the Schedule tab (S18, issue #106) to mint / copy / revoke
@@ -22,59 +17,12 @@ import {
  * path the rest of the app uses; the public READ uses the service role.
  */
 export function ClientPortalPanel({ job }: { job: Job }) {
-  const [links, setLinks] = useState<ScheduleShareLink[]>([]);
-  const [busy, setBusy] = useState(false);
+  // List / mint / revoke all live behind the store seam; this component is
+  // render-of-state plus a little clipboard UX.
+  const { links, busy, create, revoke } = useScheduleShareLinks(job);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const supabaseReady = hasSupabase();
-
-  const load = useCallback(async () => {
-    if (!supabaseReady) return;
-    const sb = getSupabase();
-    const { data } = await sb
-      .from(SCHEDULE_SHARE_LINKS_TABLE)
-      .select("*")
-      .eq("job_id", job.id)
-      .order("created_at", { ascending: false });
-    setLinks(((data as ScheduleShareLinkRow[] | null) ?? []).map(rowToScheduleShareLink));
-  }, [job.id, supabaseReady]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  const create = useCallback(async () => {
-    if (!supabaseReady || busy) return;
-    setBusy(true);
-    const link: ScheduleShareLink = {
-      id: crypto.randomUUID(),
-      jobId: job.id,
-      token: generateCapabilityToken(),
-      recipientName: null,
-      committedDateSnapshot: job.installDate,
-      viewedAt: null,
-      revokedAt: null,
-      createdAt: new Date().toISOString(),
-      createdBy: null,
-    };
-    const sb = getSupabase();
-    const { error } = await sb
-      .from(SCHEDULE_SHARE_LINKS_TABLE)
-      .insert(scheduleShareLinkToRow(link));
-    if (!error) setLinks((prev) => [link, ...prev]);
-    setBusy(false);
-  }, [busy, job.id, job.installDate, supabaseReady]);
-
-  const revoke = useCallback(
-    async (id: string) => {
-      if (!supabaseReady) return;
-      const now = new Date().toISOString();
-      const sb = getSupabase();
-      await sb.from(SCHEDULE_SHARE_LINKS_TABLE).update({ revoked_at: now }).eq("id", id);
-      setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, revokedAt: now } : l)));
-    },
-    [supabaseReady]
-  );
 
   const copy = useCallback(async (link: ScheduleShareLink) => {
     const url = `${window.location.origin}/s/${link.token}`;

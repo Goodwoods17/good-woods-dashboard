@@ -9,44 +9,13 @@ import {
   type CapacityWindow,
 } from "@features/scheduling/lib/freeCapacity";
 import { MILESTONE_STAGES } from "@shared/lib/types";
-import {
-  DEFAULT_WEEKLY_CAPACITY_HOURS,
-  type CapacitySession,
-  type PhaseHours,
-} from "@features/scheduling/lib/capacity";
+import { type CapacitySession } from "@features/scheduling/lib/capacity";
+import { usePhaseCapacity } from "@features/scheduling/lib/usePhaseCapacity";
 import { cn } from "@shared/lib/utils";
-import { hasSupabase, getSupabase } from "@shared/lib/supabase";
 import type { MilestoneStage } from "@shared/lib/types";
-import { useEffect } from "react";
 
 function fmtHours(h: number): string {
   return `${Math.round(h * 10) / 10}h`;
-}
-
-/** Load per-phase weekly capacity from the table; fall back to defaults. */
-function usePhaseCapacity(): PhaseHours {
-  const [capacity, setCapacity] = useState<PhaseHours>(DEFAULT_WEEKLY_CAPACITY_HOURS);
-  useEffect(() => {
-    if (!hasSupabase()) return;
-    let cancelled = false;
-    getSupabase()
-      .from("scheduling_phase_capacity")
-      .select("phase, weekly_capacity_hours")
-      .then(({ data, error }) => {
-        if (cancelled || error || !data || data.length === 0) return;
-        const next: PhaseHours = { ...DEFAULT_WEEKLY_CAPACITY_HOURS };
-        for (const row of data as { phase: string; weekly_capacity_hours: number | string }[]) {
-          if (row.phase in next) {
-            next[row.phase as MilestoneStage] = Number(row.weekly_capacity_hours);
-          }
-        }
-        setCapacity(next);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return capacity;
 }
 
 type FreeRowProps = { window: CapacityWindow };
@@ -95,8 +64,8 @@ function WindowRow({ window }: FreeRowProps) {
                   free === 0
                     ? "text-status-blocked"
                     : free < 16
-                    ? "text-status-at-risk"
-                    : "text-status-on-track"
+                      ? "text-status-at-risk"
+                      : "text-status-on-track"
                 )}
               >
                 {fmtHours(free)}
