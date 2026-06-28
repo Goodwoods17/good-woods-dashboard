@@ -15,14 +15,17 @@ import {
   parseQboTaxCodeList,
   suggestTaxCode,
   detectUnmappedMappings,
+  buildAccountRequirements,
   LOCAL_TAX_TYPES,
   type QboAccount,
   type QboTaxCode,
   type LocalTaxType,
   type UnmappedState,
+  type AccountRequirement,
 } from "./qboAccountMapping";
 import { getFreshAccessToken } from "./qboConnectionServer";
 import { upsertQuickbooksLink, listQuickbooksLinks } from "./quickbooksLinksServer";
+import { getServiceRoleClient } from "@shared/lib/serviceClient";
 
 /** `quickbooks_links.local_type` values this slice owns. */
 export const ACCOUNT_LOCAL_TYPE = "account";
@@ -112,9 +115,16 @@ export type MappingState = {
   accountByLocal: Record<string, string>;
   /** Persisted tax mappings: local tax key → QBO TaxCode.Id. */
   taxByLocal: Record<string, string>;
+  /**
+   * The account-mapping rows the settings UI draws (QBO-H4, issue #187): one per
+   * distinct local cost-code/category key a pending sync would touch, with its
+   * current QBO link. This is what lets the owner clear the block-until-mapped
+   * dead-end — the panel POSTs `kind:"account"` for each.
+   */
+  accountRequirements: AccountRequirement[];
   /** Auto-suggested GST/PST pairings (one per LOCAL_TAX_TYPES entry). */
   taxSuggestions: TaxSuggestion[];
-  /** Unmapped-state signal for the (future) block-until-mapped gate. */
+  /** Unmapped-state signal for the block-until-mapped gate. */
   unmapped: UnmappedState;
 };
 
@@ -126,6 +136,46 @@ type MappingError = {
 export type MappingStateResult = MappingState | MappingError;
 
 // ---------------------------------------------------------------------------
+// Harvest the local account keys a pending sync would touch
+// ---------------------------------------------------------------------------
+
+/**
+ * The distinct local cost-code/category keys (`invoice_lines.qbo_account`) on
+ * every `posted` invoice — the exact set the owner must map to QBO expense
+ * accounts before those bills can sync. This is what feeds the account-mapping
+ * rows (QBO-H4, issue #187) so the block-until-mapped gate can actually be
+ * cleared in-UI rather than naming a count the panel can't act on.
+ *
+ * Posted is the eligible-to-push status (`evaluateBillPush` refuses anything
+ * else); already-pushed invoices keep their `posted` status, so a few of these
+ * keys may already be mapped — harmless, the row just shows "mapped". Degrades
+ * to [] when the service client is unavailable (mirrors the rest of this file).
+ */
+export async function listRequiredAccountKeys(): Promise<string[]> {
+  const sb = getServiceRoleClient();
+  if (!sb) return [];
+
+  const { data: posted } = await sb.from("invoices").select("id").eq("status", "posted");
+  const ids = ((posted as { id: string }[] | null) ?? []).map((r) => r.id);
+  if (ids.length === 0) return [];
+
+  const { data: lineRows } = await sb
+    .from("invoice_lines")
+    .select("qbo_account")
+    .in("invoice_id", ids);
+
+  const seen = new Set<string>();
+  const keys: string[] = [];
+  for (const row of (lineRows as { qbo_account: string | null }[] | null) ?? []) {
+    const key = row.qbo_account?.trim();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    keys.push(key);
+  }
+  return keys;
+}
+
+// ---------------------------------------------------------------------------
 // Read the full mapping state
 // ---------------------------------------------------------------------------
 
@@ -134,7 +184,10 @@ export type MappingStateResult = MappingState | MappingError;
  * GST/PST auto-suggestions, and the unmapped-state signal.
  *
  * `requiredAccountKeys` — the local category/cost-code keys a pending sync would
- * touch (so the gate knows exactly which accounts must be mapped). Tax keys are
+ * touch (so the gate knows exactly which accounts must be mapped). When the
+ * caller passes none (the common case — the Settings panel), they're harvested
+ * from the posted invoices via {@link listRequiredAccountKeys}, so the panel
+ * always renders a mapping row for every account a sync needs. Tax keys are
  * always the two atomic Canadian taxes (GST, PST).
  */
 export async function getMappingState(
@@ -171,6 +224,12 @@ export async function getMappingState(
   const taxByLocal: Record<string, string> = {};
   for (const link of taxLinks) taxByLocal[link.localId] = link.qboId;
 
+  // No explicit keys → harvest the account labels every posted invoice carries,
+  // so the panel can draw a mapping row for each (the dead-end fix, #187).
+  const accountKeys =
+    requiredAccountKeys.length > 0 ? requiredAccountKeys : await listRequiredAccountKeys();
+  const accountRequirements = buildAccountRequirements(accountKeys, accountByLocal);
+
   const taxSuggestions: TaxSuggestion[] = LOCAL_TAX_TYPES.map((localType) => {
     const suggestion = suggestTaxCode(localType, taxCodes);
     return {
@@ -182,7 +241,7 @@ export async function getMappingState(
   });
 
   const unmapped = detectUnmappedMappings({
-    requiredAccountKeys,
+    requiredAccountKeys: accountKeys,
     requiredTaxKeys: [...LOCAL_TAX_TYPES],
     accountByLocal,
     taxByLocal,
@@ -194,6 +253,7 @@ export async function getMappingState(
     taxCodes,
     accountByLocal,
     taxByLocal,
+    accountRequirements,
     taxSuggestions,
     unmapped,
   };

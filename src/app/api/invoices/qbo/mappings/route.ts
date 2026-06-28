@@ -59,6 +59,7 @@ export async function GET(request: NextRequest) {
         taxCodes: state.taxCodes,
         accountByLocal: state.accountByLocal,
         taxByLocal: state.taxByLocal,
+        accountRequirements: state.accountRequirements,
         taxSuggestions: state.taxSuggestions,
         unmapped: state.unmapped,
       });

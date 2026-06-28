@@ -236,3 +236,40 @@ export function detectUnmappedMappings(params: {
     fullyMapped: unmappedAccounts.length === 0 && unmappedTaxes.length === 0,
   };
 }
+
+// ---------------------------------------------------------------------------
+// The per-account mapping rows the settings UI draws (QBO-H4, issue #187)
+// ---------------------------------------------------------------------------
+
+/** One account-mapping row: a local cost-code/category key + its QBO link. */
+export type AccountRequirement = {
+  /** The local cost-code/category key (an `invoice_lines.qbo_account` label). */
+  localId: string;
+  /** The currently-persisted QBO Account.Id, or null when still unmapped. */
+  mappedQboId: string | null;
+};
+
+/**
+ * Build the account-mapping rows the owner edits in Settings → QuickBooks
+ * (the block-until-mapped dead-end fix). One row per distinct local
+ * cost-code/category key a pending sync would touch, each carrying its current
+ * QBO Account link (null = unmapped). Mirrors the GST/PST tax wizard.
+ *
+ * Blank keys are dropped, whitespace trimmed, duplicates collapsed (first wins),
+ * and input order preserved — so callers can pass the raw set of `qbo_account`
+ * labels harvested from the posted invoices without pre-cleaning.
+ */
+export function buildAccountRequirements(
+  requiredKeys: string[],
+  accountByLocal: Record<string, string>
+): AccountRequirement[] {
+  const seen = new Set<string>();
+  const out: AccountRequirement[] = [];
+  for (const raw of requiredKeys) {
+    const localId = raw?.trim();
+    if (!localId || seen.has(localId)) continue;
+    seen.add(localId);
+    out.push({ localId, mappedQboId: accountByLocal[localId] ?? null });
+  }
+  return out;
+}
