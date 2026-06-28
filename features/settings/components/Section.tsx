@@ -11,13 +11,16 @@ export function Section({
   title,
   description,
   children,
+  id,
 }: {
   title: string;
   description?: string;
   children: React.ReactNode;
+  /** Anchor target so deep links like `/settings#quickbooks` scroll here. */
+  id?: string;
 }) {
   return (
-    <section className="rounded-2xl bg-surface shadow-resting">
+    <section id={id} className="scroll-mt-6 rounded-2xl bg-surface shadow-resting">
       <div className="px-5 py-4 md:px-6 md:py-5">
         <h2 className="font-serif text-title font-medium text-text-primary">{title}</h2>
         {description && (

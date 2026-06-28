@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -8,6 +9,7 @@ import {
   Send,
   Undo2,
   RefreshCw,
+  RefreshCcw,
   Paperclip,
 } from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
@@ -16,7 +18,14 @@ import {
   pushHistoryBadge,
   type AttachmentOutcome,
 } from "@features/invoices/lib/qboPushOutcome";
+import {
+  blockGuidance,
+  isReconnectReason,
+  QBO_RECONNECT_NOTICE,
+  QBO_SETTINGS_HREF,
+} from "@features/invoices/lib/qboPushNudge";
 import type { LatestPushAttempt } from "@features/invoices/lib/qboPushAudit";
+import type { TokenHealth } from "@features/invoices/lib/qboTokenHealth";
 
 /**
  * "Send to QuickBooks" panel for a POSTED invoice (QBO S7, issue #153).
@@ -71,7 +80,13 @@ type Preview = {
   billId: string | null;
   deepLink: string | null;
   latestAttempt: LatestPushAttempt | null;
+  // QBO-H8 (#191): aging-token nudge so the owner reconnects before a push fails.
+  tokenHealth: TokenHealth | null;
 };
+
+// QBO-H8: a notice can carry an actionable Settings link (reconnect / open
+// mapping panel) instead of being dead plain text.
+type Notice = { message: string; settingsLabel?: string } | null;
 
 type Phase =
   | { kind: "loading" }
@@ -79,32 +94,11 @@ type Phase =
   | { kind: "error" }
   | { kind: "ready"; data: Preview };
 
-function blockMessage(gate: Gate): string {
-  switch (gate.block) {
-    case "already_pushed":
-      return "Already sent to QuickBooks.";
-    case "not_posted":
-      return "Post this invoice to actuals before sending it to QuickBooks.";
-    case "vendor_unmapped":
-      return "Map this supplier to a QuickBooks vendor first (Settings → QuickBooks).";
-    case "accounts_unmapped":
-      return `Map ${gate.unmappedAccounts.length} expense account${
-        gate.unmappedAccounts.length === 1 ? "" : "s"
-      } in Settings → QuickBooks first.`;
-    case "taxes_unmapped":
-      return `Map the ${gate.unmappedTaxes.join(", ")} tax code${
-        gate.unmappedTaxes.length === 1 ? "" : "s"
-      } in Settings → QuickBooks first.`;
-    default:
-      return "";
-  }
-}
-
 export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
   const [phase, setPhase] = useState<Phase>({ kind: "loading" });
   const [showPreview, setShowPreview] = useState(false);
   const [sending, setSending] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice>(null);
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [voiding, setVoiding] = useState(false);
   // QBO-H7 (#190): a Bill can push while its PDF fails to attach. We hold the
@@ -148,6 +142,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
       const body = (await res.json()) as {
         ok: boolean;
         status?: string;
+        reason?: string;
         message?: string;
         gate?: Gate;
         attachment?: AttachmentOutcome;
@@ -159,13 +154,26 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
         setAttachNotice(attachmentWarning(body.attachment ?? null));
         await load();
       } else if (body.status === "blocked") {
-        setNotice(body.gate ? blockMessage(body.gate) : "This invoice can't be sent yet.");
+        // QBO-H8: a block-until-mapped reason is now an actionable link.
+        if (body.gate) {
+          const g = blockGuidance(body.gate);
+          setNotice({
+            message: g.message || "This invoice can't be sent yet.",
+            settingsLabel: g.linkToSettings ? "Open QuickBooks settings" : undefined,
+          });
+        } else {
+          setNotice({ message: "This invoice can't be sent yet." });
+        }
         await load();
+      } else if (isReconnectReason(body.reason)) {
+        // QBO-H8: an aged/expired token surfaces as not_connected at send time —
+        // tell the owner to reconnect instead of a generic "couldn't reach".
+        setNotice({ message: QBO_RECONNECT_NOTICE, settingsLabel: "Reconnect QuickBooks" });
       } else {
-        setNotice(body.message ?? "Couldn't reach QuickBooks. Try again.");
+        setNotice({ message: body.message ?? "Couldn't reach QuickBooks. Try again." });
       }
     } catch {
-      setNotice("Couldn't reach QuickBooks. Try again.");
+      setNotice({ message: "Couldn't reach QuickBooks. Try again." });
     } finally {
       setSending(false);
     }
@@ -207,13 +215,13 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
         setShowPreview(false);
         await load();
       } else if (body.status === "not_pushed") {
-        setNotice("This invoice isn't in QuickBooks anymore.");
+        setNotice({ message: "This invoice isn't in QuickBooks anymore." });
         await load();
       } else {
-        setNotice(body.message ?? "Couldn't void in QuickBooks. Try again.");
+        setNotice({ message: body.message ?? "Couldn't void in QuickBooks. Try again." });
       }
     } catch {
-      setNotice("Couldn't void in QuickBooks. Try again.");
+      setNotice({ message: "Couldn't void in QuickBooks. Try again." });
     } finally {
       setVoiding(false);
     }
@@ -241,13 +249,26 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
             retrying={sending}
           />
           <p data-testid="qbo-push-not-connected" className="text-sm text-text-secondary">
-            Connect QuickBooks in Settings to send this bill.
+            <Link
+              href={QBO_SETTINGS_HREF}
+              data-testid="qbo-push-reconnect-link"
+              className="font-medium text-text-primary underline hover:opacity-80"
+            >
+              Reconnect QuickBooks in Settings
+            </Link>{" "}
+            to send this bill.
           </p>
         </div>
       )}
 
       {phase.kind === "ready" && (
         <div className="space-y-4">
+          {/* QBO-H8: aging-token reconnect nudge — shown BEFORE a push can fail
+              on an expired token, mirroring the bulk-push panel's banner. */}
+          {phase.data.tokenHealth && phase.data.tokenHealth.level !== "ok" && (
+            <ReconnectBanner health={phase.data.tokenHealth} />
+          )}
+
           {/* Status badge */}
           {phase.data.alreadyPushed && phase.data.billId ? (
             <div
@@ -383,14 +404,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
                     </p>
                   )}
 
-                  {!phase.data.gate.pushable && (
-                    <p
-                      data-testid="qbo-push-blocked"
-                      className="flex items-center gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
-                    >
-                      <AlertTriangle className="h-4 w-4" /> {blockMessage(phase.data.gate)}
-                    </p>
-                  )}
+                  {!phase.data.gate.pushable && <BlockMessage gate={phase.data.gate} />}
 
                   <div className="flex items-center gap-2">
                     <button
@@ -416,9 +430,21 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
           )}
 
           {notice && (
-            <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
-              {notice}
-            </p>
+            <div
+              data-testid="qbo-push-notice"
+              className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+            >
+              <p>{notice.message}</p>
+              {notice.settingsLabel && (
+                <Link
+                  href={QBO_SETTINGS_HREF}
+                  data-testid="qbo-push-notice-link"
+                  className="inline-flex items-center gap-1.5 font-medium text-amber-800 underline hover:text-amber-900"
+                >
+                  <RefreshCcw className="h-3.5 w-3.5" /> {notice.settingsLabel}
+                </Link>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -510,6 +536,66 @@ function AttachmentMissingBanner({
       >
         <RefreshCw className="h-4 w-4" /> {retrying ? "Attaching…" : "Retry attachment"}
       </button>
+    </div>
+  );
+}
+
+/**
+ * QBO-H8: the block-until-mapped reason, with an actionable link to the mapping
+ * panel for the reasons that are fixed there (unmapped vendor / account / tax).
+ */
+function BlockMessage({ gate }: { gate: Gate }) {
+  const { message, linkToSettings } = blockGuidance(gate);
+  return (
+    <div
+      data-testid="qbo-push-blocked"
+      className="space-y-1.5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700"
+    >
+      <p className="flex items-center gap-1.5">
+        <AlertTriangle className="h-4 w-4" /> {message}
+      </p>
+      {linkToSettings && (
+        <Link
+          href={QBO_SETTINGS_HREF}
+          data-testid="qbo-push-blocked-link"
+          className="inline-flex items-center gap-1.5 font-medium text-amber-800 underline hover:text-amber-900"
+        >
+          <ExternalLink className="h-3.5 w-3.5" /> Open QuickBooks settings
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/**
+ * QBO-H8: aging-token reconnect nudge on the push panel — visible before a push
+ * fails on an expired token. Mirrors QboBulkPushPanel's banner.
+ */
+function ReconnectBanner({ health }: { health: TokenHealth }) {
+  const critical = health.level === "critical";
+  return (
+    <div
+      data-testid="qbo-push-token-health-banner"
+      className={`flex flex-wrap items-start gap-3 rounded-md border px-3 py-2 text-sm ${
+        critical
+          ? "border-red-200 bg-red-50 text-red-800"
+          : "border-amber-200 bg-amber-50 text-amber-800"
+      }`}
+    >
+      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+      <div className="flex-1 space-y-1">
+        <p className="font-medium">
+          {critical ? "QuickBooks connection needs renewal" : "QuickBooks connection is aging"}
+        </p>
+        <p>{health.message}</p>
+      </div>
+      <Link
+        href={QBO_SETTINGS_HREF}
+        data-testid="qbo-push-reconnect-link"
+        className="inline-flex items-center gap-1.5 rounded-md border border-current px-3 py-1 text-xs font-medium hover:opacity-80"
+      >
+        <RefreshCcw className="h-3 w-3" /> Reconnect QuickBooks
+      </Link>
     </div>
   );
 }

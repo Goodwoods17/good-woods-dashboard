@@ -2124,3 +2124,73 @@ test.describe("invoices QBO-H7 — attach-qbo endpoint (gated, degradation)", ()
     expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token|Bearer /i);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO-H8 — reconnect nudge on the push panel + actionable block-until-mapped
+// link (issue #191)
+// ───────────────────────────────────────────────────────────────────────────
+// Two surfaces, both verifiable without a live QBO sandbox:
+//   1. The Settings → QuickBooks section carries an `#quickbooks` anchor, so the
+//      reconnect / mapping deep links actually scroll somewhere (the anchor was
+//      dead before this slice).
+//   2. A posted invoice's push panel, unconnected in CI, shows an actionable
+//      "Reconnect QuickBooks in Settings" LINK (not dead text) pointing at that
+//      anchor — proving the owner gets a reconnect prompt before/at a push.
+test.describe("invoices QBO-H8 — reconnect nudge + actionable block link (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("the Settings QuickBooks section exposes the #quickbooks deep-link anchor", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/settings#quickbooks");
+    // Flag on in CI → the QuickBooks section renders with the anchor id so deep
+    // links resolve. The connect panel inside it is the proof the section mounted.
+    await expect(page.locator("#quickbooks")).toHaveCount(1);
+    await expect(page.getByTestId("qbo-connect-panel")).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("the push panel's not-connected state links to the QuickBooks settings anchor", async ({
+    page,
+  }) => {
+    test.skip(!supabaseUrl || !serviceRoleKey, "needs SUPABASE_SERVICE_ROLE_KEY");
+
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-H8-RECONNECT");
+
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "posted",
+        storage_path: "e2e-h8/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-h8.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-H8-RECONNECT",
+        pre_tax_total: 100,
+        gst: 5,
+        pst: 7,
+        total: 112,
+        qbo_vendor_id: "qbo-vendor-h8",
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+
+    await expect(page.getByTestId("qbo-push-panel")).toBeVisible({ timeout: 15_000 });
+
+    // Unconnected in CI → the not-connected state renders an actionable reconnect
+    // LINK (the H8 fix) pointing at the Settings QuickBooks anchor.
+    const link = page.getByTestId("qbo-push-reconnect-link");
+    await expect(link).toBeVisible({ timeout: 15_000 });
+    await expect(link).toHaveAttribute("href", "/settings#quickbooks");
+
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
