@@ -1,4 +1,5 @@
 import type { Job, MilestoneStage } from "@shared/lib/types";
+import { compareToTarget } from "./dateStatus";
 
 /**
  * Per-phase internal target dates. A partial map keyed by the six phases
@@ -29,10 +30,10 @@ export function scheduleStatus(
 ): ScheduleStatus {
   const target = phaseTargetDates?.[currentMilestone];
   if (!target) return "on_track";
-  // The target is owed by the END of its calendar day. Pin to UTC so the
-  // result is timezone-independent (a date is a date, not an instant).
-  const targetEndOfDay = new Date(`${target}T23:59:59.999Z`);
-  return today.getTime() > targetEndOfDay.getTime() ? "behind" : "on_track";
+  // The target is owed by the END of its calendar day → "behind" only once the
+  // target day is fully behind today (UTC day granularity; TZ-independent).
+  // Equivalent to the prior `today > target T23:59:59.999Z` instant compare.
+  return compareToTarget(target, today) === "past" ? "behind" : "on_track";
 }
 
 /** The client-committed install date — the unchanged, frozen promise. */

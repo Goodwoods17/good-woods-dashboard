@@ -46,6 +46,14 @@ describe("phaseTargetPaceStatus", () => {
   it('returns "behind" when the target date has passed', () => {
     expect(phaseTargetPaceStatus("2026-06-28", today)).toBe("behind");
   });
+
+  // Boundary equivalence after folding onto compareToTarget: yesterday → behind,
+  // today → due_today, tomorrow → on_pace (identical to the prior daysUntil sign).
+  it("maps yesterday/today/tomorrow exactly like the daysUntil sign", () => {
+    expect(phaseTargetPaceStatus("2026-06-30", today)).toBe("behind");
+    expect(phaseTargetPaceStatus("2026-07-01", today)).toBe("due_today");
+    expect(phaseTargetPaceStatus("2026-07-02", today)).toBe("on_pace");
+  });
 });
 
 // ── phaseTargetLabel ──────────────────────────────────────────────────────

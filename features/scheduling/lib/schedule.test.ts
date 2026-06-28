@@ -55,6 +55,23 @@ describe("scheduleStatus", () => {
   it("is on_track when the current phase has no target even if others do", () => {
     expect(scheduleStatus("install", targets, new Date("2026-12-31"))).toBe("on_track");
   });
+
+  // Boundary equivalence after folding onto compareToTarget: the flip happens
+  // strictly AFTER the target day ends (yesterday/today/tomorrow of the target),
+  // including at the extreme instants of the target day.
+  describe("boundary equivalence (yesterday / today / tomorrow)", () => {
+    const t: PhaseTargetDates = { assembly: "2026-08-01" };
+    it("day before target → on_track", () => {
+      expect(scheduleStatus("assembly", t, new Date("2026-07-31T12:00:00Z"))).toBe("on_track");
+    });
+    it("first and last instant of the target day → on_track", () => {
+      expect(scheduleStatus("assembly", t, new Date("2026-08-01T00:00:00.000Z"))).toBe("on_track");
+      expect(scheduleStatus("assembly", t, new Date("2026-08-01T23:59:59.999Z"))).toBe("on_track");
+    });
+    it("first instant of the day after target → behind", () => {
+      expect(scheduleStatus("assembly", t, new Date("2026-08-02T00:00:00.000Z"))).toBe("behind");
+    });
+  });
 });
 
 describe("committedDate", () => {

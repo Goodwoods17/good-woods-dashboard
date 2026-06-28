@@ -137,6 +137,30 @@ describe("buildCommitmentLedger", () => {
     expect(client!.status).toBe("open");
   });
 
+  // Boundary equivalence after folding deriveStatus onto compareToTarget: for a
+  // not-yet-complete commitment, yesterday → missed, today/tomorrow → open
+  // (identical to the prior `committedDate < todayISO` string compare).
+  it("flips a not-complete commitment to missed exactly the day after its date", () => {
+    // assembly is after the current milestone (cnc) → never auto-complete, so
+    // status is driven purely by the date boundary.
+    const anchor = new Date("2026-09-02T12:00:00.000Z"); // todayISO = 2026-09-02
+    const yesterday = buildCommitmentLedger(
+      makeJob({ phaseTargetDates: { assembly: "2026-09-01" } }),
+      anchor
+    ).find((e) => e.phase === "assembly");
+    const todayEntry = buildCommitmentLedger(
+      makeJob({ phaseTargetDates: { assembly: "2026-09-02" } }),
+      anchor
+    ).find((e) => e.phase === "assembly");
+    const tomorrow = buildCommitmentLedger(
+      makeJob({ phaseTargetDates: { assembly: "2026-09-03" } }),
+      anchor
+    ).find((e) => e.phase === "assembly");
+    expect(yesterday!.status).toBe("missed");
+    expect(todayEntry!.status).toBe("open");
+    expect(tomorrow!.status).toBe("open");
+  });
+
   it("returns only the client commitment when no phase targets are set", () => {
     const ledger = buildCommitmentLedger(makeJob({ phaseTargetDates: null }), today);
     expect(ledger).toHaveLength(1);
