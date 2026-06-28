@@ -1,13 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { Check, ClipboardCopy, ExternalLink } from "lucide-react";
 import type { Job } from "@shared/lib/types";
 import { formatDate } from "@shared/lib/format";
-import { getSupabase, hasSupabase, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
 import { buildKickoffArtifact, type KickoffArtifact } from "../lib/kickoffArtifact";
-import type { ScheduleShareLinkRow } from "../lib/scheduleShareLinksRowMap";
-import { rowToScheduleShareLink } from "../lib/scheduleShareLinksRowMap";
+import { useActivePortalUrl } from "../lib/scheduleShareLinksStore";
 
 /**
  * S20 — Kickoff expectation-setting artifact panel (issue #108).
@@ -22,31 +20,8 @@ import { rowToScheduleShareLink } from "../lib/scheduleShareLinksRowMap";
 export function KickoffArtifactPanel({ job }: { job: Job }) {
   const [copied, setCopied] = useState(false);
   // The first active share-link URL (if any) is woven into the update protocol.
-  const [portalUrl, setPortalUrl] = useState<string | null>(null);
-
-  const supabaseReady = hasSupabase();
-
-  // Load the first active share link to build the portal URL for the artifact.
-  useEffect(() => {
-    if (!supabaseReady) return;
-    const sb = getSupabase();
-    void (async () => {
-      const { data } = await sb
-        .from(SCHEDULE_SHARE_LINKS_TABLE)
-        .select("token, revoked_at")
-        .eq("job_id", job.id)
-        .is("revoked_at", null)
-        .order("created_at", { ascending: false })
-        .limit(1);
-      if (data && data.length > 0) {
-        const link = rowToScheduleShareLink(data[0] as ScheduleShareLinkRow);
-        // Build the URL from the current origin so it works in any env.
-        if (typeof window !== "undefined") {
-          setPortalUrl(`${window.location.origin}/s/${link.token}`);
-        }
-      }
-    })();
-  }, [job.id, supabaseReady]);
+  // Resolved behind the store seam so this component is render-of-state.
+  const portalUrl = useActivePortalUrl(job.id);
 
   const artifact: KickoffArtifact = buildKickoffArtifact({
     jobName: job.name,
@@ -106,10 +81,7 @@ export function KickoffArtifactPanel({ job }: { job: Job }) {
       {/* ── Subject ────────────────────────────────────────────────────────── */}
       <div className="mt-5">
         <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1">Subject</p>
-        <p
-          className="text-sm font-medium text-text-primary"
-          data-testid="kickoff-artifact-subject"
-        >
+        <p className="text-sm font-medium text-text-primary" data-testid="kickoff-artifact-subject">
           {artifact.subject}
         </p>
       </div>

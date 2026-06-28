@@ -26,12 +26,12 @@ import { useState, useMemo } from "react";
 import { Star, AlertTriangle, ArrowRight, Check, Loader2 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { formatDate } from "@shared/lib/format";
-import { hasSupabase, getSupabase, PRIORITY_BUMPS_TABLE } from "@shared/lib/supabase";
 import { useAuth } from "@shared/lib/authStore";
 import type { Job } from "@shared/lib/types";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { computeBumpImpact, buildPriorityBumpRecord } from "../lib/priorityBump";
 import type { BumpPreview } from "../lib/priorityBump";
+import { insertPriorityBump } from "../lib/priorityBumpStore";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -68,13 +68,7 @@ export function PriorityBumpPanel({
   // Other active jobs (excluding this one) that have a committed date — the
   // candidate pool for bumping. Complete jobs are excluded; they already shipped.
   const bumpCandidates = useMemo(
-    () =>
-      jobs.filter(
-        (j) =>
-          j.id !== job.id &&
-          j.pipelineStatus !== "complete" &&
-          j.installDate
-      ),
+    () => jobs.filter((j) => j.id !== job.id && j.pipelineStatus !== "complete" && j.installDate),
     [jobs, job.id]
   );
 
@@ -120,19 +114,7 @@ export function PriorityBumpPanel({
         bumpedBy: user?.email ?? null,
       });
 
-      if (hasSupabase()) {
-        const sb = getSupabase();
-        await sb.from(PRIORITY_BUMPS_TABLE).insert({
-          id: record.id,
-          priority_job_id: record.priorityJobId,
-          bumped_job_id: record.bumpedJobId,
-          bump_days: record.bumpDays,
-          reason: record.reason,
-          old_committed_date: record.oldCommittedDate,
-          new_committed_date: record.newCommittedDate,
-          bumped_by: record.bumpedBy,
-        });
-      }
+      await insertPriorityBump(record);
 
       await onBump?.({
         bumpedJobId: selectedBumpJob.id,
@@ -153,10 +135,7 @@ export function PriorityBumpPanel({
   }
 
   return (
-    <section
-      data-testid="priority-bump-panel"
-      className="bg-surface rounded-xl shadow-resting p-6"
-    >
+    <section data-testid="priority-bump-panel" className="bg-surface rounded-xl shadow-resting p-6">
       <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-4">
         Priority &amp; conflict resolution
       </h3>
@@ -166,8 +145,7 @@ export function PriorityBumpPanel({
         <div>
           <p className="text-sm font-medium text-text-primary">Priority / VIP</p>
           <p className="text-xs text-text-secondary mt-0.5">
-            Priority jobs surface first in capacity conflicts and win ties on the
-            fever board.
+            Priority jobs surface first in capacity conflicts and win ties on the fever board.
           </p>
         </div>
         <button
@@ -217,19 +195,15 @@ export function PriorityBumpPanel({
 
       {/* ── Bump panel (only when this job is priority) ─────────────────────── */}
       {isPriority && (
-        <div
-          data-testid="bump-section"
-          className="border-t border-border-faint pt-5 space-y-4"
-        >
+        <div data-testid="bump-section" className="border-t border-border-faint pt-5 space-y-4">
           <div>
             <p className="text-sm font-medium text-text-primary mb-1">
               Manual bump — push a job to protect this one
             </p>
             <p className="text-xs text-text-secondary">
-              Select a conflicting job and the number of days to push its committed
-              date. The system shows the exact impact before you confirm — you decide,
-              system shows the cost. The bumped job routes through the re-commit +
-              approval flow automatically.
+              Select a conflicting job and the number of days to push its committed date. The system
+              shows the exact impact before you confirm — you decide, system shows the cost. The
+              bumped job routes through the re-commit + approval flow automatically.
             </p>
           </div>
 
@@ -298,10 +272,7 @@ export function PriorityBumpPanel({
               className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-2"
             >
               <div className="flex items-start gap-2">
-                <AlertTriangle
-                  className="h-4 w-4 text-amber-600 shrink-0 mt-0.5"
-                  strokeWidth={2}
-                />
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
                 <p className="text-sm text-amber-800 font-medium">Impact preview</p>
               </div>
               <p className="text-sm text-amber-900 leading-relaxed">{preview.message}</p>
@@ -378,8 +349,7 @@ export function PriorityBumpPanel({
             >
               <Check className="h-4 w-4 shrink-0" strokeWidth={2.5} />
               <span>
-                Bump logged.{" "}
-                <strong>{preview?.bumpedJobName ?? "The bumped job"}</strong> needs a
+                Bump logged. <strong>{preview?.bumpedJobName ?? "The bumped job"}</strong> needs a
                 re-commit + client message — open its Schedule tab to proceed.
               </span>
             </div>

@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { History, Mail, AlertTriangle, ArrowRight, Loader2 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { formatDate } from "@shared/lib/format";
-import { hasSupabase, getSupabase, COMMITMENT_REVISIONS_TABLE } from "@shared/lib/supabase";
 import { useAuth } from "@shared/lib/authStore";
 import { MILESTONE_STAGES } from "@shared/lib/types";
 import type { Job } from "@shared/lib/types";
@@ -27,21 +26,7 @@ import {
   type RevisionKind,
   type RecommitReasonCode,
 } from "../lib/recommit";
-
-// ─── DB row shape (subset we read) ────────────────────────────────────────────
-
-type RevisionRow = {
-  id: string;
-  kind: RevisionKind;
-  reason_code: RecommitReasonCode;
-  old_committed_date: string | null;
-  new_committed_date: string;
-  new_buffer_days: number | null;
-  dings_reliability: boolean;
-  note: string | null;
-  revised_by: string | null;
-  revised_at: string;
-};
+import { insertCommitmentRevision, useCommitmentRevisions } from "../lib/commitmentRevisionsStore";
 
 const ZONE_STYLE: Record<FeverZone, string> = {
   green: "bg-status-on-track-soft text-status-on-track",
@@ -77,8 +62,7 @@ export function RecommitPanel({
   onRecommit?: (patch: { installDate: string; bufferDays: number }) => Promise<void> | void;
 }) {
   const { user } = useAuth();
-  const [revisions, setRevisions] = useState<RevisionRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { revisions, loading, reload: loadRevisions } = useCommitmentRevisions(job.id);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null);
 
@@ -140,28 +124,6 @@ export function RecommitPanel({
     [job.client, job.name, job.installDate, newDate, kind, reasonLabel]
   );
 
-  const loadRevisions = useCallback(async () => {
-    setLoading(true);
-    try {
-      if (hasSupabase()) {
-        const { data, error } = await getSupabase()
-          .from(COMMITMENT_REVISIONS_TABLE)
-          .select(
-            "id, kind, reason_code, old_committed_date, new_committed_date, new_buffer_days, dings_reliability, note, revised_by, revised_at"
-          )
-          .eq("job_id", job.id)
-          .order("revised_at", { ascending: false });
-        if (!error && data) setRevisions(data as RevisionRow[]);
-      }
-    } finally {
-      setLoading(false);
-    }
-  }, [job.id]);
-
-  useEffect(() => {
-    void loadRevisions();
-  }, [loadRevisions]);
-
   async function handleSubmit() {
     setSaving(true);
     try {
@@ -179,21 +141,7 @@ export function RecommitPanel({
         revisedAt,
       });
 
-      if (hasSupabase()) {
-        await getSupabase().from(COMMITMENT_REVISIONS_TABLE).insert({
-          job_id: rev.jobId,
-          kind: rev.kind,
-          reason_code: rev.reasonCode,
-          old_committed_date: rev.oldCommittedDate,
-          new_committed_date: rev.newCommittedDate,
-          old_buffer_days: rev.oldBufferDays,
-          new_buffer_days: rev.newBufferDays,
-          dings_reliability: rev.dingsReliability,
-          note: rev.note,
-          revised_by: rev.revisedBy,
-          revised_at: rev.revisedAt,
-        });
-      }
+      await insertCommitmentRevision(rev);
 
       // The committed date is versioned: persist the new install date + fresh
       // buffer onto the job, then reload the history so the new row shows.
@@ -463,7 +411,7 @@ export function RecommitPanel({
                 key={r.id}
                 data-testid={`recommit-revision-${r.id}`}
                 data-kind={r.kind}
-                data-dings={r.dings_reliability}
+                data-dings={r.dingsReliability}
                 className="rounded-lg border border-border px-3 py-2 text-xs"
               >
                 <div className="flex flex-wrap items-center gap-2">
@@ -471,12 +419,10 @@ export function RecommitPanel({
                     {r.kind === "change_order" ? "Change order" : "Re-commit"}
                   </span>
                   <span className="text-text-tertiary tabular-nums">
-                    {friendlyDate(r.old_committed_date)} → {friendlyDate(r.new_committed_date)}
+                    {friendlyDate(r.oldCommittedDate)} → {friendlyDate(r.newCommittedDate)}
                   </span>
-                  <span className="text-text-tertiary">
-                    · {reasonCodeMeta(r.reason_code).label}
-                  </span>
-                  {r.dings_reliability ? (
+                  <span className="text-text-tertiary">· {reasonCodeMeta(r.reasonCode).label}</span>
+                  {r.dingsReliability ? (
                     <span className="rounded bg-status-blocked-soft px-1 py-0.5 text-[10px] text-status-blocked">
                       dings reliability
                     </span>
@@ -487,8 +433,8 @@ export function RecommitPanel({
                   )}
                 </div>
                 <div className="mt-1 text-text-tertiary">
-                  {r.revised_by ? `${r.revised_by} · ` : ""}
-                  {formatDate(r.revised_at.slice(0, 10))}
+                  {r.revisedBy ? `${r.revisedBy} · ` : ""}
+                  {formatDate(r.revisedAt.slice(0, 10))}
                   {r.note ? ` · ${r.note}` : ""}
                 </div>
               </li>
