@@ -942,6 +942,71 @@ test.describe("invoices QBO S4 — account + tax-code mapping (gated)", () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
+// QBO-H4 — Expense-account mapping UI (block-until-mapped dead-end, issue #187)
+// ───────────────────────────────────────────────────────────────────────────
+// The push gate blocks `accounts_unmapped` and tells the owner to "Map N expense
+// accounts in Settings → QuickBooks first", but before #187 the settings panel
+// had no account→AccountRef control, so the block could never be cleared in-UI.
+// This slice adds the expense-account rows (mirroring the GST/PST wizard) that
+// POST `kind:"account"`. As with S4, CI has no QBO creds, so the panel resolves
+// to "connect first" and the endpoints degrade gracefully — the map→push wiring
+// is exhaustively unit-tested (buildAccountRequirements, evaluateBillPush,
+// resolveBillLineRefs) and the POST shape is proven here.
+test.describe("invoices QBO-H4 — expense-account mapping UI (gated)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("the mapping panel renders the account wizard region; unconnected it asks to connect first", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto("/settings");
+
+    const panel = page.getByTestId("qbo-mapping-panel");
+    await expect(panel).toBeVisible({ timeout: 15_000 });
+
+    // No QBO connection in CI → the panel resolves to "connect first"; neither
+    // the tax wizard nor the new account wizard rows render in that state.
+    await expect(page.getByTestId("qbo-mapping-not-connected")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("qbo-account-wizard")).toHaveCount(0);
+  });
+
+  test("POST /api/invoices/qbo/mappings with kind:account degrades gracefully (no creds)", async ({
+    page,
+  }) => {
+    await login(page);
+
+    // The account-mapping save the new UI fires. Without QBO creds in CI it must
+    // degrade cleanly (not_connected / unconfigured / flag-off), never 5xx, and
+    // never leak a token.
+    const res = await page.request.post("/api/invoices/qbo/mappings", {
+      data: { kind: "account", localId: "5000-Materials", qboId: "60" },
+      headers: { "Content-Type": "application/json" },
+    });
+
+    expect([400, 404, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token/i);
+  });
+
+  test("POST /api/invoices/qbo/mappings with kind:account rejects a missing qboId", async ({
+    page,
+  }) => {
+    await login(page);
+
+    const res = await page.request.post("/api/invoices/qbo/mappings", {
+      data: { kind: "account", localId: "5000-Materials" },
+      headers: { "Content-Type": "application/json" },
+    });
+
+    // Flag off → 404; flag on + missing qboId → 400. Never a crash.
+    expect([400, 404]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+  });
+});
+
+// ───────────────────────────────────────────────────────────────────────────
 // QBO S5 — material/subtrade kind resolution (issue #151)
 // ───────────────────────────────────────────────────────────────────────────
 // Posting used to hardcode kind="material", so subtrade bills mis-booked in

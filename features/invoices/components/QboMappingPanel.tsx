@@ -26,6 +26,10 @@ type TaxSuggestion = {
   suggestedQboName: string | null;
   mappedQboId: string | null;
 };
+type AccountRequirement = {
+  localId: string;
+  mappedQboId: string | null;
+};
 type UnmappedState = {
   unmappedAccounts: string[];
   unmappedTaxes: string[];
@@ -38,6 +42,7 @@ type MappingPayload = {
   taxCodes: QboTaxCode[];
   accountByLocal: Record<string, string>;
   taxByLocal: Record<string, string>;
+  accountRequirements: AccountRequirement[];
   taxSuggestions: TaxSuggestion[];
   unmapped: UnmappedState;
 };
@@ -54,6 +59,8 @@ export function QboMappingPanel() {
   const [notice, setNotice] = useState<string | null>(null);
   // Local edits to the tax selects, keyed by local tax type.
   const [taxChoice, setTaxChoice] = useState<Record<string, string>>({});
+  // Local edits to the account selects, keyed by local cost-code/category key.
+  const [accountChoice, setAccountChoice] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     try {
@@ -69,11 +76,17 @@ export function QboMappingPanel() {
       const data = (await res.json()) as MappingPayload;
       setPhase({ kind: "ready", data });
       // Seed the tax selects from the persisted mapping or the suggestion.
-      const seed: Record<string, string> = {};
+      const taxSeed: Record<string, string> = {};
       for (const s of data.taxSuggestions) {
-        seed[s.localType] = s.mappedQboId ?? s.suggestedQboId ?? "";
+        taxSeed[s.localType] = s.mappedQboId ?? s.suggestedQboId ?? "";
       }
-      setTaxChoice(seed);
+      setTaxChoice(taxSeed);
+      // Seed the account selects from each requirement's persisted mapping.
+      const acctSeed: Record<string, string> = {};
+      for (const a of data.accountRequirements) {
+        acctSeed[a.localId] = a.mappedQboId ?? "";
+      }
+      setAccountChoice(acctSeed);
     } catch {
       setPhase({ kind: "error" });
     }
@@ -106,6 +119,31 @@ export function QboMappingPanel() {
       }
     },
     [taxChoice, load]
+  );
+
+  const saveAccount = useCallback(
+    async (localId: string) => {
+      const qboId = accountChoice[localId];
+      if (!qboId) return;
+      setSavingKey(`account:${localId}`);
+      setNotice(null);
+      try {
+        const res = await fetch("/api/invoices/qbo/mappings", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kind: "account", localId, qboId }),
+        });
+        if (res.ok) {
+          setNotice(`Account mapping saved.`);
+          await load();
+        } else {
+          setNotice("Could not save the mapping.");
+        }
+      } finally {
+        setSavingKey(null);
+      }
+    },
+    [accountChoice, load]
   );
 
   if (phase.kind === "loading") {
@@ -216,10 +254,70 @@ export function QboMappingPanel() {
         ))}
       </div>
 
-      {/* Expense accounts available for cost-code mapping (reference). */}
-      <p className="text-xs text-text-tertiary" data-testid="qbo-accounts-count">
-        {data.accounts.length} QuickBooks account(s) available for cost-code mapping.
-      </p>
+      {/* Expense-account mapping: each local cost-code/category → a QB account.
+          This is what clears the block-until-mapped push gate (#187). */}
+      <div className="space-y-2" data-testid="qbo-account-wizard">
+        <h3 className="text-sm font-medium text-text-primary">Expense accounts</h3>
+        <p className="text-xs text-text-tertiary">
+          Map each cost-code on your posted invoices to a QuickBooks expense account. Subtrade lines
+          book to your subcontractor account; material lines to materials.
+        </p>
+        {data.accountRequirements.length === 0 ? (
+          <p className="text-sm text-text-tertiary" data-testid="qbo-accounts-none">
+            No expense accounts need mapping yet — they appear here once you post an invoice.
+          </p>
+        ) : (
+          data.accountRequirements.map((a) => (
+            <div
+              key={a.localId}
+              className="flex flex-wrap items-center gap-3"
+              data-testid={`qbo-account-row-${a.localId}`}
+            >
+              <span className="min-w-[10rem] text-sm font-medium text-text-primary">
+                {a.localId}
+              </span>
+              <select
+                aria-label={`Expense account for ${a.localId}`}
+                data-testid={`qbo-account-select-${a.localId}`}
+                value={accountChoice[a.localId] ?? ""}
+                onChange={(e) =>
+                  setAccountChoice((prev) => ({ ...prev, [a.localId]: e.target.value }))
+                }
+                className="min-w-[14rem] rounded-lg border border-border bg-surface px-3 py-1.5 text-sm text-text-primary"
+              >
+                <option value="">— choose a QuickBooks account —</option>
+                {data.accounts
+                  .filter((acct) => acct.active)
+                  .map((acct) => (
+                    <option key={acct.id} value={acct.id}>
+                      {acct.name}
+                    </option>
+                  ))}
+              </select>
+              {a.mappedQboId ? (
+                <span
+                  className="text-xs text-status-on-track"
+                  data-testid={`qbo-account-mapped-${a.localId}`}
+                >
+                  mapped
+                </span>
+              ) : null}
+              <button
+                type="button"
+                data-testid={`qbo-account-save-${a.localId}`}
+                onClick={() => saveAccount(a.localId)}
+                disabled={savingKey === `account:${a.localId}` || !accountChoice[a.localId]}
+                className="rounded-full border border-border px-3 py-1 text-xs font-medium text-text-secondary transition-colors duration-fast hover:border-border-strong hover:text-text-primary disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save
+              </button>
+            </div>
+          ))
+        )}
+        <p className="text-xs text-text-tertiary" data-testid="qbo-accounts-count">
+          {data.accounts.length} QuickBooks account(s) available.
+        </p>
+      </div>
 
       {notice && (
         <p className="text-xs text-text-tertiary" data-testid="qbo-mapping-notice" role="status">

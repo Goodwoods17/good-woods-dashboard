@@ -16,6 +16,7 @@ import {
   suggestTaxCode,
   resolveBillLineRefs,
   detectUnmappedMappings,
+  buildAccountRequirements,
   LOCAL_TAX_TYPES,
   type QboTaxCode,
 } from "./qboAccountMapping";
@@ -222,5 +223,40 @@ describe("detectUnmappedMappings", () => {
       taxByLocal: {},
     });
     expect(state.unmappedAccounts).toEqual(["B"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildAccountRequirements — the per-account mapping rows the settings UI draws
+// ---------------------------------------------------------------------------
+
+describe("buildAccountRequirements", () => {
+  it("returns one row per required key with its current mapping", () => {
+    const rows = buildAccountRequirements(["5000-Materials", "Subcontractors", "9000-New"], {
+      "5000-Materials": "60",
+      Subcontractors: "7",
+    });
+    expect(rows).toEqual([
+      { localId: "5000-Materials", mappedQboId: "60" },
+      { localId: "Subcontractors", mappedQboId: "7" },
+      { localId: "9000-New", mappedQboId: null },
+    ]);
+  });
+
+  it("preserves input order, de-duplicates, and ignores blank keys", () => {
+    const rows = buildAccountRequirements(["B", "B", "", "  ", "A"], { A: "1" });
+    expect(rows).toEqual([
+      { localId: "B", mappedQboId: null },
+      { localId: "A", mappedQboId: "1" },
+    ]);
+  });
+
+  it("trims surrounding whitespace from keys before looking them up", () => {
+    const rows = buildAccountRequirements([" Subcontractors "], { Subcontractors: "7" });
+    expect(rows).toEqual([{ localId: "Subcontractors", mappedQboId: "7" }]);
+  });
+
+  it("returns an empty array when there are no required keys", () => {
+    expect(buildAccountRequirements([], { A: "1" })).toEqual([]);
   });
 });
