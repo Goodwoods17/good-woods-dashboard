@@ -1,5 +1,6 @@
-import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { type MilestoneStage } from "@shared/lib/types";
 import { addWorkDays, workDaysBetween } from "@shared/lib/workdays";
+import { PHASE_LIST, phaseIndex, internalPhaseLabel } from "./phases";
 
 /**
  * S5 — Editable Gantt schedule: ripple/pull-plan/conflict logic (issue #93).
@@ -13,8 +14,6 @@ import { addWorkDays, workDaysBetween } from "@shared/lib/workdays";
  *      all preceding phase dates backward from the anchor using stored phase
  *      durations; warn if any pinned intermediate conflicts.
  */
-
-export const PHASES: readonly MilestoneStage[] = MILESTONE_STAGES.map((s) => s.key);
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -70,9 +69,9 @@ export function rippleForward(
 
   if (delta === 0) return { dates, conflicts };
 
-  const changedIdx = PHASES.indexOf(changedPhase);
-  for (let i = changedIdx + 1; i < PHASES.length; i++) {
-    const phase = PHASES[i];
+  const changedIdx = phaseIndex(changedPhase);
+  for (let i = changedIdx + 1; i < PHASE_LIST.length; i++) {
+    const phase = PHASE_LIST[i];
     const currentDate = dates[phase];
     if (!currentDate) continue; // no date set for this phase → skip
 
@@ -80,7 +79,7 @@ export function rippleForward(
       conflicts.push({
         phase,
         type: "pinned_anchor_violated",
-        message: `Ripple would move ${MILESTONE_STAGES.find((s) => s.key === phase)?.label ?? phase} by ${delta > 0 ? "+" : ""}${delta}d — it is a pinned anchor and cannot shift.`,
+        message: `Ripple would move ${internalPhaseLabel(phase)} by ${delta > 0 ? "+" : ""}${delta}d — it is a pinned anchor and cannot shift.`,
       });
       // Phase stays at its current date. Ripple continues past it with the
       // same delta so the user can see all downstream effects.
@@ -119,7 +118,7 @@ export function pullPlanBackward(
   currentDates: Partial<Record<MilestoneStage, string>>,
   pinnedPhases: PinnedPhases
 ): RippleResult {
-  const anchorIdx = PHASES.indexOf(anchorPhase);
+  const anchorIdx = phaseIndex(anchorPhase);
   const dates: Partial<Record<MilestoneStage, string>> = {
     ...currentDates,
     [anchorPhase]: anchorDate,
@@ -130,8 +129,8 @@ export function pullPlanBackward(
   // predecessor_end = successor_end − successor_duration.
   let cursor = anchorDate;
   for (let i = anchorIdx; i >= 1; i--) {
-    const successorPhase = PHASES[i];
-    const predecessorPhase = PHASES[i - 1];
+    const successorPhase = PHASE_LIST[i];
+    const predecessorPhase = PHASE_LIST[i - 1];
     const duration = Math.max(0, phaseDurations[successorPhase] ?? 0);
     const computed = addWorkDays(cursor, -duration);
 
@@ -141,7 +140,7 @@ export function pullPlanBackward(
         conflicts.push({
           phase: predecessorPhase,
           type: "pinned_anchor_violated",
-          message: `Pull-plan would move ${MILESTONE_STAGES.find((s) => s.key === predecessorPhase)?.label ?? predecessorPhase} to ${computed} — it is pinned at ${pinned} and cannot shift.`,
+          message: `Pull-plan would move ${internalPhaseLabel(predecessorPhase)} to ${computed} — it is pinned at ${pinned} and cannot shift.`,
         });
         // Use the pinned date as the new cursor so further backward phases
         // are planned from the hard constraint, not the inconsistent computed date.

@@ -7,10 +7,10 @@ import {
   seedPhaseDurationsFromHistory,
   phaseTargetDatesFromDurations,
   DEFAULT_WEEKLY_CAPACITY_HOURS,
-  DEFAULT_PHASE_DURATION_DAYS,
   HOURS_PER_WORK_DAY,
   type CapacitySession,
 } from "./capacity";
+import { DEFAULT_PHASE_DURATION_DAYS } from "./phases";
 import type { MilestoneStage } from "@shared/lib/types";
 
 const HOUR_MS = 3_600_000;

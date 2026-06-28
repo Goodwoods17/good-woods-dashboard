@@ -1,4 +1,4 @@
-import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { type MilestoneStage } from "@shared/lib/types";
 import { addWorkDays } from "@shared/lib/workdays";
 import {
   HOURS_PER_WORK_DAY,
@@ -6,6 +6,7 @@ import {
   type CapacitySession,
   type PhaseCapacityRow,
 } from "./capacity";
+import { PHASE_LIST } from "./phases";
 
 /**
  * S3 — Capacity-aware committed date + risk-tiered buffer + floating-bottleneck
@@ -23,8 +24,7 @@ import {
  *     current window, auto-detected from the S2 capacity model. Floats weekly.
  */
 
-const PHASES: readonly MilestoneStage[] = MILESTONE_STAGES.map((s) => s.key);
-const PHASE_KEYS = new Set<string>(PHASES);
+const PHASE_KEYS = new Set<string>(PHASE_LIST);
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -83,7 +83,7 @@ export function computeCapacityAwareSchedule(
   const phaseTargetDates = {} as Record<MilestoneStage, string>;
   let totalWorkDays = 0;
 
-  for (const phase of PHASES) {
+  for (const phase of PHASE_LIST) {
     const base = Math.max(0, phaseDurations[phase] ?? 0);
     const ratio = ratioFor.get(phase) ?? 1;
     const adjusted = capacityAdjustedDuration(base, ratio);
@@ -217,7 +217,7 @@ export function phaseVarianceNudgeDays(sessions: CapacitySession[], maxNudgeDays
   }
 
   let totalNudge = 0;
-  for (const phase of PHASES) {
+  for (const phase of PHASE_LIST) {
     const jobs = byPhaseJob.get(phase);
     if (!jobs || jobs.size < 2) continue;
     const values = Array.from(jobs.values());

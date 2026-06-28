@@ -1,5 +1,6 @@
 import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
 import { addWorkDays } from "@shared/lib/workdays";
+import { PHASE_LIST, DEFAULT_PHASE_DURATION_DAYS } from "./phases";
 
 /**
  * Phase-level CAPACITY / LOAD model for the Scheduling & Client-Commitment
@@ -19,9 +20,7 @@ const HOUR_MS = 3_600_000;
 /** A full work day of active shop time, for hours→days conversion. */
 export const HOURS_PER_WORK_DAY = 8;
 
-/** The six phases, in their canonical milestone order. */
-const PHASES: readonly MilestoneStage[] = MILESTONE_STAGES.map((s) => s.key);
-const PHASE_SET = new Set<string>(PHASES);
+const PHASE_SET = new Set<string>(PHASE_LIST);
 
 /**
  * Minimal labour-session shape this model needs — a structural subset of
@@ -49,18 +48,6 @@ export const DEFAULT_WEEKLY_CAPACITY_HOURS: PhaseHours = {
   finishing: 40,
   delivery: 40,
   install: 40,
-};
-
-/** Fallback phase durations (work days) for a brand-new job before any history
- * exists. Replaced phase-by-phase by `seedPhaseDurationsFromHistory` as soon as
- * the shop has logged real time for that phase. */
-export const DEFAULT_PHASE_DURATION_DAYS: Record<MilestoneStage, number> = {
-  design: 5,
-  cnc: 3,
-  assembly: 5,
-  finishing: 3,
-  delivery: 1,
-  install: 2,
 };
 
 const zeroHours = (): PhaseHours => ({
@@ -189,7 +176,7 @@ export function seedPhaseDurationsFromHistory(
   }
 
   const out = { ...DEFAULT_PHASE_DURATION_DAYS };
-  for (const phase of PHASES) {
+  for (const phase of PHASE_LIST) {
     const jobs = byPhaseJob.get(phase);
     if (!jobs || jobs.size === 0) continue;
     let sum = 0;
@@ -215,7 +202,7 @@ export function phaseTargetDatesFromDurations(
 ): Record<MilestoneStage, string> {
   let cursor = startDate.slice(0, 10);
   const out = {} as Record<MilestoneStage, string>;
-  for (const phase of PHASES) {
+  for (const phase of PHASE_LIST) {
     cursor = addWorkDays(cursor, Math.max(0, durations[phase] ?? 0));
     out[phase] = cursor;
   }

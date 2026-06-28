@@ -1,6 +1,6 @@
 import type { MilestoneStage } from "@shared/lib/types";
-import { MILESTONE_STAGES } from "@shared/lib/types";
-import { CLIENT_PHASE_LABELS, businessWeekWindow } from "./clientPortal";
+import { businessWeekWindow } from "./clientPortal";
+import { PHASE_LIST, CLIENT_PHASE_LABELS } from "./phases";
 import type { PhaseTargetDates } from "./schedule";
 
 /**
@@ -58,8 +58,7 @@ export const BASE_UPDATE_PROTOCOL: readonly string[] = [
   "If your install date ever changes, we'll contact you the same day.",
 ] as const;
 
-const PORTAL_PROTOCOL_ITEM =
-  "You can view your live schedule anytime at the link below.";
+const PORTAL_PROTOCOL_ITEM = "You can view your live schedule anytime at the link below.";
 
 /**
  * Display string for a single phase in the kickoff artifact.
@@ -95,7 +94,7 @@ export function buildKickoffArtifact(input: KickoffArtifactInput): KickoffArtifa
 
   const subject = `Your ${jobName} project schedule — Good Woods`;
 
-  const phaseLines: KickoffPhaseEntry[] = MILESTONE_STAGES.map(({ key }) => ({
+  const phaseLines: KickoffPhaseEntry[] = PHASE_LIST.map((key) => ({
     phase: key,
     label: CLIENT_PHASE_LABELS[key],
     window: kickoffPhaseWindow(key, installDate, phaseTargetDates),

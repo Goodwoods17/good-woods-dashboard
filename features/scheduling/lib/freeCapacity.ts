@@ -1,4 +1,4 @@
-import { MILESTONE_STAGES, type MilestoneStage } from "@shared/lib/types";
+import { type MilestoneStage } from "@shared/lib/types";
 import { weekMondayOf, weekLabel } from "@shared/lib/workdays";
 import {
   buildCapacityModel,
@@ -7,6 +7,7 @@ import {
   type PhaseCapacityRow,
   type PhaseHours,
 } from "./capacity";
+import { PHASE_LIST } from "./phases";
 
 // Re-export the work-calendar week helpers so existing importers of these from
 // freeCapacity keep working; the canonical definitions live in @shared/lib/workdays.
@@ -30,8 +31,6 @@ export { weekMondayOf, weekLabel };
  * Pure + dependency-free. Ships behind NEXT_PUBLIC_SCHEDULING_ENABLED.
  * Non-goal this slice: per-job scheduling, cost, or UI persistence.
  */
-
-const PHASES: readonly MilestoneStage[] = MILESTONE_STAGES.map((s) => s.key);
 
 /** How many weeks ahead to scan by default. */
 export const DEFAULT_LOOKAHEAD_WEEKS = 8;
@@ -145,7 +144,7 @@ export function buildWeeklyWindows(
     );
     const freeHoursByPhase = phaseAvailableHours(model);
 
-    const isBookable = PHASES.every((p) => freeHoursByPhase[p] >= MIN_BOOKABLE_HOURS);
+    const isBookable = PHASE_LIST.every((p) => freeHoursByPhase[p] >= MIN_BOOKABLE_HOURS);
 
     windows.push({
       weekStart,

@@ -11,7 +11,7 @@ import {
   bufferDaysFor,
   SCHEDULE_STATUS_LABELS,
 } from "../lib/schedule";
-import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/capacity";
+import { DEFAULT_PHASE_DURATION_DAYS } from "../lib/phases";
 import { computeRiskTieredBuffer } from "../lib/committedDate";
 import {
   computeBufferBurn,
@@ -40,10 +40,7 @@ export function ScheduleTimeline({ job }: { job: Job }) {
   // S3: risk-tiered buffer breakdown. Use the job's stored buffer_days as the
   // override if set; otherwise compute from the default phase durations (a new
   // job's total = sum of DEFAULT_PHASE_DURATION_DAYS = 19 work days).
-  const defaultTotalDays = Object.values(DEFAULT_PHASE_DURATION_DAYS).reduce(
-    (s, d) => s + d,
-    0
-  );
+  const defaultTotalDays = Object.values(DEFAULT_PHASE_DURATION_DAYS).reduce((s, d) => s + d, 0);
   const riskBuffer = computeRiskTieredBuffer({
     totalInternalDays: defaultTotalDays,
     subDependencyCount: 0,
@@ -151,9 +148,7 @@ export function ScheduleTimeline({ job }: { job: Job }) {
         className="mt-4 border-t border-border pt-3 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-text-secondary tabular-nums"
       >
         <span className="text-text-tertiary font-medium">Buffer breakdown</span>
-        <span>
-          {riskBuffer.baseDays}d base
-        </span>
+        <span>{riskBuffer.baseDays}d base</span>
         <span>+{riskBuffer.subDays}d subs</span>
         <span>+{riskBuffer.varianceDays}d variance</span>
         {riskBuffer.isOverridden && (
@@ -163,10 +158,7 @@ export function ScheduleTimeline({ job }: { job: Job }) {
 
       {/* S6: fever chart + buffer burn + recovery flag */}
       {burn && zone && recoveryFlag && (
-        <div
-          data-testid="fever-section"
-          className="mt-4 border-t border-border pt-4 space-y-3"
-        >
+        <div data-testid="fever-section" className="mt-4 border-t border-border pt-4 space-y-3">
           {/* Recovery flag — owner-only, visible only in RED zone */}
           {recoveryFlag.active && (
             <div
@@ -184,13 +176,9 @@ export function ScheduleTimeline({ job }: { job: Job }) {
 
           {/* Buffer consumption summary */}
           <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 text-xs text-text-secondary tabular-nums">
-            <span className="font-medium text-text-primary">
-              Buffer burn
-            </span>
+            <span className="font-medium text-text-primary">Buffer burn</span>
             <span>
-              <span className="font-medium text-text-primary">
-                {burn.consumedBufferDays}d
-              </span>{" "}
+              <span className="font-medium text-text-primary">{burn.consumedBufferDays}d</span>{" "}
               consumed of {burn.totalBufferDays}d
             </span>
             <span
@@ -203,9 +191,7 @@ export function ScheduleTimeline({ job }: { job: Job }) {
             >
               {Math.round(burn.bufferConsumedPct)}% of buffer
             </span>
-            <span className="text-text-tertiary">
-              {Math.round(chainPct)}% chain complete
-            </span>
+            <span className="text-text-tertiary">{Math.round(chainPct)}% chain complete</span>
           </div>
 
           {/* Fever chart — buffer% vs chain% */}

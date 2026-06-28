@@ -19,12 +19,8 @@
  * owner kind (shop / person / subtrade), and feeds the S3 risk-tiered buffer.
  */
 
-import {
-  MILESTONE_STAGES,
-  type MilestoneStage,
-  type Job,
-  type CommitmentOwner,
-} from "@shared/lib/types";
+import { type MilestoneStage, type Job, type CommitmentOwner } from "@shared/lib/types";
+import { PHASE_LIST, phaseIndex, internalPhaseLabel } from "./phases";
 
 export type { CommitmentOwner };
 
@@ -74,9 +70,6 @@ export type OwnerReliabilitySummary = {
   missRate: number;
 };
 
-const PHASES: readonly MilestoneStage[] = MILESTONE_STAGES.map((s) => s.key);
-const PHASE_LABEL = new Map(MILESTONE_STAGES.map((s) => [s.key, s.label]));
-
 /**
  * A stable identity key for an owner. Prefers `kind:id` (so two subs with the
  * same display name never collide); falls back to `kind:name` for owners with no
@@ -112,7 +105,7 @@ function deriveStatus(
  */
 export function buildCommitmentLedger(job: Job, today: Date): LedgerEntry[] {
   const todayISO = isoDate(today);
-  const currentIndex = PHASES.indexOf(job.currentMilestone);
+  const currentIndex = phaseIndex(job.currentMilestone);
   const entries: LedgerEntry[] = [];
 
   // ── Client-level install (owned by the shop) ──
@@ -130,14 +123,14 @@ export function buildCommitmentLedger(job: Job, today: Date): LedgerEntry[] {
   // ── Per-phase internal commitments ──
   const targets = job.phaseTargetDates ?? {};
   const owners = job.phaseOwners ?? {};
-  PHASES.forEach((phase, idx) => {
+  PHASE_LIST.forEach((phase, idx) => {
     const committedDate = targets[phase];
     if (!committedDate) return;
     const isComplete = idx < currentIndex;
     entries.push({
       level: "phase",
       phase,
-      label: PHASE_LABEL.get(phase) ?? phase,
+      label: internalPhaseLabel(phase),
       owner: owners[phase] ?? SHOP_OWNER,
       committedDate,
       status: deriveStatus(committedDate, isComplete, todayISO),
