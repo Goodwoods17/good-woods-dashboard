@@ -2373,3 +2373,121 @@ test.describe("invoices #170 — duplicate + math guards on the match screen", (
     await sb.from("invoices").delete().ilike("invoice_number", "E2E-GUARD-001");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Issue #171 — transactional multi-line review save (RPC)
+// ---------------------------------------------------------------------------
+
+// The review save flips the header AND writes every line. It now runs through a
+// single Postgres function (save_reviewed_invoice) so the whole batch commits in
+// one transaction. This proves the happy path end-to-end: editing all three
+// lines and clicking Save persists EVERY line (not just the first), and flips the
+// invoice to `reviewed` — exercising the multi-row RPC against the real seeded DB.
+test.describe("invoices #171 — transactional multi-line review save", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("saving a 3-line review persists every line atomically and marks reviewed", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-TXN-171");
+
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "needs_review",
+        storage_path: "e2e-171/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-txn-171.pdf",
+        supplier: "Txn Supplier Ltd",
+        invoice_number: "E2E-TXN-171",
+        // Σ lines 600 = pre_tax; 600 + 30 + 42 = 672 total → math banner stays hidden.
+        pre_tax_total: 600,
+        gst: 30,
+        pst: 42,
+        total: 672,
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert([
+      {
+        invoice_id: inv.id,
+        line_no: 1,
+        qty: 1,
+        sku: "A-1",
+        description: "Line one orig",
+        unit: "ea",
+        unit_price: 100,
+        amount: 100,
+        tax_flag: true,
+      },
+      {
+        invoice_id: inv.id,
+        line_no: 2,
+        qty: 1,
+        sku: "B-2",
+        description: "Line two orig",
+        unit: "ea",
+        unit_price: 200,
+        amount: 200,
+        tax_flag: true,
+      },
+      {
+        invoice_id: inv.id,
+        line_no: 3,
+        qty: 1,
+        sku: "C-3",
+        description: "Line three orig",
+        unit: "ea",
+        unit_price: 300,
+        amount: 300,
+        tax_flag: true,
+      },
+    ]);
+
+    await login(page);
+    await page.goto(`/invoices/${inv.id}`);
+    await expect(page.locator('[data-testid="invoice-review-form"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Edit every line's description, then save. The RPC must persist all three.
+    await page.getByLabel("Line 1 description").fill("Line one EDITED");
+    await page.getByLabel("Line 2 description").fill("Line two EDITED");
+    await page.getByLabel("Line 3 description").fill("Line three EDITED");
+
+    const saveBtn = page.locator('[data-testid="save-reviewed-btn"]');
+    await expect(saveBtn).not.toBeDisabled();
+    await saveBtn.click();
+
+    // Reviewed invoices route to the match step on success.
+    await expect(page.locator('[data-testid="invoice-match-view"]')).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Header flipped AND every line persisted its edit (atomic multi-row write).
+    const { data: after } = await sb.from("invoices").select("status").eq("id", inv.id).single();
+    expect(after?.status).toBe("reviewed");
+
+    const { data: lineRows } = await sb
+      .from("invoice_lines")
+      .select("line_no, description")
+      .eq("invoice_id", inv.id)
+      .order("line_no", { ascending: true });
+    expect(lineRows?.map((l) => l.description)).toEqual([
+      "Line one EDITED",
+      "Line two EDITED",
+      "Line three EDITED",
+    ]);
+
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
