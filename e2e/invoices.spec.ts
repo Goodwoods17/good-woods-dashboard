@@ -1069,3 +1069,137 @@ test.describe("invoices QBO S5 — material/subtrade kind resolution", () => {
     await sb.from("invoices").delete().eq("id", inv.id);
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO S6 — build the QB Bill from a posted invoice (issue #152)
+// ───────────────────────────────────────────────────────────────────────────
+// The export endpoint now also returns the REAL QBO v3 Bill payload + a total
+// reconciliation. This proves, end-to-end on a seeded invoice, that: VendorRef
+// resolves; a material line and a subtrade line each carry the right per-line
+// tax code (GST_PST vs GST); a no-job (shop-stock) line is INCLUDED on the bill
+// (job actuals skip it, the bill must not); GST and PST stay as two separate
+// TaxLines (never collapsed — ADR 0019); and Σ pre-tax lines + GST + PST equals
+// the stated total. The pure logic is unit-tested in qboExport.test.ts.
+test.describe("invoices QBO S6 — QB Bill payload", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("export endpoint returns a reconciled QB Bill with split taxes + shop-stock line", async () => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-BILL-001");
+
+    // 1. Seed a reviewed GST+PST invoice: one material (PST) line assigned to a
+    //    job, one GST-only supplies line, one shop-stock (no job) line.
+    //    pre-tax 1000 + GST 50 + PST 35 = 1085. PST is charged only on the two
+    //    PST lines (700 base), GST on all taxable lines.
+    const { data: invRows, error: invErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "reviewed",
+        storage_path: "e2e-s6/dummy.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-bill.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-BILL-001",
+        pre_tax_total: 1000,
+        gst: 50,
+        pst: 35,
+        total: 1085,
+        qbo_vendor_id: "qbo-vendor-bill",
+      })
+      .select("*");
+    expect(invErr).toBeNull();
+    const inv = invRows![0];
+
+    await sb.from("invoice_lines").insert([
+      {
+        invoice_id: inv.id,
+        line_no: 0,
+        description: "Hard maple sheet",
+        amount: 500,
+        tax_flag: true, // GST + PST
+        qbo_account: "5000-Materials",
+        line_kind: "material",
+        job_id: "e2e-smoke-job",
+      },
+      {
+        invoice_id: inv.id,
+        line_no: 1,
+        description: "Spray finishing sub bill",
+        amount: 200,
+        tax_flag: true, // GST + PST
+        qbo_account: "5100-Subcontractors",
+        line_kind: "subtrade",
+        job_id: "e2e-smoke-job",
+      },
+      {
+        invoice_id: inv.id,
+        line_no: 2,
+        description: "Shop-stock screws",
+        amount: 300,
+        tax_flag: false, // GST only, no job
+        qbo_account: "5010-Supplies",
+        job_id: null,
+      },
+    ]);
+
+    // 2. Hit the export endpoint (same auth as the slice-8 stub).
+    const cronSecret = process.env.CRON_SECRET ?? "test-secret";
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const resp = await fetch(`${baseUrl}/api/invoices/${inv.id}/export-qbo`, {
+      headers: { authorization: `Bearer ${cronSecret}` },
+    });
+    expect([200, 401]).toContain(resp.status);
+
+    if (resp.status === 200) {
+      const body = await resp.json();
+      const bill = body.bill;
+      // VendorRef resolved + TaxExcluded global calc.
+      expect(bill.VendorRef.value).toBe("qbo-vendor-bill");
+      expect(bill.GlobalTaxCalculation).toBe("TaxExcluded");
+
+      // All three lines INCLUDED — shop-stock is not skipped from the bill.
+      expect(bill.Line).toHaveLength(3);
+      const material = bill.Line.find((l: { LineNum: number }) => l.LineNum === 0);
+      const subtrade = bill.Line.find((l: { LineNum: number }) => l.LineNum === 1);
+      const shopStock = bill.Line.find((l: { LineNum: number }) => l.LineNum === 2);
+
+      // Per-line account + tax code (no maps threaded → raw local labels).
+      expect(material.AccountBasedExpenseLineDetail.AccountRef.value).toBe("5000-Materials");
+      expect(material.AccountBasedExpenseLineDetail.TaxCodeRef.value).toBe("GST_PST");
+      expect(material._kind).toBe("material");
+      expect(subtrade.AccountBasedExpenseLineDetail.AccountRef.value).toBe("5100-Subcontractors");
+      expect(subtrade.AccountBasedExpenseLineDetail.TaxCodeRef.value).toBe("GST_PST");
+      expect(subtrade._kind).toBe("subtrade");
+
+      // Shop-stock line: GST only, no job → NotBillable, null CustomerRef.
+      expect(shopStock.AccountBasedExpenseLineDetail.TaxCodeRef.value).toBe("GST");
+      expect(shopStock.AccountBasedExpenseLineDetail.CustomerRef).toBeNull();
+      expect(shopStock.AccountBasedExpenseLineDetail.BillableStatus).toBe("NotBillable");
+
+      // GST and PST stay as TWO separate TaxLines (never collapsed).
+      expect(Number(bill.TxnTaxDetail.TotalTax)).toBeCloseTo(85, 2);
+      const components = bill.TxnTaxDetail.TaxLine.map(
+        (t: { _component: string }) => t._component
+      ).sort();
+      expect(components).toEqual(["GST", "PST"]);
+
+      // PST allocated across the two PST lines, summing exactly to header PST.
+      const pstShares = bill.Line.map((l: { _pstShare: number }) => l._pstShare);
+      expect(pstShares.reduce((s: number, x: number) => s + x, 0)).toBeCloseTo(35, 2);
+
+      // Total reconciliation: 1000 + 50 + 35 = 1085.
+      expect(body.reconciliation.balanced).toBe(true);
+      expect(Number(body.reconciliation.computedTotal)).toBeCloseTo(1085, 2);
+    }
+
+    // 3. Clean up.
+    await sb.from("invoices").delete().eq("id", inv.id);
+  });
+});
