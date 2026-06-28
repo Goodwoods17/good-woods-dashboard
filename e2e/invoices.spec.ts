@@ -1992,3 +1992,135 @@ test.describe("invoices QBO-H5 — pushed_by audit column round-trips the actor"
     }
   });
 });
+
+// ───────────────────────────────────────────────────────────────────────────
+// QBO-H7 — push-outcome visibility: failed/retry states + attachment failure
+// (issue #190)
+// ───────────────────────────────────────────────────────────────────────────
+// Two silent gaps this proves closed:
+//   (a) attachment failure is visible (covered by the pure-helper unit tests in
+//       qboPushOutcome.test.ts + the attach-qbo endpoint degradation test below);
+//   (b) a failed / retry-pending push is distinguishable from never-sent — the
+//       push panel surfaces a "Failed — will retry" badge + a "Retry now" button
+//       driven by the latest qbo_push_attempts row, EVEN when QBO is currently
+//       not connected (CI has no QBO creds), because previewInvoicePush reads the
+//       audit row independent of the live token.
+test.describe("invoices QBO-H7 — failed/retry push is distinct from never-sent", () => {
+  test.skip(
+    !email || !password || !supabaseUrl || !serviceRoleKey,
+    "needs E2E_EMAIL / E2E_PASSWORD + SUPABASE_SERVICE_ROLE_KEY"
+  );
+
+  test("a posted invoice with a failed_transient attempt shows a retry badge; a never-attempted one does not", async ({
+    page,
+  }) => {
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean slate from any prior run.
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-H7-FAILED");
+    await sb.from("invoices").delete().ilike("invoice_number", "E2E-H7-NEVER");
+
+    // 1. Seed a POSTED invoice whose last push FAILED transiently (no Bill link).
+    const { data: failedRows, error: failedErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "posted",
+        storage_path: "e2e-h7/failed.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-h7-failed.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-H7-FAILED",
+        pre_tax_total: 100,
+        gst: 5,
+        pst: 7,
+        total: 112,
+        qbo_vendor_id: "qbo-vendor-h7",
+      })
+      .select("id");
+    expect(failedErr).toBeNull();
+    const failedId = failedRows![0].id as string;
+
+    const { error: attErr } = await sb.from("qbo_push_attempts").insert({
+      invoice_id: failedId,
+      status: "failed_transient",
+      kind: "push",
+      error_message: "QBO bill create failed: 503 Service Unavailable",
+      http_status: 503,
+      next_retry_at: new Date(Date.now() + 60_000).toISOString(),
+      environment: "sandbox",
+    });
+    expect(attErr).toBeNull();
+
+    // 2. Seed a control POSTED invoice that was NEVER pushed (no attempt rows).
+    const { data: neverRows, error: neverErr } = await sb
+      .from("invoices")
+      .insert({
+        status: "posted",
+        storage_path: "e2e-h7/never.pdf",
+        mime: "application/pdf",
+        original_filename: "e2e-h7-never.pdf",
+        supplier: "Reimer Hardwoods",
+        invoice_number: "E2E-H7-NEVER",
+        pre_tax_total: 100,
+        gst: 5,
+        pst: 7,
+        total: 112,
+        qbo_vendor_id: "qbo-vendor-h7",
+      })
+      .select("id");
+    expect(neverErr).toBeNull();
+    const neverId = neverRows![0].id as string;
+
+    await login(page);
+
+    try {
+      // The failed invoice: the panel surfaces a distinct "Failed — will retry"
+      // badge + a "Retry now" affordance (even though CI is not connected to QBO).
+      await page.goto(`/invoices/${failedId}`);
+      await expect(page.locator('[data-testid="qbo-push-panel"]')).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.locator('[data-testid="qbo-push-failed-retry"]')).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.locator('[data-testid="qbo-push-retry-now"]')).toBeVisible();
+
+      // The control invoice: NO failed badge — distinct from the failure state.
+      await page.goto(`/invoices/${neverId}`);
+      await expect(page.locator('[data-testid="qbo-push-panel"]')).toBeVisible({
+        timeout: 15_000,
+      });
+      await expect(page.locator('[data-testid="qbo-push-failed-retry"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="qbo-push-failed"]')).toHaveCount(0);
+    } finally {
+      // Invoice delete cascades to qbo_push_attempts.
+      await sb.from("invoices").delete().eq("id", failedId);
+      await sb.from("invoices").delete().eq("id", neverId);
+    }
+  });
+});
+
+// QBO-H7 — the re-attach endpoint (retry just the PDF) degrades gracefully in
+// CI (no QBO creds) exactly like the push/void routes: never a 5xx, never a
+// token leak. The real attach path is exercised by the S8 pure-helper tests.
+test.describe("invoices QBO-H7 — attach-qbo endpoint (gated, degradation)", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("POST attach-qbo degrades gracefully without real QBO creds (no 5xx, no token leak)", async ({
+    page,
+  }) => {
+    await login(page);
+    const res = await page.request.post(
+      "/api/invoices/00000000-0000-4000-8000-0000001907a1/attach-qbo"
+    );
+    // Flag on in CI but no QBO creds → not_connected/unconfigured/not_found, or
+    // not_pushed for a missing invoice — anything in the 4xx/5xx-but-not-server
+    // band, but crucially NOT a 500-class crash and NOT a leaked token.
+    expect([400, 404, 409, 503]).toContain(res.status());
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(JSON.stringify(body)).not.toMatch(/access_token|refresh_token|Bearer /i);
+  });
+});

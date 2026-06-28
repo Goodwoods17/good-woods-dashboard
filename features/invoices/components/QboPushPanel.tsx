@@ -1,8 +1,22 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { CheckCircle2, AlertTriangle, ExternalLink, Send, Undo2 } from "lucide-react";
+import {
+  CheckCircle2,
+  AlertTriangle,
+  ExternalLink,
+  Send,
+  Undo2,
+  RefreshCw,
+  Paperclip,
+} from "lucide-react";
 import { formatCAD } from "@shared/lib/format";
+import {
+  attachmentWarning,
+  pushHistoryBadge,
+  type AttachmentOutcome,
+} from "@features/invoices/lib/qboPushOutcome";
+import type { LatestPushAttempt } from "@features/invoices/lib/qboPushAudit";
 
 /**
  * "Send to QuickBooks" panel for a POSTED invoice (QBO S7, issue #153).
@@ -56,11 +70,12 @@ type Preview = {
   alreadyPushed: boolean;
   billId: string | null;
   deepLink: string | null;
+  latestAttempt: LatestPushAttempt | null;
 };
 
 type Phase =
   | { kind: "loading" }
-  | { kind: "not_connected" }
+  | { kind: "not_connected"; latestAttempt: LatestPushAttempt | null }
   | { kind: "error" }
   | { kind: "ready"; data: Preview };
 
@@ -92,12 +107,21 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
   const [confirmVoid, setConfirmVoid] = useState(false);
   const [voiding, setVoiding] = useState(false);
+  // QBO-H7 (#190): a Bill can push while its PDF fails to attach. We hold the
+  // amber "didn't attach" copy until a re-attach succeeds.
+  const [attachNotice, setAttachNotice] = useState<string | null>(null);
+  const [reattaching, setReattaching] = useState(false);
 
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/push-qbo`, { cache: "no-store" });
       if (res.status === 400 || res.status === 503) {
-        setPhase({ kind: "not_connected" });
+        // QBO-H7: even when not connected, the body carries the latest attempt
+        // so a prior failed push stays visible (distinct from never-sent).
+        const body = (await res.json().catch(() => null)) as {
+          latestAttempt?: LatestPushAttempt | null;
+        } | null;
+        setPhase({ kind: "not_connected", latestAttempt: body?.latestAttempt ?? null });
         return;
       }
       if (!res.ok) {
@@ -118,6 +142,7 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
   const send = useCallback(async () => {
     setSending(true);
     setNotice(null);
+    setAttachNotice(null);
     try {
       const res = await fetch(`/api/invoices/${invoiceId}/push-qbo`, { method: "POST" });
       const body = (await res.json()) as {
@@ -125,9 +150,13 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
         status?: string;
         message?: string;
         gate?: Gate;
+        attachment?: AttachmentOutcome;
       };
       if (body.ok && (body.status === "pushed" || body.status === "already_pushed")) {
         setShowPreview(false);
+        // QBO-H7: the Bill sent — but the PDF attach is non-blocking. Read it so
+        // the owner never assumes the document is in QuickBooks when it isn't.
+        setAttachNotice(attachmentWarning(body.attachment ?? null));
         await load();
       } else if (body.status === "blocked") {
         setNotice(body.gate ? blockMessage(body.gate) : "This invoice can't be sent yet.");
@@ -141,6 +170,28 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
       setSending(false);
     }
   }, [invoiceId, load]);
+
+  // QBO-H7: retry JUST the PDF attachment against the existing Bill (re-pushing
+  // would short-circuit and never re-attach).
+  const reattach = useCallback(async () => {
+    setReattaching(true);
+    try {
+      const res = await fetch(`/api/invoices/${invoiceId}/attach-qbo`, { method: "POST" });
+      const body = (await res.json()) as { ok: boolean; attachment?: AttachmentOutcome };
+      if (body.ok && body.attachment?.status === "attached") {
+        setAttachNotice(null);
+      } else {
+        setAttachNotice(
+          attachmentWarning(body.attachment ?? null) ??
+            "Bill sent, but the PDF still didn’t attach. Try again."
+        );
+      }
+    } catch {
+      setAttachNotice("Couldn’t reach QuickBooks to attach the PDF. Try again.");
+    } finally {
+      setReattaching(false);
+    }
+  }, [invoiceId]);
 
   // S10: un-push / void a Bill pushed in error. Confirm-gated (two-step), then
   // POSTs the void; on success the link is cleared server-side so reloading the
@@ -182,9 +233,17 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
       )}
 
       {phase.kind === "not_connected" && (
-        <p data-testid="qbo-push-not-connected" className="text-sm text-text-secondary">
-          Connect QuickBooks in Settings to send this bill.
-        </p>
+        <div className="space-y-3">
+          {/* QBO-H7: a prior failed push stays visible even while disconnected. */}
+          <PushHistoryCard
+            badge={pushHistoryBadge({ alreadyPushed: false, latest: phase.latestAttempt })}
+            onRetryNow={send}
+            retrying={sending}
+          />
+          <p data-testid="qbo-push-not-connected" className="text-sm text-text-secondary">
+            Connect QuickBooks in Settings to send this bill.
+          </p>
+        </div>
       )}
 
       {phase.kind === "ready" && (
@@ -260,14 +319,33 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
             </div>
           )}
 
-          {!phase.data.alreadyPushed && (
-            <div
-              data-testid="qbo-push-badge-unsent"
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary"
-            >
-              Not sent to QuickBooks
-            </div>
+          {/* QBO-H7: amber "Bill sent but PDF didn't attach" — with a re-attach retry. */}
+          {phase.data.alreadyPushed && attachNotice && (
+            <AttachmentMissingBanner
+              message={attachNotice}
+              onRetry={reattach}
+              retrying={reattaching}
+            />
           )}
+
+          {/* Not-sent / failed-history badge. QBO-H7 makes a failed/retry-pending
+              push distinct from a never-attempted one. */}
+          {!phase.data.alreadyPushed &&
+            (pushHistoryBadge({ alreadyPushed: false, latest: phase.data.latestAttempt }).kind ===
+            "none" ? (
+              <div
+                data-testid="qbo-push-badge-unsent"
+                className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary"
+              >
+                Not sent to QuickBooks
+              </div>
+            ) : (
+              <PushHistoryCard
+                badge={pushHistoryBadge({ alreadyPushed: false, latest: phase.data.latestAttempt })}
+                onRetryNow={send}
+                retrying={sending}
+              />
+            ))}
 
           {/* Send flow (only when not already sent) */}
           {!phase.data.alreadyPushed && (
@@ -345,6 +423,94 @@ export function QboPushPanel({ invoiceId }: { invoiceId: string }) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * QBO-H7: a failed / retry-pending push, visually distinct from "Not sent".
+ * A transient failure offers a "Retry now" button (re-POSTs the push); a
+ * permanent failure shows the reason without a retry (it would loop forever).
+ */
+function PushHistoryCard({
+  badge,
+  onRetryNow,
+  retrying,
+}: {
+  badge: ReturnType<typeof pushHistoryBadge>;
+  onRetryNow: () => void;
+  retrying: boolean;
+}) {
+  if (badge.kind === "none") return null;
+
+  if (badge.kind === "queued") {
+    return (
+      <div
+        data-testid="qbo-push-queued"
+        className="inline-flex items-center gap-2 rounded-md border border-border bg-surface-muted px-3 py-2 text-sm text-text-secondary"
+      >
+        <RefreshCw className="h-4 w-4 animate-spin" /> {badge.label}
+      </div>
+    );
+  }
+
+  const testid = badge.kind === "failed_retry" ? "qbo-push-failed-retry" : "qbo-push-failed";
+  return (
+    <div
+      data-testid={testid}
+      className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+    >
+      <p className="flex items-center gap-1.5 font-medium">
+        <AlertTriangle className="h-4 w-4" />{" "}
+        <span data-testid="qbo-push-failed-label">{badge.label}</span>
+      </p>
+      <p className="text-xs text-amber-700">{badge.detail}</p>
+      {badge.kind === "failed_retry" && (
+        <button
+          type="button"
+          data-testid="qbo-push-retry-now"
+          onClick={onRetryNow}
+          disabled={retrying}
+          className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <RefreshCw className="h-4 w-4" /> {retrying ? "Retrying…" : "Retry now"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * QBO-H7: the Bill is in QuickBooks but its source PDF did not attach. Offers a
+ * "Retry attachment" that re-runs only the Attachable upload (re-pushing the
+ * Bill would no-op via the local link and never re-attach).
+ */
+function AttachmentMissingBanner({
+  message,
+  onRetry,
+  retrying,
+}: {
+  message: string;
+  onRetry: () => void;
+  retrying: boolean;
+}) {
+  return (
+    <div
+      data-testid="qbo-attachment-failed"
+      className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+    >
+      <p className="flex items-center gap-1.5 font-medium">
+        <Paperclip className="h-4 w-4" /> {message}
+      </p>
+      <button
+        type="button"
+        data-testid="qbo-attachment-retry"
+        onClick={onRetry}
+        disabled={retrying}
+        className="inline-flex items-center gap-1.5 rounded-md border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-800 hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <RefreshCw className="h-4 w-4" /> {retrying ? "Attaching…" : "Retry attachment"}
+      </button>
+    </div>
   );
 }
 
