@@ -4,6 +4,7 @@ import { encryptToken, decryptToken } from "./qboTokenCrypto";
 import {
   qboOAuthConfigured,
   readQboOAuthEnv,
+  readQboEnvironment,
   refreshAccessToken,
   type QboEnvironment,
 } from "./qboOAuth";
@@ -38,13 +39,28 @@ export type QboConnectionStatus = {
   companyName: string | null;
   /** Which Intuit environment the stored tokens belong to. */
   environment: QboEnvironment | null;
+  /**
+   * Which QBO environment this server deployment currently targets (driven by
+   * QBO_ENVIRONMENT env var; "sandbox" when unset). Always returned so the UI
+   * can show the right label — including BEFORE a connection is made — and so
+   * the S12 go-live checklist can detect when a prod cutover is complete.
+   */
+  configuredEnvironment: QboEnvironment;
 };
 
 /** Status for the UI panel — never throws, never leaks the token. */
 export async function getQboConnectionStatus(): Promise<QboConnectionStatus> {
   const configured = qboOAuthConfigured();
+  const configuredEnvironment = readQboEnvironment();
   const sb = getServiceRoleClient();
-  if (!sb) return { configured, connected: false, companyName: null, environment: null };
+  if (!sb)
+    return {
+      configured,
+      connected: false,
+      companyName: null,
+      environment: null,
+      configuredEnvironment,
+    };
 
   const { data } = await sb
     .from(QUICKBOOKS_CONNECTION_TABLE)
@@ -58,6 +74,7 @@ export async function getQboConnectionStatus(): Promise<QboConnectionStatus> {
     connected: Boolean(data),
     companyName: (data?.company_name as string | null) ?? null,
     environment: (data?.environment as QboEnvironment | null) ?? null,
+    configuredEnvironment,
   };
 }
 

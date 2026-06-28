@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Link2, Unplug } from "lucide-react";
+import { AlertTriangle, Link2, Unplug } from "lucide-react";
 
 /**
  * Owner-only "Connect QuickBooks" settings panel (QBO S1, issue #147). Drives
- * the OAuth connection tracer: connect the QuickBooks (sandbox) company, see the
+ * the OAuth connection tracer: connect the QuickBooks company, see the
  * connected state, and disconnect. The riskiest assumption of the QBO milestone
  * — OAuth → encrypted token → QBO sandbox — is proven by this round-trip.
  *
@@ -13,12 +13,17 @@ import { Link2, Unplug } from "lucide-react";
  * SettingsView). Degrades gracefully: when the QBO OAuth creds are absent the
  * status probe reports `configured:false` and we show a clear "not configured"
  * state instead of a dead button — mirrors the S23 Google Calendar panel.
+ *
+ * QBO S12 (issue #158): the description now dynamically shows whether the
+ * deployment targets the sandbox or production QB company (driven by
+ * QBO_ENVIRONMENT). A production warning badge fires when targeting live QB so
+ * the owner knows they're about to connect a real company.
  */
 type Status =
   | { phase: "loading" }
-  | { phase: "not_configured" }
-  | { phase: "disconnected" }
-  | { phase: "connected"; companyName: string | null; environment: string | null }
+  | { phase: "not_configured"; configuredEnvironment: string }
+  | { phase: "disconnected"; configuredEnvironment: string }
+  | { phase: "connected"; companyName: string | null; environment: string | null; configuredEnvironment: string }
   | { phase: "error" };
 
 const REDIRECT_MESSAGES: Record<string, string> = {
@@ -48,15 +53,18 @@ export function ConnectQuickBooksPanel() {
         connected: boolean;
         companyName: string | null;
         environment: string | null;
+        configuredEnvironment: string;
       };
-      if (!data.configured) setStatus({ phase: "not_configured" });
+      const configuredEnvironment = data.configuredEnvironment ?? "sandbox";
+      if (!data.configured) setStatus({ phase: "not_configured", configuredEnvironment });
       else if (data.connected)
         setStatus({
           phase: "connected",
           companyName: data.companyName,
           environment: data.environment,
+          configuredEnvironment,
         });
-      else setStatus({ phase: "disconnected" });
+      else setStatus({ phase: "disconnected", configuredEnvironment });
     } catch {
       setStatus({ phase: "error" });
     }
@@ -84,13 +92,47 @@ export function ConnectQuickBooksPanel() {
     }
   }, [loadStatus]);
 
+  // Derive the configured environment label for the description text.
+  const configuredEnvironment =
+    status.phase !== "loading" && status.phase !== "error"
+      ? (status as { configuredEnvironment: string }).configuredEnvironment
+      : null;
+
+  const isProduction = configuredEnvironment === "production";
+
   return (
     <div data-testid="qbo-connect-panel">
       <p className="text-sm leading-relaxed text-text-secondary">
-        Connect your QuickBooks company so posted invoices can sync as bills. This connects to the
-        QuickBooks <span className="font-medium text-text-primary">sandbox</span> for now; the
-        refresh token is stored encrypted and never leaves the server.
+        Connect your QuickBooks company so posted invoices can sync as bills. The refresh token is
+        stored encrypted and never leaves the server.
+        {configuredEnvironment ? (
+          <>
+            {" "}
+            Targeting the{" "}
+            <span
+              data-testid="qbo-configured-env"
+              className="font-medium text-text-primary"
+            >
+              {configuredEnvironment}
+            </span>{" "}
+            environment.
+          </>
+        ) : null}
       </p>
+
+      {/* Production warning — the owner needs to know before connecting live QB */}
+      {isProduction && (
+        <div
+          data-testid="qbo-prod-warning"
+          className="mt-3 flex items-start gap-2 rounded-lg bg-status-blocked-soft px-4 py-3 text-sm text-status-blocked"
+        >
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" strokeWidth={1.75} aria-hidden />
+          <span>
+            This deployment targets <strong>production</strong> QuickBooks. Connecting will link
+            your live QB company — not a sandbox. Complete the go-live checklist before proceeding.
+          </span>
+        </div>
+      )}
 
       {status.phase === "loading" && (
         <p className="mt-4 text-sm text-text-tertiary" data-testid="qbo-loading">
