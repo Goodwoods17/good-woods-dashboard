@@ -177,15 +177,40 @@ export async function getFreshAccessToken(): Promise<AccessTokenResult> {
     tokens.expires_in != null
       ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
       : null;
-  await sb
+
+  // QBO-H11: NEVER overwrite the stored refresh token with an empty value. QBO
+  // rotates the refresh token on (most) refreshes; if a response somehow omits
+  // it, persisting "" would brick the connection. Keep the prior token instead
+  // and alert loudly so the gap is visible in logs.
+  const update: Record<string, unknown> = {
+    encrypted_access_token: encryptToken(tokens.access_token, encKey),
+    access_token_expires_at: expiresAt,
+    updated_at: new Date().toISOString(),
+  };
+  if (tokens.refresh_token && tokens.refresh_token.trim()) {
+    update.encrypted_refresh_token = encryptToken(tokens.refresh_token, encKey);
+  } else {
+    console.error(
+      "[invoices/qbo] refresh returned NO refresh_token — keeping the prior one; " +
+        "the QBO connection may expire soon and need a manual reconnect."
+    );
+  }
+
+  // QBO-H11: the rotation write is not transactional with the network refresh —
+  // if it fails, the freshly-rotated refresh token is lost and the next refresh
+  // will fail (QBO already invalidated the old one). We can't roll back, but we
+  // MUST surface it loudly rather than swallow it silently.
+  const { error: updateError } = await sb
     .from(QUICKBOOKS_CONNECTION_TABLE)
-    .update({
-      encrypted_refresh_token: encryptToken(tokens.refresh_token, encKey),
-      encrypted_access_token: encryptToken(tokens.access_token, encKey),
-      access_token_expires_at: expiresAt,
-      updated_at: new Date().toISOString(),
-    })
+    .update(update)
     .eq("id", connection.id);
+  if (updateError) {
+    console.error(
+      "[invoices/qbo] FAILED to persist the rotated QBO token — the connection " +
+        "will likely need a manual reconnect:",
+      updateError.message
+    );
+  }
 
   return {
     ok: true,

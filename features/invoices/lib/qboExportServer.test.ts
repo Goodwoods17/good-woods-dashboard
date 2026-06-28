@@ -130,8 +130,7 @@ describe("buildInvoiceQboExport — central-link resolution (QBO-H6)", () => {
 
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
-    // Central vendor wins everywhere — flat export AND the v3 Bill.
-    expect(result.export.vendorRef).toBe("CENTRAL-VENDOR");
+    // Central vendor wins on the v3 Bill (the legacy flat export was removed).
     expect(result.bill.VendorRef?.value).toBe("CENTRAL-VENDOR");
     // Account map flows into the built bill line (not the raw local label).
     expect(result.bill.Line[0].AccountBasedExpenseLineDetail.AccountRef?.value).toBe("QBO-ACCT-99");
@@ -152,7 +151,6 @@ describe("buildInvoiceQboExport — central-link resolution (QBO-H6)", () => {
 
     expect(result.status).toBe("ok");
     if (result.status !== "ok") return;
-    expect(result.export.vendorRef).toBe("EMBEDDED-VENDOR");
     expect(result.bill.VendorRef?.value).toBe("EMBEDDED-VENDOR");
     // No maps → the raw local account label is carried through.
     expect(result.bill.Line[0].AccountBasedExpenseLineDetail.AccountRef?.value).toBe(

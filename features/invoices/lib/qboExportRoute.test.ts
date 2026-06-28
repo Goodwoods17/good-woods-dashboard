@@ -56,12 +56,11 @@ describe("GET /api/invoices/[id]/export-qbo — gates (QBO-H6)", () => {
     expect(mocks.buildInvoiceQboExport).not.toHaveBeenCalled();
   });
 
-  it("delegates and returns the export + bill when flag on + bearer correct", async () => {
+  it("delegates and returns the v3 Bill + reconciliation when flag on + bearer correct", async () => {
     process.env[FLAG] = "true";
     process.env.CRON_SECRET = "sekret";
     mocks.buildInvoiceQboExport.mockResolvedValue({
       status: "ok",
-      export: { vendorRef: "V1" },
       bill: { VendorRef: { value: "V1" } },
       reconciliation: { balanced: true },
     });
@@ -70,8 +69,10 @@ describe("GET /api/invoices/[id]/export-qbo — gates (QBO-H6)", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.export.vendorRef).toBe("V1");
+    // The legacy flat `export` shape was removed (QBO-H11) — only the Bill remains.
+    expect(body.export).toBeUndefined();
     expect(body.bill.VendorRef.value).toBe("V1");
+    expect(body.reconciliation.balanced).toBe(true);
     expect(mocks.buildInvoiceQboExport).toHaveBeenCalledWith("abc");
   });
 

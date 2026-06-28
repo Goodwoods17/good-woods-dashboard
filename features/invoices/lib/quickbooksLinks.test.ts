@@ -61,7 +61,27 @@ describe("quickbooksLinks mapping", () => {
     expect(rowToLink(linkToRow(unsynced))).toEqual(unsynced);
   });
 
-  it("linkToInsert omits the generated id and defaults optional fields to null", () => {
+  it("linkToInsert omits the generated id, defaults synced_at to null, and OMITS environment so the DB default applies", () => {
+    const insert = linkToInsert({
+      localType: "vendor",
+      localId: "contact-7",
+      qboType: "Vendor",
+      qboId: "qbo-vendor-99",
+      realmId: "9130347",
+    });
+    expect(insert).toEqual({
+      local_type: "vendor",
+      local_id: "contact-7",
+      qbo_type: "Vendor",
+      qbo_id: "qbo-vendor-99",
+      realm_id: "9130347",
+      synced_at: null,
+    });
+    // Never send an explicit environment — the column is NOT NULL DEFAULT 'sandbox'.
+    expect("environment" in insert).toBe(false);
+  });
+
+  it("linkToInsert includes environment only when the caller supplies a real value", () => {
     expect(
       linkToInsert({
         localType: "vendor",
@@ -69,16 +89,34 @@ describe("quickbooksLinks mapping", () => {
         qboType: "Vendor",
         qboId: "qbo-vendor-99",
         realmId: "9130347",
-      })
-    ).toEqual({
-      local_type: "vendor",
-      local_id: "contact-7",
-      qbo_type: "Vendor",
-      qbo_id: "qbo-vendor-99",
-      realm_id: "9130347",
-      environment: null,
-      synced_at: null,
-    });
+        environment: "production",
+      }).environment
+    ).toBe("production");
+  });
+
+  it("linkToInsert omits environment for explicit null or empty string", () => {
+    expect(
+      "environment" in
+        linkToInsert({
+          localType: "vendor",
+          localId: "contact-7",
+          qboType: "Vendor",
+          qboId: "qbo-vendor-99",
+          realmId: "9130347",
+          environment: null,
+        })
+    ).toBe(false);
+    expect(
+      "environment" in
+        linkToInsert({
+          localType: "vendor",
+          localId: "contact-7",
+          qboType: "Vendor",
+          qboId: "qbo-vendor-99",
+          realmId: "9130347",
+          environment: "",
+        })
+    ).toBe(false);
   });
 });
 
