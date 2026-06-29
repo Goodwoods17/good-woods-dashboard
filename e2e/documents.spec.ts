@@ -19,6 +19,8 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const DEMO_JOB_ID = "job-status-demo";
 const ACTIVE_TOKEN = "e2edocviewactive00000000000000000000ab";
 const REVOKED_TOKEN = "e2edocviewrevoked0000000000000000000cd";
+// The seeded client-safe doc whose bytes the watermark route stamps (S4).
+const SAFE_DOC_ID = "52d00000-0000-4000-8000-000000000001";
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -183,5 +185,66 @@ test.describe("project files S3 — email the link", () => {
     const notifySel = section.getByTestId("document-share-notify-pref");
     await expect(notifySel).toBeVisible();
     await expect(notifySel.locator("option[value='major']")).toHaveCount(1);
+  });
+});
+
+// Project Files & Sharing — S4 Dynamic watermark on shared view (issue #215).
+//
+// The portal "Open" button routes through a per-doc watermark endpoint that
+// stamps "{recipient} · {date} · Good Woods" into the RENDERED bytes (pdf-lib) on
+// each request; the stored object is never mutated. scripts/seed-e2e.mjs uploads
+// a real PDF for SAFE_DOC_ID whose own text does NOT contain the recipient name,
+// so finding the recipient in the served bytes proves render-time injection.
+test.describe("project files S4 — dynamic watermark on the shared view", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the portal Open button points at the token-scoped watermark route", async ({ browser }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/d/${ACTIVE_TOKEN}`);
+      await expect(guestPage.getByTestId("document-portal-view")).toBeVisible({ timeout: 15_000 });
+
+      // The recipient watermark notice is shown.
+      await expect(guestPage.getByTestId("portal-watermark-notice")).toBeVisible();
+
+      // Open routes through the watermark endpoint (not a raw signed Storage URL).
+      const href = await guestPage.getByTestId("portal-doc-open").getAttribute("href");
+      expect(href).toBe(`/api/documents/portal/${ACTIVE_TOKEN}/file/${SAFE_DOC_ID}`);
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("opening a drawing stamps the recipient watermark into the rendered bytes", async ({
+    request,
+  }) => {
+    const res = await request.get(`/api/documents/portal/${ACTIVE_TOKEN}/file/${SAFE_DOC_ID}`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("application/pdf");
+    expect(res.headers()["x-watermark"]).toBe("applied");
+
+    const bytes = new Uint8Array(await res.body());
+
+    // Extract the rendered text the way a viewer would — the recipient name must
+    // appear (injected at render time), proving the stamp is in the bytes.
+    const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    const doc = await pdfjs.getDocument({ data: bytes, useSystemFonts: true }).promise;
+    let rendered = "";
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const content = await page.getTextContent();
+      rendered += content.items.map((it) => ("str" in it ? it.str : "")).join(" ") + " ";
+    }
+    expect(rendered).toContain("E2E Test Client");
+    expect(rendered).toContain("Good Woods");
+  });
+
+  test("a revoked token gets no bytes from the watermark route", async ({ request }) => {
+    const res = await request.get(`/api/documents/portal/${REVOKED_TOKEN}/file/${SAFE_DOC_ID}`);
+    expect(res.status()).toBe(410);
   });
 });

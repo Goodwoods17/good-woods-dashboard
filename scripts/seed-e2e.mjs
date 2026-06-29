@@ -8,6 +8,8 @@
 //      E2E_EMAIL, E2E_PASSWORD. Intended for the ephemeral local Supabase in CI.
 // Run: node scripts/seed-e2e.mjs
 
+import { PDFDocument, StandardFonts } from "pdf-lib";
+
 const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const email = process.env.E2E_EMAIL ?? "e2e@goodwoods.local";
@@ -568,6 +570,38 @@ async function seedS2DocumentShares(token) {
   console.log("OK seeded S2 document view portal fixtures (docs + share tokens)");
 }
 
+// ─── Project Files S4 (issue #215) — watermark file bytes ────────────────────
+// S4 stamps the recipient name + date into the RENDERED bytes at view time. The
+// S2 safe doc points at job-status-demo/<id>.pdf; upload a real PDF there (via the
+// service-role Storage API) whose own text does NOT contain the recipient name,
+// so the watermark e2e can prove the stamp is injected at render time, not stored.
+async function seedS4PortalFile() {
+  const pdf = await PDFDocument.create();
+  const page = pdf.addPage([612, 792]);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  page.drawText("Kitchen elevations (original, unwatermarked)", {
+    x: 72,
+    y: 700,
+    size: 16,
+    font,
+  });
+  const bytes = await pdf.save({ useObjectStreams: false });
+
+  const path = `job-status-demo/${S2_SAFE_DOC_ID}.pdf`;
+  const res = await fetch(`${url}/storage/v1/object/job-documents/${path}`, {
+    method: "POST",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      "Content-Type": "application/pdf",
+      "x-upsert": "true",
+    },
+    body: Buffer.from(bytes),
+  });
+  if (!res.ok) throw new Error(`seed S4 file ${res.status}: ${await res.text()}`);
+  console.log("OK seeded S4 watermark source file (job-documents storage object)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -581,6 +615,7 @@ async function seedJob() {
   await seedS17Bumps(token);
   await seedS18ShareLinks(token);
   await seedS2DocumentShares(token);
+  await seedS4PortalFile();
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

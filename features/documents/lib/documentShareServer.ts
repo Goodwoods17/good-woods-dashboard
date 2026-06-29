@@ -4,8 +4,8 @@ import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { loadCapabilityRow } from "@shared/lib/capabilityLink";
 import { rowToShareToken, type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import { rowToDocument, type DocumentRow } from "./documentsRowMap";
-import { JOB_DOCUMENTS_BUCKET } from "@features/drawings/lib/storage";
 import { computeSuperseded, selectClientSafeDocuments, type SupersededInfo } from "./documentShare";
+import { buildPortalFileUrl } from "./documentWatermark";
 import { CLIENT_SAFE_KINDS, type ProjectDocument } from "@shared/lib/types";
 
 // CLIENT_SAFE_KINDS is a typed DocumentKind[]; PostgREST's `.in()` wants string[].
@@ -23,21 +23,23 @@ const CLIENT_SAFE_KIND_VALUES: string[] = CLIENT_SAFE_KINDS;
  * EXPLICIT column select with a server-side allow-list — `.in("kind",
  * CLIENT_SAFE_KINDS)` (excludes `other` + `toolpath_cnc`), `.neq("source",
  * "link")` (Drive links can't guarantee no-login access), `.eq("is_current",
- * true)` — never `select("*")`. Uploaded files get a fresh 5-MINUTE signed URL;
- * nothing in the private bucket is ever exposed beyond that window.
+ * true)` — never `select("*")`. Uploaded files are opened through the per-doc
+ * watermark route (S4) — the bytes are never exposed beyond the token capability,
+ * and the recipient name + date is stamped in at render time.
  */
-
-/** Signed-URL lifetime for the public portal — 5 minutes (locked-decision-3). */
-const PORTAL_SIGNED_URL_TTL = 5 * 60;
 
 /** The explicit, audited column list — NEVER `*` on a public path. */
 const DOC_COLUMNS =
   "id, project_id, kind, label, drive_url, version, is_current, notes, uploaded_by, created_at, source, storage_path, mime, page_count";
 
-/** One document as it appears on the portal, with a short-lived signed URL. */
+/** One document as it appears on the portal, with its watermark-route open URL. */
 export type PortalDocument = {
   doc: ProjectDocument;
-  /** Fresh 5-min signed URL into the private bucket; null if it couldn't be signed. */
+  /**
+   * The token-scoped watermark route the "Open" button points at (S4) — opening
+   * it streams the recipient-watermarked bytes. Null when there is no stored
+   * object to render.
+   */
   url: string | null;
 };
 
@@ -100,9 +102,13 @@ export async function loadDocumentPortal(token: string): Promise<DocumentPortalL
     (setRows as DocumentRow[] | null)?.map(rowToDocument) ?? []
   );
 
-  const documents: PortalDocument[] = await Promise.all(
-    safe.map(async (doc) => ({ doc, url: await signOrNull(sb, doc.storagePath) }))
-  );
+  // Each doc opens through the per-doc watermark route (S4) — no pre-signing here,
+  // so the portal's first paint isn't blocked by signing OR stamping; the render
+  // happens on click, inside the token capability.
+  const documents: PortalDocument[] = safe.map((doc) => ({
+    doc,
+    url: doc.storagePath ? buildPortalFileUrl(token, doc.id) : null,
+  }));
 
   // Superseded banner: compare the anchored doc against the live current set
   // (which we already loaded for the same kind, plus the anchor's own kind).
@@ -151,18 +157,6 @@ export async function recordFurthestPage(token: string, page: number): Promise<b
     .eq("token", token)
     .eq("capability_type", "document_view");
   return !error;
-}
-
-async function signOrNull(
-  sb: ReturnType<typeof getServiceRoleClient>,
-  storagePath: string | null | undefined
-): Promise<string | null> {
-  if (!sb || !storagePath) return null;
-  const { data, error } = await sb.storage
-    .from(JOB_DOCUMENTS_BUCKET)
-    .createSignedUrl(storagePath, PORTAL_SIGNED_URL_TTL);
-  if (error || !data) return null;
-  return data.signedUrl;
 }
 
 async function loadJobContact(

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { FileText, Phone, Mail, History, ExternalLink } from "lucide-react";
+import { FileText, Phone, Mail, History, ExternalLink, ShieldAlert } from "lucide-react";
 import { DOCUMENT_KIND_LABELS } from "@shared/lib/types";
 import type { DocumentPortalBundle } from "../lib/documentShareServer";
 
@@ -75,7 +75,21 @@ export function DocumentPortalView({
           </div>
         ) : null}
 
-        <section className="mt-6 space-y-3">
+        {documents.length > 0 ? (
+          <div
+            data-testid="portal-watermark-notice"
+            className="mt-6 flex items-start gap-2 rounded-xl border border-border bg-surface-sunken px-4 py-2.5 text-xs text-text-tertiary"
+          >
+            <ShieldAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
+            <span>
+              {recipientName
+                ? `Opened drawings are watermarked for ${recipientName}. Please don't redistribute.`
+                : "Opened drawings are watermarked. Please don't redistribute."}
+            </span>
+          </div>
+        ) : null}
+
+        <section className="mt-4 space-y-3">
           {documents.length === 0 ? (
             <div
               data-testid="portal-empty"
