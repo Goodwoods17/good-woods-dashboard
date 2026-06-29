@@ -60,3 +60,10 @@ public/pdf.worker.min.mjs
 
 # Ad-hoc smoke-test screenshots in repo root (so `git add -A` can't sweep them in)
 /smoke-*.png
+# All root-level screenshots are dev/smoke artifacts (real assets live under public/)
+/*.png
+
+# Editor + ad-hoc scratch files
+.vscode/
+_extract_tmp.mjs
+skills-lock.json

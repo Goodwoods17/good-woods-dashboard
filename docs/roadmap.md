@@ -5,18 +5,22 @@
 > **Maintain it:** whenever a slice ships, a PR merges, or scope changes during a session,
 > update this file in the same session. Verify claims against code/git, not memory.
 >
-> **Last verified:** 2026-06-26 (against `main` @ `8db94a3` — Live Job Status milestone #5 shipped,
-> §2c; 0 open PRs / 0 open issues in #5). Forms #2/#3 + Invoices #4 also shipped since #18 — their
-> own sections still need a fuller reconcile.
+> **Last verified:** 2026-06-28 (against `main` @ `f15b2b5`; 0 open PRs). Since the prior verify:
+> **Forms #2/#3**, **Invoice capture #4**, **Live Job Status #5**, the **Scheduling & Client-
+> Commitment Engine #7** (all 25 slices — v1 live, P6 dark), **QBO sync #8**, and the **QBO/Invoices
+> hardening #10/#11** all shipped. New ADRs **0019** (invoices), **0020** (scheduling), **0021** (QBO).
 
 ---
 
 ## Where we are (one line)
 
-All ~17 app surfaces are **built and live**. The full **job-costing / Budget-vs-Actual spine
-(cost-codes A–D)** has shipped, plus **CI + a security-hardening pass** (below). Remaining spine
-work is **P5 → P6**. The active build frontier is now the **per-feature Phase-2 backlog** (§4) —
-first up: **Reface forms/hinge** (in flight).
+All ~17 app surfaces are **built and live**. The job-costing / Budget-vs-Actual spine, **Live Job
+Status** (#5), **Forms** (#2/#3), **Invoice capture** (#4) + **QuickBooks sync** (#8) + hardening
+(#10/#11), and the **Scheduling & Client-Commitment Engine** (#7, §2d) have all shipped. The
+autonomous **`/cook`** workflow now drives most feature builds end-to-end (plan → build → Phase-C
+consolidate). **Live in prod:** Scheduling v1 (flag on). **Built, staged behind flags (owner flips
+when ready):** Live Job Status, Invoice capture, QBO sync, Scheduling P6. Remaining frontier is the
+**per-feature Phase-2 backlog** (§4) + the staged go-lives.
 
 ---
 
@@ -154,8 +158,51 @@ Both additive migrations **applied to prod 2026-06-26** (tables + RLS + `pieces.
 + live smoke. **Non-goals (later milestones):** client portal (`/j/<token>`), installer daily
 log, scheduling/ETA, notifications.
 
-> Note: **Forms (milestones #2/#3)** and **Invoice capture (#4)** also shipped since this file's
-> prior verify date — their sections here still need a fuller reconcile.
+---
+
+## 2d. Scheduling & Client-Commitment Engine (#7) — shipped, v1 LIVE 🆕
+
+Dual-schedule CCPM: live internal per-phase targets + a frozen client-committed install date with
+an honest **buffer** you watch **burn**. ADR 0020; spec in `features/scheduling/CLAUDE.md`.
+
+### Shipped ✅ (2026-06-27→28, milestone #7 CLOSED — all 25 slices, via autonomous `/cook`)
+- **v1-core (S1–S22):** schema + capacity/load model + capacity-aware committed date + risk-tiered
+  buffer + floating bottleneck + editable Frappe Gantt (ripple/pin) + fever chart + Schedule tab +
+  buffer-aware hitlist + "one number" dashboard + shop-floor targets + trade-line sub dates +
+  make-ready gate + commitment ledger + per-owner/sub **reliability loop** + re-commit/change-orders +
+  free-capacity finder + capacity-aware quote dates + priority/VIP bump + **client schedule portal**
+  (tokenized, read-only) + **ICS feed** + approval-gated **notifications** + Contacts link.
+- **Architecture deepening** (6 PRs #139–144): shared seams `workdays` (work-calendar + BC stat
+  holidays), `serviceClient`/`capabilityLink`, `phases`, `buffer`, `dateStatus`; scheduling panels
+  moved behind store seams.
+- **P6 dark (S23–S25):** one-way Google Calendar push (OAuth), P&L revenue forecast, PPC/on-time
+  scorecard — built **behind `NEXT_PUBLIC_SCHEDULING_P6_ENABLED`** (OFF in prod). Phase-C reviewed.
+
+### Go-live status
+- **v1-core: LIVE** — 9 migrations applied to prod + `NEXT_PUBLIC_SCHEDULING_ENABLED=true` (2026-06-28).
+- **P6: dark** — apply `20260708_scheduling_google_calendar` migration + provision Google OAuth
+  creds + flip `NEXT_PUBLIC_SCHEDULING_P6_ENABLED` when ready. Open follow-up: **#162** (PKCE for S23).
+
+---
+
+## 2e. Invoices — capture (#4) + QuickBooks sync (#8) + hardening (#10/#11) — shipped 🆕
+
+AP invoice capture/extraction → review → post to actuals → QuickBooks. ADRs 0019 (capture) + 0021 (QBO).
+
+### Shipped ✅ (milestones #4/#8/#10/#11 CLOSED, via autonomous `/cook`)
+- **Capture (#4, S1–S8):** upload/camera capture → extraction → review & edit (math validation +
+  duplicate guard) → supplier/job matching → post to `job_cost_actual` with provenance → catalog
+  price-update → QBO export stub.
+- **QBO sync (#8, 12 slices):** one-way push posted invoices → QBO Bills (OAuth, sandbox-first, PDF
+  attached, idempotent, payment-pull-ready). Mirrors the Scheduling-S23 Google OAuth pattern.
+- **Hardening (#10/#11):** transactional invoice saves, QBO idempotency/concurrency, session-auth
+  on "Process now" (dropped `NEXT_PUBLIC_CRON_SECRET`), RLS least-privilege, error-state UX.
+
+### Go-live status (both behind flags, OFF in prod)
+- **Capture** (`NEXT_PUBLIC_INVOICES_ENABLED`): 5 migrations applied to prod; remaining = wire the
+  home-machine extractor engine + poppler, then flip the flag.
+- **QBO** (`NEXT_PUBLIC_INVOICES_QBO_ENABLED`): 4 migrations staged (NOT applied); remaining =
+  provision QB sandbox app + `QBO_*` creds → apply migrations → flip flag → smoke.
 
 ---
 
@@ -185,7 +232,7 @@ Mostly **disjoint feature folders** → safe to build in parallel windows (see
 - **Catalog:** ~~surface all kinds~~ DONE (category-based UI already surfaces all 7 kinds; generic per-item attributes editor + empty-category state = PR #14) · remaining: estimator pick-from integration
 - **Reface:** end-panel/toe-kick forms · hinge logic · order reconciliation
 - **SOPs:** make editable (DB + versioning) · **Documents:** design from scratch
-- **Cross-cutting:** QuickBooks two-way sync · multi-role auth · contacts comms-history
+- **Cross-cutting:** ~~QuickBooks one-way push~~ DONE (#8, one-way invoices→QBO Bills; two-way sync + payment-pull still future) · multi-role auth · contacts comms-history
 
 ---
 
@@ -208,8 +255,10 @@ QuickBooks-ready costing · **0012** unified template + Mozaik · **0013** exter
 derived source-of-truth · **0014** BvA P4 scope + margin · **0015** subtrade actuals per
 trade-line (Slice C, supersedes 0014 subtrade deferral) · **0016** active drawings in Supabase /
 archive to Drive · **0017** trunk-based vertical slices, no stacked PRs · **0018** autonomous
-build workflow (plan-first, run-till-done; global but fenced to software work). (0002/0003 = the
-build process: deliberate-plan-then-autonomous-build.)
+build workflow (plan-first, run-till-done; global but fenced to software work) · **0019** invoice
+capture & extraction · **0020** scheduling dual-dates & client commitment (supersedes 0008's "no
+dates") · **0021** QuickBooks Online sync. (0002/0003 = the build process: deliberate-plan-then-
+autonomous-build.)
 
 ---
 
