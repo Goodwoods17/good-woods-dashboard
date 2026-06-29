@@ -1,3 +1,4 @@
+import "server-only";
 import type { FormInstance, FormShareLink } from "@shared/lib/types";
 import { FORM_INSTANCES_TABLE, FORM_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";

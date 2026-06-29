@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S9 — push audit log + retry queue (issue #155).
  * SERVICE-ROLE only; never import from a client component.

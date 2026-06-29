@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only reader for the authenticated actor id (QBO-H5, issue #188).
  *

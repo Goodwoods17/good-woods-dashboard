@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * QBO-H6 (#189) — server-only I/O for the single-invoice QuickBooks export.
  *

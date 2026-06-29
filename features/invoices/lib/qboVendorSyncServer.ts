@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S3 vendor mapping (issue #149).
  *

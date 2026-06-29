@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabase, hasSupabase, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
 import type { Job, ScheduleShareLink } from "@shared/lib/types";
-import { generateCapabilityToken } from "@shared/lib/utils";
+import { generateCapabilityToken } from "@shared/lib/capabilityToken";
 import {
   rowToScheduleShareLink,
   scheduleShareLinkToRow,

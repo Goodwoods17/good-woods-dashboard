@@ -78,3 +78,117 @@ describe("loadCapabilityRow", () => {
     expect(update).not.toHaveBeenCalled();
   });
 });
+
+// ─── Generalized share_tokens behaviour (ADR 0022) ──────────────────────────
+// A flexible fake: every chain link (`.eq(...)`) returns the same chain, so any
+// number of filters compose; `.maybeSingle()` resolves the select, and an
+// `update(...).eq(...)...` chain is itself awaitable (thenable) like supabase-js.
+type ShareRow = {
+  revoked_at: string | null;
+  viewed_at: string | null;
+  token: string;
+  capability_type: string;
+  expires_at: string | null;
+};
+
+function makeShareTokensClient(opts: { row: ShareRow | null; error?: unknown }) {
+  const updatePatches: Array<Record<string, unknown>> = [];
+  const from = vi.fn(() => ({
+    select: vi.fn(() => {
+      const chain: Record<string, unknown> = {};
+      chain.eq = vi.fn(() => chain);
+      chain.maybeSingle = vi.fn().mockResolvedValue({ data: opts.row, error: opts.error ?? null });
+      return chain;
+    }),
+    update: vi.fn((patch: Record<string, unknown>) => {
+      updatePatches.push(patch);
+      const chain: Record<string, unknown> = {};
+      chain.eq = vi.fn(() => chain);
+      // Awaited directly (no .maybeSingle()) → make the chain thenable.
+      chain.then = (resolve: (v: unknown) => void) => resolve({ data: null, error: null });
+      return chain;
+    }),
+  }));
+  return { sb: { from } as unknown as SupabaseClient, updatePatches };
+}
+
+const SHARE_TABLE = "share_tokens";
+
+function shareRow(over: Partial<ShareRow> = {}): ShareRow {
+  return {
+    revoked_at: null,
+    viewed_at: null,
+    token: TOKEN,
+    capability_type: "document_view",
+    expires_at: null,
+    ...over,
+  };
+}
+
+describe("loadCapabilityRow — capability_type (token type-confusion)", () => {
+  it("rejects a foreign-type token as not_found (a schedule row read as a form token)", async () => {
+    const { sb, updatePatches } = makeShareTokensClient({
+      row: shareRow({ capability_type: "schedule" }),
+    });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "form",
+    });
+    expect(res).toEqual({ ok: false, reason: "not_found" });
+    // No first-view stamp on a rejected wrong-type token.
+    expect(updatePatches).toHaveLength(0);
+  });
+
+  it("returns ok (and stamps) when the row's capability_type matches", async () => {
+    const { sb, updatePatches } = makeShareTokensClient({
+      row: shareRow({ capability_type: "document_view" }),
+    });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "document_view",
+    });
+    expect(res.ok).toBe(true);
+    expect(updatePatches).toHaveLength(1);
+    expect(typeof updatePatches[0].viewed_at).toBe("string");
+  });
+});
+
+describe("loadCapabilityRow — expiry (NULL = never; opt-in)", () => {
+  it("never expires when expires_at is NULL", async () => {
+    const { sb } = makeShareTokensClient({ row: shareRow({ expires_at: null }) });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "document_view",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("rejects a token whose expires_at is in the past", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const { sb, updatePatches } = makeShareTokensClient({
+      row: shareRow({ expires_at: past }),
+    });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "document_view",
+    });
+    expect(res).toEqual({ ok: false, reason: "expired" });
+    expect(updatePatches).toHaveLength(0); // expired → never stamped
+  });
+
+  it("allows a token whose expires_at is in the future", async () => {
+    const future = new Date(Date.now() + 60 * 60_000).toISOString();
+    const { sb } = makeShareTokensClient({ row: shareRow({ expires_at: future }) });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "document_view",
+    });
+    expect(res.ok).toBe(true);
+  });
+
+  it("revoked beats expiry: a revoked token reads as revoked, not expired", async () => {
+    const past = new Date(Date.now() - 60_000).toISOString();
+    const { sb } = makeShareTokensClient({
+      row: shareRow({ revoked_at: "2026-01-01T00:00:00Z", expires_at: past }),
+    });
+    const res = await loadCapabilityRow<ShareRow>(sb, SHARE_TABLE, TOKEN, {
+      capabilityType: "document_view",
+    });
+    expect(res).toEqual({ ok: false, reason: "revoked" });
+  });
+});

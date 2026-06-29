@@ -48,3 +48,6 @@ export const PRIORITY_BUMPS_TABLE = "priority_bumps";
 export const SCHEDULE_SHARE_LINKS_TABLE = "schedule_share_links";
 export const SCHEDULING_GOOGLE_CONNECTIONS_TABLE = "scheduling_google_connections";
 export const SCHEDULING_GOOGLE_EVENTS_TABLE = "scheduling_google_events";
+// ADR 0022 — the generalized no-login capability-link registry that the two
+// per-feature share tables (form_share_links + schedule_share_links) consolidate onto.
+export const SHARE_TOKENS_TABLE = "share_tokens";
