@@ -24,6 +24,8 @@ import { parseDriveUrl } from "../lib/driveUrl";
 import { AddDocumentForm } from "./AddDocumentForm";
 import { DocumentShareSection } from "./DocumentShareSection";
 import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
+import { useJob } from "@features/jobs/lib/jobsStore";
+import { useContact } from "@features/contacts/lib/contactsStore";
 
 /**
  * Documents card on JobDetail. Tagged shelf with kind-filter chips,
@@ -42,6 +44,11 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
   const [adding, setAdding] = useState(false);
   const [savingNew, setSavingNew] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
+
+  // S3: prefill the recipient email from the job's designer contact.
+  const job = useJob(projectId);
+  const designerContact = useContact(job?.designerId ?? "");
+  const designerEmail = designerContact?.emails?.[0]?.value?.trim() ?? null;
 
   const counts = useMemo(() => {
     const c: Record<Filter, number> = { all: docs.length } as Record<Filter, number>;
@@ -136,7 +143,9 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         </div>
       )}
 
-      {projectFilesEnabled() && docs.length > 0 && <DocumentShareSection docs={docs} />}
+      {projectFilesEnabled() && docs.length > 0 && (
+        <DocumentShareSection docs={docs} designerEmail={designerEmail} />
+      )}
 
       <div className="px-6 py-3 flex flex-wrap items-center gap-1.5 border-b border-[rgba(26,25,22,0.05)]">
         <Chip

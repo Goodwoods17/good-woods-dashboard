@@ -33,7 +33,11 @@ async function loadLinks(documentIds: string[]): Promise<ShareToken[]> {
 export type UseDocumentShareLinks = {
   links: ShareToken[];
   busy: boolean;
-  create: (anchorDocumentId: string, recipientName: string | null) => Promise<void>;
+  create: (
+    anchorDocumentId: string,
+    recipientName: string | null,
+    opts?: { expiresAt?: string | null; notifyPreference?: string | null }
+  ) => Promise<void>;
   revoke: (id: string) => Promise<void>;
 };
 
@@ -59,10 +63,16 @@ export function useDocumentShareLinks(documentIds: string[]): UseDocumentShareLi
   }, [refresh]);
 
   const create = useCallback(
-    async (anchorDocumentId: string, recipientName: string | null) => {
+    async (
+      anchorDocumentId: string,
+      recipientName: string | null,
+      opts: { expiresAt?: string | null; notifyPreference?: string | null } = {}
+    ) => {
       if (!supabaseReady || busy) return;
       setBusy(true);
       try {
+        const state: ShareToken["state"] = {};
+        if (opts.notifyPreference) state.notifyPreference = opts.notifyPreference as "everything" | "major" | "digest";
         const link: ShareToken = {
           id: crypto.randomUUID(),
           capabilityType: "document_view",
@@ -73,13 +83,13 @@ export function useDocumentShareLinks(documentIds: string[]): UseDocumentShareLi
           recipientName: recipientName?.trim() ? recipientName.trim() : null,
           viewedAt: null,
           revokedAt: null,
-          expiresAt: null,
+          expiresAt: opts.expiresAt ?? null,
           viewCount: 0,
           ip: null,
           ua: null,
           createdAt: new Date().toISOString(),
           createdBy: null,
-          state: {},
+          state,
         };
         const { error } = await getSupabase()
           .from(SHARE_TOKENS_TABLE)
