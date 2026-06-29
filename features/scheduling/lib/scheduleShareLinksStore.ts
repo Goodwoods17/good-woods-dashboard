@@ -8,60 +8,87 @@
  * the first active link's public URL). Both components stay render-of-state.
  */
 import { useCallback, useEffect, useState } from "react";
-import { getSupabase, hasSupabase, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
+import {
+  getSupabase,
+  hasSupabase,
+  SCHEDULE_SHARE_LINKS_TABLE,
+  SHARE_TOKENS_TABLE,
+} from "@shared/lib/supabase";
 import type { Job, ScheduleShareLink } from "@shared/lib/types";
 import { generateCapabilityToken } from "@shared/lib/capabilityToken";
+import { scheduleShareLinkToRow } from "./scheduleShareLinksRowMap";
 import {
-  rowToScheduleShareLink,
-  scheduleShareLinkToRow,
-  type ScheduleShareLinkRow,
-} from "./scheduleShareLinksRowMap";
+  scheduleShareLinkToShareTokenRow,
+  shareTokenRowToScheduleShareLink,
+} from "./scheduleShareTokenMap";
+import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 
 // ─── Data access ──────────────────────────────────────────────────────────────
+//
+// S5a (milestone #12, ADR 0022): reads are CUT to the generalized `share_tokens`
+// registry (capability_type=schedule); writes are DUAL-WRITTEN to both the
+// legacy `schedule_share_links` table and `share_tokens` during the overlap, so
+// the legacy table stays a faithful mirror (rollback-safe) until the S5b Forms
+// retrofit proves the mechanics. The id is shared across both rows so a
+// revoke-by-id stamps the same logical link in each.
 
-/** All share links for a job, newest first. */
+/** All schedule share links for a job, newest first (read from share_tokens). */
 export async function loadScheduleShareLinks(jobId: string): Promise<ScheduleShareLink[]> {
   if (!hasSupabase()) return [];
   const { data } = await getSupabase()
-    .from(SCHEDULE_SHARE_LINKS_TABLE)
+    .from(SHARE_TOKENS_TABLE)
     .select("*")
     .eq("job_id", jobId)
+    .eq("capability_type", "schedule")
     .order("created_at", { ascending: false });
-  return ((data as ScheduleShareLinkRow[] | null) ?? []).map(rowToScheduleShareLink);
+  return ((data as ShareTokenRow[] | null) ?? []).map(shareTokenRowToScheduleShareLink);
 }
 
-/** The first active (non-revoked) share link for a job, or null. */
+/** The first active (non-revoked) share link for a job, or null (read from share_tokens). */
 export async function loadActiveScheduleShareLink(
   jobId: string
 ): Promise<ScheduleShareLink | null> {
   if (!hasSupabase()) return null;
   const { data } = await getSupabase()
-    .from(SCHEDULE_SHARE_LINKS_TABLE)
+    .from(SHARE_TOKENS_TABLE)
     .select("*")
     .eq("job_id", jobId)
+    .eq("capability_type", "schedule")
     .is("revoked_at", null)
     .order("created_at", { ascending: false })
     .limit(1);
-  const rows = (data as ScheduleShareLinkRow[] | null) ?? [];
-  return rows.length > 0 ? rowToScheduleShareLink(rows[0]) : null;
+  const rows = (data as ShareTokenRow[] | null) ?? [];
+  return rows.length > 0 ? shareTokenRowToScheduleShareLink(rows[0]) : null;
 }
 
-/** Insert a share link; returns true on success. */
+/**
+ * Dual-write a new share link to both share_tokens (the read path) and the
+ * legacy schedule_share_links table (kept mirrored until S5b). Returns true only
+ * when the share_tokens write — the one the portal now reads — succeeds.
+ */
 export async function insertScheduleShareLink(link: ScheduleShareLink): Promise<boolean> {
   if (!hasSupabase()) return false;
-  const { error } = await getSupabase()
-    .from(SCHEDULE_SHARE_LINKS_TABLE)
-    .insert(scheduleShareLinkToRow(link));
-  return !error;
+  const sb = getSupabase();
+  const { error } = await sb
+    .from(SHARE_TOKENS_TABLE)
+    .insert(scheduleShareLinkToShareTokenRow(link));
+  if (error) return false;
+  // Legacy mirror (best-effort; the read path no longer depends on it).
+  await sb.from(SCHEDULE_SHARE_LINKS_TABLE).insert(scheduleShareLinkToRow(link));
+  return true;
 }
 
-/** Stamp `revoked_at` on a share link. */
+/** Stamp `revoked_at` on a share link in BOTH tables (id is shared across them). */
 export async function revokeScheduleShareLink(id: string, revokedAt: string): Promise<void> {
   if (!hasSupabase()) return;
-  await getSupabase()
-    .from(SCHEDULE_SHARE_LINKS_TABLE)
+  const sb = getSupabase();
+  await sb
+    .from(SHARE_TOKENS_TABLE)
     .update({ revoked_at: revokedAt })
-    .eq("id", id);
+    .eq("id", id)
+    .eq("capability_type", "schedule");
+  // Legacy mirror.
+  await sb.from(SCHEDULE_SHARE_LINKS_TABLE).update({ revoked_at: revokedAt }).eq("id", id);
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────

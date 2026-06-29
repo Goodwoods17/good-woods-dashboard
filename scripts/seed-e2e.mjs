@@ -472,11 +472,53 @@ const S18_LINKS = [
   },
 ];
 
+// S5a (issue #216, milestone #12) retrofits the Scheduling portal onto the
+// generalized `share_tokens` registry: the /s + feed.ics READS are cut to
+// share_tokens (capability_type=schedule, committed_date_snapshot → state). The
+// owner store dual-writes both tables, so seed BOTH here. The backfill migration
+// only catches rows that pre-date it; seed rows are inserted post-migration, so
+// the share_tokens mirror must be seeded explicitly.
+const S18_SHARE_TOKENS = S18_LINKS.map((l) => ({
+  id: l.id,
+  capability_type: "schedule",
+  job_id: l.job_id,
+  token: l.token,
+  recipient_name: l.recipient_name,
+  viewed_at: l.viewed_at,
+  revoked_at: l.revoked_at,
+  expires_at: null,
+  view_count: 0,
+  created_by: l.created_by,
+  state: { committedDateSnapshot: l.committed_date_snapshot },
+}));
+
+// S5a regression guard: a schedule link seeded ONLY into share_tokens (never
+// into the legacy schedule_share_links table). /s/<this token> rendering proves
+// the read path is truly cut to share_tokens, not silently still reading legacy.
+const S5A_SHARETOKENS_ONLY_TOKEN = "e2eschedsharetokensonly000000000000ef";
+const S5A_SHARE_TOKEN_ONLY = {
+  id: "51a00000-0000-4000-8000-000000000001",
+  capability_type: "schedule",
+  job_id: "job-status-demo",
+  token: S5A_SHARETOKENS_ONLY_TOKEN,
+  recipient_name: "E2E Retrofit Client",
+  viewed_at: null,
+  revoked_at: null,
+  expires_at: null,
+  view_count: 0,
+  created_by: "claude-smoke-test@spacecraftjoinery.local",
+  state: { committedDateSnapshot: "2026-12-15" }, // == DEMO_JOB install_date → On track
+};
+
 async function seedS18ShareLinks(token) {
   for (const row of S18_LINKS) {
     await upsert(token, "schedule_share_links", row);
   }
-  console.log("OK seeded S18 client schedule portal share links");
+  for (const row of S18_SHARE_TOKENS) {
+    await upsert(token, "share_tokens", row);
+  }
+  await upsert(token, "share_tokens", S5A_SHARE_TOKEN_ONLY);
+  console.log("OK seeded S18 client schedule portal share links (legacy + share_tokens)");
 }
 
 // ─── Project Files S2 (issue #213) — document VIEW portal fixtures ───────────

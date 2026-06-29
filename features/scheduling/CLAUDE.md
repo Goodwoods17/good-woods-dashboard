@@ -52,7 +52,7 @@ The six `MilestoneStage` phases double as shop **work-centers**. `capacity.ts`:
   history in the window), configured **capacity**, and `under | near | over`
   status. Load is derived at read time — never stored.
 - `seedPhaseDurationsFromHistory(sessions)` → default phase durations (work days)
-  for a **new job**, from the average active hours *per job per phase* in history
+  for a **new job**, from the average active hours _per job per phase_ in history
   (the "garbage-in fix" — uses data we already have). Falls back to
   `DEFAULT_PHASE_DURATION_DAYS` per-phase when there's no history.
 - `phaseTargetDatesFromDurations(start, durations)` chains those durations
@@ -192,6 +192,7 @@ prerequisites are in place. `makeReady.ts`:
 `checked`, `overridden`, `auto_signal`, etc. RLS authenticated-only.
 
 `MakeReadyChecklistPanel` renders inside `ScheduleTab`:
+
 - Loads saved state from Supabase; merges onto standard items.
 - Applies auto-signals at render time (signals derived from Job in ScheduleTab).
 - Per-phase sections with `data-testid="make-ready-phase-<phase>"`.
@@ -200,6 +201,7 @@ prerequisites are in place. `makeReady.ts`:
 - Persists check/override state to Supabase via upsert on `(job_id, template_item_id)`.
 
 Auto-signals wired in `ScheduleTab.tsx` from `Job`:
+
 - `designSignoff`: `currentMilestoneIndex > 0` (past design = drawings approved)
 - `blockerResolved`: `!job.blocker` (no free-text blocker = no outstanding block)
 - `materialLogged`: `false` for now (requires job-items store, wired in a future slice)
@@ -293,16 +295,28 @@ features/scheduling/
 ├── lib/
 │   ├── clientPortal.ts            pure: client-safe schedule view (status / % done /
 │   │                              next step / firm install + soft mid-phase ranges) (+ test)
-│   ├── scheduleShareLinksRowMap.ts row ↔ ScheduleShareLink
-│   └── scheduleShareLinkServer.ts  server-only: loadScheduleShareLink(token) (service role)
+│   ├── scheduleShareLinksRowMap.ts row ↔ ScheduleShareLink (legacy table; still dual-written)
+│   ├── scheduleShareTokenMap.ts    ScheduleShareLink ↔ share_tokens row (S5a retrofit; snapshot→state)
+│   └── scheduleShareLinkServer.ts  server-only: loadScheduleShareLink(token) (service role; reads share_tokens)
 └── components/
     ├── ClientScheduleView.tsx      the public read-only portal page body
     ├── ClientScheduleInactive.tsx  clean inactive state (revoked / unknown / unconfigured)
     └── ClientPortalPanel.tsx       owner mint/copy/revoke panel in ScheduleTab
 src/app/s/[token]/page.tsx          public no-login route (flag-gated; 404s when off)
 supabase/migrations/
-└── 20260706000000_scheduling_share_links.sql   schedule_share_links table
+├── 20260706000000_scheduling_share_links.sql       schedule_share_links table (legacy; kept until S5b)
+└── 20260716000000_backfill_schedule_share_tokens.sql  S5a: backfill → generalized share_tokens
 ```
+
+**S5a retrofit (Project Files milestone #12, ADR 0022).** The client portal
+now rides the generalized `share_tokens` registry. `/s/<token>` + the ICS feed
+READ `share_tokens` (capability_type=schedule; the `committed_date_snapshot`
+column moves into `state.committedDateSnapshot`). The owner store DUAL-WRITES
+both `share_tokens` and the legacy `schedule_share_links` (id shared across both
+rows so revoke-by-id hits each) so the legacy table stays a rollback-safe mirror
+until the S5b Forms retrofit proves the mechanics; only then is it dropped.
+`viewed_at` read-receipts + the ICS `stampView=false` semantics are preserved
+verbatim by `loadCapabilityRow`.
 
 A tokenized, READ-ONLY, no-login client view of ONE job's schedule, reusing the
 Forms P2 share-link pattern (opaque token = capability, service-role read,
