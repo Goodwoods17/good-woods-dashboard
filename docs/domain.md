@@ -368,8 +368,10 @@ milestone #12; ADR 0022). Built behind `NEXT_PUBLIC_PROJECT_FILES_ENABLED`.
   full server-side size / MIME-sniff / quota / revoked-check guards.
 - **Expiry** — a capability link's optional `expires_at`. **NULL = never expires**
   (the default; the live `/f` form links are always no-expiry). Opt-in per link.
-- **Watermark** _(later slice)_ — a render-time recipient-name + date stamp burned
-  onto a PDF/image as it is served through a view portal (never on the stored file).
+- **Watermark** — a render-time `{recipient} · {date} · Good Woods` stamp tiled
+  onto a PDF (or an image wrapped in a PDF) as it is served through the document
+  view portal's per-doc file route — never on the stored object, and never on
+  authenticated staff views. Deters redistribution of proprietary shop drawings.
 - **Revision / Superseded** _(later slice)_ — a document's `version` history; the
   current revision (`is_current`) supersedes prior ones, which show a "superseded"
   banner rather than disappearing.
