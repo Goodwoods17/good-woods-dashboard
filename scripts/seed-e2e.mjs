@@ -477,6 +477,97 @@ async function seedS18ShareLinks(token) {
   console.log("OK seeded S18 client schedule portal share links");
 }
 
+// ─── Project Files S2 (issue #213) — document VIEW portal fixtures ───────────
+// Three docs on the demo job that exercise the curated-set exposure rules:
+//   * a CLIENT-SAFE uploaded designer drawing  → MUST appear on /d/<token>
+//   * an internal toolpath_cnc upload          → MUST NOT appear (excluded kind)
+//   * a Drive-link designer doc                → MUST NOT appear (source:'link')
+// Plus an active + a revoked document_view share token anchored on the safe doc,
+// so the e2e can prove no-login view, internal-exclusion, and revoke-kills-access
+// without depending on file bytes in Storage (a missing object just signs to a
+// null URL; the curated-set membership is what the test asserts).
+const S2_SAFE_DOC_ID = "52d00000-0000-4000-8000-000000000001";
+const S2_CNC_DOC_ID = "52d00000-0000-4000-8000-000000000002";
+const S2_DRIVE_DOC_ID = "52d00000-0000-4000-8000-000000000003";
+const S2_DOCS = [
+  {
+    id: S2_SAFE_DOC_ID,
+    project_id: "job-status-demo",
+    kind: "designer",
+    label: "Kitchen elevations",
+    drive_url: null,
+    version: "R2",
+    is_current: true,
+    source: "upload",
+    storage_path: `job-status-demo/${S2_SAFE_DOC_ID}.pdf`,
+    mime: "application/pdf",
+    page_count: 4,
+  },
+  {
+    id: S2_CNC_DOC_ID,
+    project_id: "job-status-demo",
+    kind: "toolpath_cnc",
+    label: "Cabinet bank toolpaths",
+    drive_url: null,
+    version: "R1",
+    is_current: true,
+    source: "upload",
+    storage_path: `job-status-demo/${S2_CNC_DOC_ID}.nc`,
+    mime: "application/octet-stream",
+    page_count: null,
+  },
+  {
+    id: S2_DRIVE_DOC_ID,
+    project_id: "job-status-demo",
+    kind: "designer",
+    label: "Designer concept (Drive)",
+    drive_url: "https://drive.google.com/file/d/e2e-drive-doc/view",
+    version: null,
+    is_current: true,
+    source: "link",
+    storage_path: null,
+    mime: null,
+    page_count: null,
+  },
+];
+
+const S2_ACTIVE_TOKEN = "e2edocviewactive00000000000000000000ab";
+const S2_REVOKED_TOKEN = "e2edocviewrevoked0000000000000000000cd";
+const S2_SHARE_TOKENS = [
+  {
+    id: "52700000-0000-4000-8000-000000000001",
+    capability_type: "document_view",
+    document_id: S2_SAFE_DOC_ID,
+    token: S2_ACTIVE_TOKEN,
+    recipient_name: "E2E Test Client",
+    viewed_at: null,
+    revoked_at: null,
+    expires_at: null,
+    view_count: 0,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+    state: {},
+  },
+  {
+    id: "52700000-0000-4000-8000-000000000002",
+    capability_type: "document_view",
+    document_id: S2_SAFE_DOC_ID,
+    token: S2_REVOKED_TOKEN,
+    recipient_name: null,
+    viewed_at: null,
+    revoked_at: "2026-06-28T00:00:00Z",
+    expires_at: null,
+    view_count: 0,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+    state: {},
+  },
+];
+
+async function seedS2DocumentShares(token) {
+  for (const row of S2_DOCS) await upsert(token, "documents", row);
+  for (const row of S2_SHARE_TOKENS) await upsert(token, "share_tokens", row);
+  console.log("OK seeded S2 document view portal fixtures (docs + share tokens)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -489,6 +580,7 @@ async function seedJob() {
   await seedS14Revisions(token);
   await seedS17Bumps(token);
   await seedS18ShareLinks(token);
+  await seedS2DocumentShares(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 
