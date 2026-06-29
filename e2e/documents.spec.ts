@@ -122,3 +122,66 @@ test.describe("project files S2 — document view portal", () => {
     await expect(rows).toHaveCount(before);
   });
 });
+
+// Project Files & Sharing — S3 Email-the-link (issue #214).
+//
+// S3 adds a Resend-backed "Send email" button to each share-link row, with a
+// graceful mailto fallback when RESEND_API_KEY is absent (always in CI). The
+// test verifies:
+//   1. The email input appears on each link row.
+//   2. When Resend is unconfigured (CI), the route returns 503 and the UI opens
+//      a mailto draft (we verify the send-note text appears, not the OS dialog).
+//   3. Opt-in expiry and notification preference are present in the mint form.
+// Needs the same seeded fixtures as S2 (same DEMO_JOB_ID + share tokens).
+test.describe("project files S3 — email the link", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("email input is present on link rows, unconfigured path opens mailto", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const section = page.getByTestId("document-share-section");
+    await expect(section).toBeVisible({ timeout: 15_000 });
+
+    // At least one active link row exists (seeded in S2 fixtures).
+    const firstRow = section.getByTestId("document-share-link-row").first();
+    await expect(firstRow).toBeVisible();
+
+    // S3: the email input is rendered on the row.
+    const emailInput = firstRow.getByTestId("document-share-email-input");
+    await expect(emailInput).toBeVisible();
+
+    // Fill a valid email and click Send.
+    await emailInput.fill("smoke-test@goodwoods.local");
+    const sendBtn = firstRow.getByTestId("document-share-send");
+    await expect(sendBtn).toBeEnabled();
+    await sendBtn.click();
+
+    // CI has no RESEND_API_KEY → the API returns 503 "unconfigured". The UI
+    // reacts by opening a mailto draft (we can't assert an OS dialog, but we
+    // can assert the fallback note appears in the row).
+    const note = firstRow.getByTestId("document-share-send-note");
+    await expect(note).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("opt-in expiry and notification preference controls are present in the mint form", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const section = page.getByTestId("document-share-section");
+    await expect(section).toBeVisible({ timeout: 15_000 });
+
+    // S3: expiry date picker exists.
+    await expect(section.getByTestId("document-share-expires")).toBeVisible();
+
+    // S3: notification preference dropdown exists and has a "major" option.
+    const notifySel = section.getByTestId("document-share-notify-pref");
+    await expect(notifySel).toBeVisible();
+    await expect(notifySel.locator("option[value='major']")).toHaveCount(1);
+  });
+});

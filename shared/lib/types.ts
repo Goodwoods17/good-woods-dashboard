@@ -185,6 +185,11 @@ export type ShareTokenState = {
   // shared set, a coarse engagement signal recorded best-effort from the public
   // portal (never client-trusted for anything but analytics).
   furthestPage?: number;
+  // S3 (document_view) — ISO timestamp of the first successful email send.
+  // Stored in state (not a dedicated column) per ADR 0022 locked-decision-2.
+  sentAt?: string;
+  // S3 — how often the recipient wishes to hear from us.
+  notifyPreference?: "everything" | "major" | "digest";
   [key: string]: unknown;
 };
 
