@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S11 — bulk catch-up push + token-health probe
  * (issue #157). SERVICE-ROLE only; never import from a client component.

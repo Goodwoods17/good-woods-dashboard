@@ -1,3 +1,4 @@
+import "server-only";
 import {
   JOBS_TABLE,
   SCHEDULING_GOOGLE_CONNECTIONS_TABLE,

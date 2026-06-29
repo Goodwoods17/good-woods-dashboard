@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S8 — attach the source PDF to the pushed QBO Bill
  * (issue #154). SERVICE-ROLE only; never import from a client component.

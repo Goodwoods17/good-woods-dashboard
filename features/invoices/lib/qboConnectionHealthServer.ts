@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only token-health probe (QBO S11 / QBO-H8). SERVICE-ROLE only.
  *

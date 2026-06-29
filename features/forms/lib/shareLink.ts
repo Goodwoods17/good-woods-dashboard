@@ -1,4 +1,5 @@
 import type { FormInstanceField, FormShareLink } from "@shared/lib/types";
+import { generateCapabilityToken } from "@shared/lib/capabilityToken";
 import { getFieldEntry } from "./fieldRegistry";
 import { isFieldVisible } from "./conditionals";
 
@@ -20,17 +21,13 @@ export type ShareAnswerPatch = {
 export type ShareAnswers = Record<string, ShareAnswerPatch>;
 
 /**
- * Mint an opaque, url-safe token (>=32 chars). Uses Web Crypto (available in the
- * Edge + Node runtimes and the browser) so there's no Node-only dependency.
+ * Mint an opaque, url-safe token (>=32 chars). Thin alias over the consolidated
+ * `generateCapabilityToken` (ADR 0022) — the single token source every no-login
+ * capability link now shares. Kept as a named re-export so existing Forms call
+ * sites (`formInstancesStore`) need no churn.
  */
 export function generateShareToken(): string {
-  const bytes = new Uint8Array(32);
-  crypto.getRandomValues(bytes);
-  // base64url, no padding — url-safe and opaque.
-  let bin = "";
-  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
-  const b64 = typeof btoa === "function" ? btoa(bin) : Buffer.from(bytes).toString("base64");
-  return b64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  return generateCapabilityToken();
 }
 
 /** A link is usable until it is manually revoked. No expiry (jobs outlast 30 days). */

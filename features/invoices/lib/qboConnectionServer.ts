@@ -1,3 +1,4 @@
+import "server-only";
 import { QUICKBOOKS_CONNECTION_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { encryptToken, decryptToken } from "./qboTokenCrypto";

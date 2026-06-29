@@ -1,3 +1,4 @@
+import "server-only";
 import { QUICKBOOKS_LINKS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import {

@@ -1,3 +1,4 @@
+import "server-only";
 import { type SupabaseClient } from "@supabase/supabase-js";
 import type { FormInstance, FormInstanceField, FormShareLink } from "@shared/lib/types";
 import {
@@ -55,9 +56,11 @@ export async function loadShareLink(token: string): Promise<ShareLinkLoadResult>
   const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  // Select-by-token → revoked check → stamp viewed_at on first view.
+  // Select-by-token → revoked check → stamp viewed_at on first view. Forms links
+  // never expire (no expires_at column), so the generalized "expired" reason is
+  // unreachable here; collapse it into not_found for the inactive state's union.
   const res = await loadCapabilityRow<FormShareLinkRow>(sb, FORM_SHARE_LINKS_TABLE, token);
-  if (!res.ok) return { ok: false, reason: res.reason };
+  if (!res.ok) return { ok: false, reason: res.reason === "expired" ? "not_found" : res.reason };
 
   const link = rowToFormShareLink(res.row);
 

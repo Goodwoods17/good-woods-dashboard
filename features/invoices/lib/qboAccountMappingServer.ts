@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S4 account + tax-code mapping (issue #150).
  *

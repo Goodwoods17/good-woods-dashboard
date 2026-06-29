@@ -338,6 +338,44 @@ projected job cost`, where projected cost locks completed phases to their
 - **Sketch** — a document with no uploaded source file: a blank-canvas drawing made in-app on
   the per-project sketchpad. `source = 'sketch'`.
 
+## Sharing & capability links (Tier-2)
+
+Vocabulary for the no-login external-sharing surfaces (Project Files & Sharing,
+milestone #12; ADR 0022). Built behind `NEXT_PUBLIC_PROJECT_FILES_ENABLED`.
+
+- **Capability link** (a.k.a. **share link**) — a no-login URL whose only key is an
+  opaque **token**. The link _is_ the capability: holding the token grants exactly
+  the scoped action (view this job's documents, fill this form, upload requested
+  files) and nothing else. The public route reads it via the **service role**
+  scoped to the one row behind the token; the table is `anon_none` (anon is denied
+  entirely). A link is usable until **revoked** (`revoked_at`) or **expired**.
+- **Token** — the opaque, url-safe, ≥32-byte (256-bit) random string at the end of
+  a capability link (e.g. `/d/<token>`). Globally unique across every capability
+  type; minted once by `generateCapabilityToken`. Knowing the token is the whole
+  authorization — so it is never guessable and never logged in plaintext.
+- **Capability type** — the discriminator on a `share_tokens` row that says what a
+  token _does_ and which anchor it points at: **`document_view`** (curated document
+  portal → a `document`), **`document_request`** (designer **upload portal** → a
+  `document`), **`form`** (the `/f` fill portal → a `form_instance`), **`schedule`**
+  (the `/s` client schedule portal → a `job`). Validated in TS, not a DB enum, so
+  new types need no migration.
+- **Document portal (view)** — the read-only `document_view` surface: a no-login
+  page showing a job's curated, client-safe set of current documents (short-lived
+  signed URLs; `'other'` kind and external Drive links excluded).
+- **Upload portal / file request** — the `document_request` surface (the first
+  _writing_ token): a checklist of files the shop asked a designer/GC for; the
+  invitee drops files straight onto the job (live on upload + staff alert), with
+  full server-side size / MIME-sniff / quota / revoked-check guards.
+- **Expiry** — a capability link's optional `expires_at`. **NULL = never expires**
+  (the default; the live `/f` form links are always no-expiry). Opt-in per link.
+- **Watermark** _(later slice)_ — a render-time recipient-name + date stamp burned
+  onto a PDF/image as it is served through a view portal (never on the stored file).
+- **Revision / Superseded** _(later slice)_ — a document's `version` history; the
+  current revision (`is_current`) supersedes prior ones, which show a "superseded"
+  banner rather than disappearing.
+- **Pinned spec (canonical set)** _(later slice)_ — the default share payload: a
+  job's `is_current` documents of client-safe kinds, surfaced as the hero set.
+
 ## Add new terms here
 
 When introducing a domain term in code, add it here first.

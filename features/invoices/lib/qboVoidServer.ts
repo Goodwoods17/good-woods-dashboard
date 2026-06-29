@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-only I/O for QBO S10 — un-push / void path (issue #156). SERVICE-ROLE
  * only; never import from a client component.

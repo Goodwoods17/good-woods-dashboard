@@ -1,3 +1,4 @@
+import "server-only";
 /**
  * Server-safe signoff PDF generation (Forms P2 · Slice 4, issue #43).
  *

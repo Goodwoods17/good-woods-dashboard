@@ -126,6 +126,64 @@ export type FormShareLink = {
   createdBy: string | null;
 };
 
+// ADR 0022 — the generalized `share_tokens` capability registry. A
+// `capability_type` discriminator (validated in TS, NOT a DB enum, so the
+// vocabulary evolves without a migration) decides which anchor + which `state`
+// shape a row carries:
+//   * document_view    — no-login curated document portal (anchor: documentId)
+//   * document_request — no-login designer upload / file-request portal (documentId)
+//   * form             — the /f/<token> fill portal (anchor: formInstanceId)
+//   * schedule         — the /s/<token> client schedule portal (anchor: jobId)
+// EXACTLY ONE anchor is non-null per row (DB CHECK + this typed model).
+export type CapabilityType = "document_view" | "document_request" | "form" | "schedule";
+
+export const CAPABILITY_TYPES: CapabilityType[] = [
+  "document_view",
+  "document_request",
+  "form",
+  "schedule",
+];
+
+// One row of the generalized `share_tokens` registry. The opaque `token` is the
+// only key; the public path reads it via the SERVICE ROLE scoped to this one row
+// (anon is denied entirely). `expiresAt` is opt-in — NULL = never expires.
+// `state` holds the type-specific bits (lockedFieldIds, committedDateSnapshot,
+// progress, requested files, notification prefs) the legacy per-feature columns
+// used to carry; `lockedFieldIds` defaults to [] (it is the server-side security
+// gate, never null). `ip`/`ua` are quietly logged server-side (never client-set).
+export type ShareToken = {
+  id: string;
+  capabilityType: CapabilityType;
+  // Exactly one of these is non-null, matched to capabilityType.
+  formInstanceId: string | null;
+  jobId: string | null;
+  documentId: string | null;
+  token: string;
+  recipientName: string | null;
+  viewedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  viewCount: number;
+  ip: string | null;
+  ua: string | null;
+  createdAt: string;
+  createdBy: string | null;
+  state: ShareTokenState;
+};
+
+// Type-specific bits carried in the `state` jsonb. All optional — a given
+// capability type populates only the keys it needs. Kept open-ended (an index
+// signature) so a new capability type adds keys without a type-model change,
+// while the well-known keys stay typed for the readers that consume them.
+export type ShareTokenState = {
+  lockedFieldIds?: string[];
+  committedDateSnapshot?: string;
+  progress?: number;
+  requestedFiles?: string[];
+  notifyEmails?: string[];
+  [key: string]: unknown;
+};
+
 // Scheduling S18 (issue #106) — a no-login token link to ONE job's client
 // schedule portal (read-only, on-track). The token is the only key; reusable
 // until manually revoked (revokedAt). `committedDateSnapshot` records the

@@ -1,3 +1,4 @@
+import "server-only";
 import { JOBS_TABLE, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { loadCapabilityRow } from "@shared/lib/capabilityLink";
@@ -67,7 +68,9 @@ export async function loadScheduleShareLink(
   const res = await loadCapabilityRow<ScheduleShareLinkRow>(sb, SCHEDULE_SHARE_LINKS_TABLE, token, {
     stampView,
   });
-  if (!res.ok) return { ok: false, reason: res.reason };
+  // Schedule links never expire (no expires_at column), so the generalized
+  // "expired" reason is unreachable here; collapse it into not_found.
+  if (!res.ok) return { ok: false, reason: res.reason === "expired" ? "not_found" : res.reason };
 
   const link = rowToScheduleShareLink(res.row);
 
