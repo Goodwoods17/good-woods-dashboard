@@ -181,6 +181,10 @@ export type ShareTokenState = {
   progress?: number;
   requestedFiles?: string[];
   notifyEmails?: string[];
+  // S2 (document_view) — the furthest page index a viewer has reached in the
+  // shared set, a coarse engagement signal recorded best-effort from the public
+  // portal (never client-trusted for anything but analytics).
+  furthestPage?: number;
   [key: string]: unknown;
 };
 
@@ -259,6 +263,22 @@ export const DOCUMENT_KIND_ORDER: DocumentKind[] = [
   "permit",
   "photo",
   "other",
+];
+
+// Project Files & Sharing (Tier-2) · S2 — the kinds of document that may leave
+// the shop on a no-login `document_view` share link. The server-side curated-set
+// query allow-lists these (`.in("kind", CLIENT_SAFE_KINDS)`, never `*`), so the
+// exclusion is enforced in Postgres, not just the UI. Deliberately EXCLUDES:
+//   * `toolpath_cnc` — internal CNC machine code; never a client-facing artefact.
+//   * `other`        — un-triaged catch-all; opt-in only, never auto-shared.
+// A kind added here is a deliberate decision to expose that class of document.
+export const CLIENT_SAFE_KINDS: DocumentKind[] = [
+  "designer",
+  "shop",
+  "architect",
+  "appliance",
+  "permit",
+  "photo",
 ];
 
 export type DocumentSource = "upload" | "link" | "sketch";

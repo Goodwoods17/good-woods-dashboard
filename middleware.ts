@@ -4,8 +4,10 @@ import { isCronExemptPath } from "@shared/lib/cronRoutes";
 
 // Routes that don't require auth. `/f` = the public tokenized form-fill portal
 // (Forms P2); `/s` = the public tokenized client schedule portal (Scheduling
-// S18). In both, the token is the capability, served by a service-role route.
-const PUBLIC_ROUTES = ["/login", "/f", "/s"];
+// S18); `/d` = the public tokenized document view portal (Project Files S2). In
+// each, the token is the capability, served by a service-role route. The
+// document portal's no-login engagement beacon lives under `/api/documents/portal`.
+const PUBLIC_ROUTES = ["/login", "/f", "/s", "/d", "/api/documents/portal"];
 
 export async function middleware(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

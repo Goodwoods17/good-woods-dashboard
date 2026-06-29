@@ -19,12 +19,11 @@ import {
   type DocumentKind,
   type ProjectDocument,
 } from "@shared/lib/types";
-import {
-  useDocuments,
-  useProjectDocuments,
-} from "../lib/documentsStore";
+import { useDocuments, useProjectDocuments } from "../lib/documentsStore";
 import { parseDriveUrl } from "../lib/driveUrl";
 import { AddDocumentForm } from "./AddDocumentForm";
+import { DocumentShareSection } from "./DocumentShareSection";
+import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
 
 /**
  * Documents card on JobDetail. Tagged shelf with kind-filter chips,
@@ -56,7 +55,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
     return [...base].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [docs, filter]);
 
-  const active = activeId ? docs.find((d) => d.id === activeId) ?? null : filtered[0] ?? null;
+  const active = activeId ? (docs.find((d) => d.id === activeId) ?? null) : (filtered[0] ?? null);
   const activePreview = active?.driveUrl ? parseDriveUrl(active.driveUrl) : null;
 
   async function handleAdd(payload: {
@@ -137,6 +136,8 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         </div>
       )}
 
+      {projectFilesEnabled() && docs.length > 0 && <DocumentShareSection docs={docs} />}
+
       <div className="px-6 py-3 flex flex-wrap items-center gap-1.5 border-b border-[rgba(26,25,22,0.05)]">
         <Chip
           active={filter === "all"}
@@ -174,9 +175,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                     onClick={() => setActiveId(d.id)}
                     className={cn(
                       "w-full text-left px-6 py-3 transition-colors duration-fast",
-                      active?.id === d.id
-                        ? "bg-surface-muted/60"
-                        : "hover:bg-surface-muted/40"
+                      active?.id === d.id ? "bg-surface-muted/60" : "hover:bg-surface-muted/40"
                     )}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -283,10 +282,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                 ) : (
                   <div className="flex-1 flex items-center justify-center text-sm text-text-tertiary px-6 py-10 text-center">
                     <div>
-                      <Eye
-                        className="h-5 w-5 mx-auto mb-2 text-text-tertiary"
-                        strokeWidth={1.5}
-                      />
+                      <Eye className="h-5 w-5 mx-auto mb-2 text-text-tertiary" strokeWidth={1.5} />
                       Preview not available for this link type. Open in Drive instead.
                     </div>
                   </div>
@@ -328,12 +324,7 @@ function Chip({
       )}
     >
       {label}
-      <span
-        className={cn(
-          "tabular-nums",
-          active ? "text-white/70" : "text-text-tertiary"
-        )}
-      >
+      <span className={cn("tabular-nums", active ? "text-white/70" : "text-text-tertiary")}>
         {count}
       </span>
     </button>
@@ -351,15 +342,11 @@ function KindPill({ kind }: { kind: DocumentKind }) {
 function EmptyState({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="px-6 py-12 text-center">
-      <FileText
-        className="h-7 w-7 text-text-tertiary mx-auto mb-3"
-        strokeWidth={1.5}
-      />
-      <h4 className="font-serif text-title font-medium text-text-primary mb-1">
-        No documents yet
-      </h4>
+      <FileText className="h-7 w-7 text-text-tertiary mx-auto mb-3" strokeWidth={1.5} />
+      <h4 className="font-serif text-title font-medium text-text-primary mb-1">No documents yet</h4>
       <p className="text-sm text-text-secondary max-w-md mx-auto leading-relaxed mb-5">
-        Paste a Google Drive link for the designer drawings, Toolpath CNC files, shop drawings, architect plans, appliance specs, or permits.
+        Paste a Google Drive link for the designer drawings, Toolpath CNC files, shop drawings,
+        architect plans, appliance specs, or permits.
       </p>
       <button
         type="button"

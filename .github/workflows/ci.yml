@@ -77,6 +77,10 @@ jobs:
       # ON for the e2e job so the gated panels render under test. The Google push
       # degrades to a clean "not configured" state with no OAuth creds present.
       NEXT_PUBLIC_SCHEDULING_P6_ENABLED: "true"
+      # Project Files & Sharing (milestone #12) is flag-gated OFF in prod; turn it
+      # ON for the e2e job so the document share-link mint UI + the no-login
+      # /d/<token> view portal render under test.
+      NEXT_PUBLIC_PROJECT_FILES_ENABLED: "true"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
