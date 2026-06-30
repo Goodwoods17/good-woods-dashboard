@@ -27,6 +27,7 @@ export const JOBS_TABLE = "jobs";
 export const CONTACTS_TABLE = "contacts";
 export const DOCUMENTS_TABLE = "documents";
 export const JOB_PIECES_TABLE = "job_pieces";
+export const JOB_PIECE_PINS_TABLE = "job_piece_pins";
 export const DOCUMENT_ANNOTATIONS_TABLE = "document_annotations";
 export const FORM_TEMPLATES_TABLE = "form_templates";
 export const FORM_TEMPLATE_FIELDS_TABLE = "form_template_fields";

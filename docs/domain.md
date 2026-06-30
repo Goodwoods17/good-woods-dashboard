@@ -327,6 +327,9 @@ projected job cost`, where projected cost locks completed phases to their
 - **Pin** — a piece's marker placed on a drawing at a normalized (0–1) point on a specific
   `(document, page)`; carries the piece's `R#C#` code and a status badge. The drawing-side half
   of the pin↔checklist pair. A piece may have **no pin** (e.g. Mozaik-seeded before placement).
+  As of ADR 0023 a pin is a **located reference** and a piece may carry **many** (a plan, an
+  elevation, a section/detail — its `role`), with exactly one **primary** pin standing in for the
+  legacy single-pin behaviour (checklist marker, jump-to-it target). Stored in `job_piece_pins`.
 - **Markup / annotation** — ink, highlighter, shape/arrow, or typed text note drawn on a
   document page (or a sketch). Stored as vector data in normalized (0–1) coordinates.
 - **Document** — any per-project file or link reference (uploaded PDF, uploaded image,
