@@ -719,6 +719,48 @@ async function seedS5bFormShareToken(token) {
   console.log("OK seeded S5b form share link (share_tokens only — read-cut proof)");
 }
 
+// ─── Project Files S11 (issue #225) — designer UPLOAD portal (writing token) ──
+// A no-login document_request token anchored on the DEMO JOB (not a document —
+// uploads land in the job) with a two-item "request these files" checklist, plus
+// a revoked twin so the e2e proves a revoked write-token is rejected. The portal
+// + the /api/documents/portal/<token>/upload write route are feature-flagged
+// behind NEXT_PUBLIC_PROJECT_FILES_ENABLED (on in CI, dormant in prod).
+const S11_REQUEST_TOKEN = "e2edocrequestactive00000000000000000ab";
+const S11_REQUEST_REVOKED_TOKEN = "e2edocrequestrevoked000000000000000cd";
+const S11_SHARE_TOKENS = [
+  {
+    id: "52710000-0000-4000-8000-000000000001",
+    capability_type: "document_request",
+    job_id: "job-status-demo",
+    token: S11_REQUEST_TOKEN,
+    recipient_name: "E2E Designer",
+    viewed_at: null,
+    revoked_at: null,
+    expires_at: null,
+    view_count: 0,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+    state: { requestedFiles: ["Sink elevation", "Hinge schedule"], submissions: [] },
+  },
+  {
+    id: "52710000-0000-4000-8000-000000000002",
+    capability_type: "document_request",
+    job_id: "job-status-demo",
+    token: S11_REQUEST_REVOKED_TOKEN,
+    recipient_name: "E2E Designer (revoked)",
+    viewed_at: null,
+    revoked_at: "2026-06-28T00:00:00Z",
+    expires_at: null,
+    view_count: 0,
+    created_by: "claude-smoke-test@spacecraftjoinery.local",
+    state: { requestedFiles: ["Sink elevation"], submissions: [] },
+  },
+];
+
+async function seedS11DocumentRequest(token) {
+  for (const row of S11_SHARE_TOKENS) await upsert(token, "share_tokens", row);
+  console.log("OK seeded S11 designer upload portal fixtures (document_request tokens)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -734,6 +776,7 @@ async function seedJob() {
   await seedS2DocumentShares(token);
   await seedS4PortalFile();
   await seedS5bFormShareToken(token);
+  await seedS11DocumentRequest(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

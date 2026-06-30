@@ -1,5 +1,10 @@
 import { loadDocumentPortal } from "@features/documents/lib/documentShareServer";
+import {
+  loadDocumentRequestPortal,
+  resolveCapabilityType,
+} from "@features/documents/lib/documentRequestServer";
 import { DocumentPortalView } from "@features/documents/components/DocumentPortalView";
+import { DocumentRequestPortalView } from "@features/documents/components/DocumentRequestPortalView";
 import { DocumentPortalInactive } from "@features/documents/components/DocumentPortalInactive";
 import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
 
@@ -15,9 +20,23 @@ export const fetchCache = "force-no-store";
 // render it. A missing / revoked / expired token shows a clean inactive state,
 // never data. Gated by NEXT_PUBLIC_PROJECT_FILES_ENABLED — when off the route
 // renders the inactive state so prod stays dormant until the owner flips the flag.
+// The /d/<token> namespace is shared across both document capability types — a
+// no-login VIEW (document_view, S2) and a no-login UPLOAD (document_request, S11).
+// Tokens are globally unique, so we resolve the row's capability_type first and
+// dispatch; a foreign / unknown token resolves to null → clean inactive state.
 export default async function DocumentPortalPage({ params }: { params: { token: string } }) {
   if (!projectFilesEnabled()) {
     return <DocumentPortalInactive reason="not_found" />;
+  }
+
+  const capabilityType = await resolveCapabilityType(params.token);
+
+  if (capabilityType === "document_request") {
+    const upload = await loadDocumentRequestPortal(params.token);
+    if (!upload.ok) {
+      return <DocumentPortalInactive reason={upload.reason} />;
+    }
+    return <DocumentRequestPortalView token={params.token} bundle={upload.bundle} />;
   }
 
   const result = await loadDocumentPortal(params.token);

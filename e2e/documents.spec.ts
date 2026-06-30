@@ -1,4 +1,9 @@
 import { test, expect, type Page } from "@playwright/test";
+import { createClient } from "@supabase/supabase-js";
+import ws from "ws";
+
+// The CI runner is Node 20, which ships no global WebSocket (supabase-js realtime).
+(globalThis as { WebSocket?: unknown }).WebSocket ??= ws;
 
 // Project Files & Sharing — S2 document VIEW portal (issue #213).
 //
@@ -15,6 +20,9 @@ import { test, expect, type Page } from "@playwright/test";
 const email = process.env.E2E_EMAIL;
 const password = process.env.E2E_PASSWORD;
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+// Service-role key — only the S11 upload test needs it (to verify the created
+// row + clean it up so the shared demo job's current-spec count stays pristine).
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 const DEMO_JOB_ID = "job-status-demo";
 const ACTIVE_TOKEN = "e2edocviewactive00000000000000000000ab";
@@ -359,9 +367,9 @@ test.describe("project files S7 — document revision / supersede UI", () => {
     // Rev A (is_current=false) is in the S7 seed. Find it by data-doc-id on the
     // SUPERSEDED badge — the badge is data-testid="doc-superseded-badge".
     // We locate the list item that contains the badge AND the Rev A doc row.
-    await expect(
-      page.locator(`[data-testid="doc-superseded-badge"]`).first()
-    ).toBeVisible({ timeout: 15_000 });
+    await expect(page.locator(`[data-testid="doc-superseded-badge"]`).first()).toBeVisible({
+      timeout: 15_000,
+    });
   });
 
   test("Rev B (current) has a revision history panel showing both revisions", async ({ page }) => {
@@ -393,8 +401,12 @@ test.describe("project files S7 — document revision / supersede UI", () => {
     await expect(historyPanel.getByTestId("doc-revision-item")).toHaveCount(2);
 
     // Rev A's item is marked superseded, Rev B's is marked current.
-    const revAItem = historyPanel.locator(`[data-testid="doc-revision-item"][data-doc-id="${S7_REVA_DOC_ID}"]`);
-    const revBItem = historyPanel.locator(`[data-testid="doc-revision-item"][data-doc-id="${SAFE_DOC_ID}"]`);
+    const revAItem = historyPanel.locator(
+      `[data-testid="doc-revision-item"][data-doc-id="${S7_REVA_DOC_ID}"]`
+    );
+    const revBItem = historyPanel.locator(
+      `[data-testid="doc-revision-item"][data-doc-id="${SAFE_DOC_ID}"]`
+    );
     await expect(revAItem).toBeVisible();
     await expect(revBItem).toBeVisible();
     await expect(revAItem).toHaveAttribute("data-is-current", "false");
@@ -436,10 +448,7 @@ test.describe("project files S7 — document revision / supersede UI", () => {
 // seeded Supabase environment (same guards as other S* tests).
 test.describe("project files S10 — install photos gallery", () => {
   // The "Files" tab navigation is always exercisable as long as we can log in.
-  test.skip(
-    !email || !password,
-    "needs E2E_EMAIL / E2E_PASSWORD"
-  );
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD");
 
   test("the Files tab is enabled and navigable on the job detail page", async ({ page }) => {
     await login(page);
@@ -517,11 +526,13 @@ test.describe("project files S10 — install photos gallery", () => {
       "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==",
       "base64"
     );
-    await filechooser.setFiles([{
-      name: "smoke-install.png",
-      mimeType: "image/png",
-      buffer,
-    }]);
+    await filechooser.setFiles([
+      {
+        name: "smoke-install.png",
+        mimeType: "image/png",
+        buffer,
+      },
+    ]);
 
     // After upload the form closes; the timeline should show the photo.
     const timeline = page.getByTestId("photos-timeline");
@@ -532,5 +543,158 @@ test.describe("project files S10 — install photos gallery", () => {
 
     // The "After" position label is visible in the timeline.
     await expect(page.getByTestId("position-label-after")).toBeVisible();
+  });
+});
+
+// Project Files & Sharing — S11 designer UPLOAD portal / writing token (issue #225).
+//
+// The FIRST no-login WRITE capability link. A `document_request` token anchored
+// on the demo job lets a token holder POST requested files straight into the job.
+// Every security gate is server-side (service-role only, capability-type assert,
+// revoked RE-check before the storage write, magic-byte MIME sniff, per-file size
+// + per-token quota, server-generated path with upsert:false). The portal + write
+// route are gated behind NEXT_PUBLIC_PROJECT_FILES_ENABLED (on in CI).
+//
+// scripts/seed-e2e.mjs seeds an ACTIVE + a REVOKED document_request token on the
+// demo job, each with a "request these files" checklist.
+const S11_REQUEST_TOKEN = "e2edocrequestactive00000000000000000ab";
+const S11_REQUEST_REVOKED_TOKEN = "e2edocrequestrevoked000000000000000cd";
+
+// A minimal real PDF (its %PDF header is what the server's magic-byte sniff reads).
+const PDF_BYTES = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n", "utf8");
+// A spoof: bytes are a Windows executable ("MZ"), but it will be sent labelled
+// image/png — the server must reject it on the SNIFF, not the client mime.
+const SPOOF_BYTES = Buffer.from([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+
+test.describe("project files S11 — designer upload portal (writing token)", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the no-login upload portal shows the request checklist + outstanding status", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/d/${S11_REQUEST_TOKEN}`);
+
+      const view = guestPage.getByTestId("document-request-portal-view");
+      await expect(view).toBeVisible({ timeout: 15_000 });
+      await expect(guestPage.getByTestId("portal-job-name")).toHaveText("Job Status Demo");
+
+      // The seeded two-item checklist renders.
+      await expect(guestPage.getByTestId("request-checklist-item")).toHaveCount(2);
+
+      // The upload form + file input are present.
+      await expect(guestPage.getByTestId("request-upload-form")).toBeVisible();
+      await expect(guestPage.getByTestId("request-file-input")).toBeVisible();
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("a revoked write-token is rejected — no bytes are accepted", async ({ request }) => {
+    const res = await request.post(`/api/documents/portal/${S11_REQUEST_REVOKED_TOKEN}/upload`, {
+      multipart: {
+        file: { name: "drawing.pdf", mimeType: "application/pdf", buffer: PDF_BYTES },
+      },
+    });
+    expect(res.status()).toBe(410);
+  });
+
+  test("an unknown write-token is rejected (404)", async ({ request }) => {
+    const res = await request.post(
+      `/api/documents/portal/this-token-does-not-exist-000000000000000000/upload`,
+      {
+        multipart: {
+          file: { name: "drawing.pdf", mimeType: "application/pdf", buffer: PDF_BYTES },
+        },
+      }
+    );
+    expect(res.status()).toBe(404);
+  });
+
+  test("a spoofed-MIME upload is rejected on the magic-byte sniff (415)", async ({ request }) => {
+    const res = await request.post(`/api/documents/portal/${S11_REQUEST_TOKEN}/upload`, {
+      multipart: {
+        // Client LIES: claims image/png, but the bytes are an MZ executable.
+        file: { name: "innocent.png", mimeType: "image/png", buffer: SPOOF_BYTES },
+      },
+    });
+    expect(res.status()).toBe(415);
+  });
+
+  test("an oversized upload is rejected (413)", async ({ request }) => {
+    // 26 MiB — over the 25 MiB per-file ceiling. PDF header so it passes the sniff
+    // gate IF it ever reached it; it must be rejected on size first.
+    const big = Buffer.alloc(26 * 1024 * 1024);
+    big.set([0x25, 0x50, 0x44, 0x46], 0); // %PDF
+    const res = await request.post(`/api/documents/portal/${S11_REQUEST_TOKEN}/upload`, {
+      multipart: {
+        file: { name: "huge.pdf", mimeType: "application/pdf", buffer: big },
+      },
+    });
+    expect(res.status()).toBe(413);
+  });
+
+  test("a valid upload is accepted, lands as a document on the job, and path-traversal in the filename is neutralised", async ({
+    request,
+  }) => {
+    test.skip(!serviceRoleKey, "needs SUPABASE_SERVICE_ROLE_KEY to verify + clean up");
+    const sb = createClient(supabaseUrl!, serviceRoleKey!);
+
+    // A path-traversal attempt in the CLIENT filename — the server builds the
+    // storage path itself from the token's job id, so this can never escape.
+    const res = await request.post(`/api/documents/portal/${S11_REQUEST_TOKEN}/upload`, {
+      multipart: {
+        file: { name: "../../../etc/passwd.pdf", mimeType: "application/pdf", buffer: PDF_BYTES },
+        requestIndex: "0",
+      },
+    });
+    expect(res.status()).toBe(201);
+    const body = (await res.json()) as {
+      ok: boolean;
+      submissionId: string;
+      documentId: string;
+      filename: string;
+      status: string;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.submissionId).toBeTruthy();
+    expect(body.documentId).toBeTruthy();
+    // The display filename was sanitised — no path separators survive.
+    expect(body.filename).not.toContain("/");
+    expect(body.filename).not.toContain("..");
+    // Checklist advanced off "none" now that an item is satisfied.
+    expect(["partial", "complete"]).toContain(body.status);
+
+    // The document row exists on the demo job, server-pathed (no traversal).
+    const { data: docRow } = await sb
+      .from("documents")
+      .select("id, project_id, kind, source, storage_path")
+      .eq("id", body.documentId)
+      .maybeSingle();
+    expect(docRow).toBeTruthy();
+    const doc = docRow as {
+      project_id: string;
+      kind: string;
+      source: string;
+      storage_path: string;
+    };
+    expect(doc.project_id).toBe(DEMO_JOB_ID);
+    expect(doc.source).toBe("upload");
+    expect(doc.storage_path.startsWith(`${DEMO_JOB_ID}/`)).toBe(true);
+    expect(doc.storage_path).not.toContain("..");
+
+    // ── Clean up so the shared demo job's current-spec count is left pristine
+    //    (the uploaded doc is is_current designer → would otherwise inflate S6).
+    await sb.storage.from("job-documents").remove([doc.storage_path]);
+    await sb.from("documents").delete().eq("id", body.documentId);
+    await sb
+      .from("share_tokens")
+      .update({ state: { requestedFiles: ["Sink elevation", "Hinge schedule"], submissions: [] } })
+      .eq("token", S11_REQUEST_TOKEN);
   });
 });
