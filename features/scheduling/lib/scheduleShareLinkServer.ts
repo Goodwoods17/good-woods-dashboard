@@ -1,9 +1,10 @@
 import "server-only";
-import { JOBS_TABLE, SCHEDULE_SHARE_LINKS_TABLE } from "@shared/lib/supabase";
+import { JOBS_TABLE, SHARE_TOKENS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { loadCapabilityRow } from "@shared/lib/capabilityLink";
+import { type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import type { MilestoneStage } from "@shared/lib/types";
-import { rowToScheduleShareLink, type ScheduleShareLinkRow } from "./scheduleShareLinksRowMap";
+import { shareTokenRowToScheduleShareLink } from "./scheduleShareTokenMap";
 import { buildClientScheduleView, type ClientScheduleView } from "./clientPortal";
 import type { PhaseTargetDates } from "./schedule";
 
@@ -11,9 +12,15 @@ import type { PhaseTargetDates } from "./schedule";
  * Server-only data access for the no-login /s/<token> client schedule portal
  * (S18, issue #106). Uses the SERVICE ROLE key, but every read is scoped to the
  * ONE job behind the token — the token is the capability. The public anon client
- * is never used here; the *_anon_none policy denies schedule_share_links
- * entirely. Reads SUPABASE_SERVICE_ROLE_KEY (server-only, never NEXT_PUBLIC_*),
- * so this module is only ever imported by the server route under src/app/s.
+ * is never used here; the *_anon_none policy denies share_tokens entirely.
+ * Reads SUPABASE_SERVICE_ROLE_KEY (server-only, never NEXT_PUBLIC_*), so this
+ * module is only ever imported by the server route under src/app/s.
+ *
+ * S5a (milestone #12, ADR 0022): the read is CUT to the generalized
+ * `share_tokens` registry (capability_type=schedule), scoped so a foreign-type
+ * token reads as not_found. The legacy `schedule_share_links` table is still
+ * dual-written by the owner store during the overlap, but nothing READS it here
+ * anymore — it is kept only until the S5b Forms retrofit proves the mechanics.
  *
  * It returns ONLY the client-safe computed view (buildClientScheduleView) plus a
  * job display name — the buffer, internal targets, and fever data never leave
@@ -63,16 +70,20 @@ export async function loadScheduleShareLink(
   const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  // Select-by-token → revoked check → stamp viewed_at on first view (unless the
-  // ICS feed passed stampView:false so background polls don't masquerade as a visit).
-  const res = await loadCapabilityRow<ScheduleShareLinkRow>(sb, SCHEDULE_SHARE_LINKS_TABLE, token, {
+  // Select-by-token (scoped to capability_type=schedule so a foreign-type token
+  // reads as not_found) → revoked check → stamp viewed_at on first view (unless
+  // the ICS feed passed stampView:false so background polls don't masquerade as
+  // a visit). The first-view guard inside loadCapabilityRow preserves viewed_at
+  // verbatim once stamped (S18 read-receipt semantics, unchanged by the retrofit).
+  const res = await loadCapabilityRow<ShareTokenRow>(sb, SHARE_TOKENS_TABLE, token, {
     stampView,
+    capabilityType: "schedule",
   });
-  // Schedule links never expire (no expires_at column), so the generalized
-  // "expired" reason is unreachable here; collapse it into not_found.
+  // Schedule links are minted with expires_at NULL (never expire), so the
+  // generalized "expired" reason is unreachable here; collapse it into not_found.
   if (!res.ok) return { ok: false, reason: res.reason === "expired" ? "not_found" : res.reason };
 
-  const link = rowToScheduleShareLink(res.row);
+  const link = shareTokenRowToScheduleShareLink(res.row);
 
   const { data: jobRow, error: jobErr } = await sb
     .from(JOBS_TABLE)

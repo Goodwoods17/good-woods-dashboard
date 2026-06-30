@@ -1864,3 +1864,58 @@ test.describe("scheduling slice 25 — PPC + on-time delivery scorecard (P6, gat
     await expect(panel.getByTestId("reliability-public-stat")).not.toBeVisible();
   });
 });
+
+// ─── Scheduling S5a (issue #216) — retrofit the client portal onto share_tokens ─
+// Project Files milestone #12, ADR 0022. The /s + feed.ics READS are cut from the
+// legacy `schedule_share_links` table to the generalized `share_tokens` registry
+// (capability_type=schedule, committed_date_snapshot → state). The seed plants a
+// token ONLY in share_tokens (never in the legacy table) so a green portal render
+// PROVES the read path is truly cut — not silently still reading legacy.
+const S5A_SHARETOKENS_ONLY_TOKEN = "e2eschedsharetokensonly000000000000ef";
+
+test.describe("scheduling slice 5a — retrofit portal onto share_tokens", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("a share_tokens-only schedule link renders the public portal end-to-end", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/s/${S5A_SHARETOKENS_ONLY_TOKEN}`);
+
+      const view = guestPage.getByTestId("client-schedule-view");
+      await expect(view).toBeVisible({ timeout: 15_000 });
+
+      // committedDateSnapshot was read back out of state → snapshot == live install
+      // date → "On track" (proves the state-jsonb round-trip works on the read path).
+      await expect(guestPage.getByTestId("client-status-pill")).toHaveAttribute(
+        "data-status",
+        "on_track"
+      );
+      await expect(guestPage.getByTestId("client-install-date")).toContainText("2026");
+
+      // The privacy gate still holds after the retrofit.
+      await expect(guestPage.getByText(/buffer/i)).toHaveCount(0);
+      await expect(guestPage.getByText(/fever/i)).toHaveCount(0);
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("the share_tokens-only token's ICS feed serves a valid calendar (read cut, stampView=false)", async ({
+    request,
+  }) => {
+    const res = await request.get(`/s/${S5A_SHARETOKENS_ONLY_TOKEN}/feed.ics`);
+    expect(res.status()).toBe(200);
+    expect(res.headers()["content-type"]).toContain("text/calendar");
+
+    const body = await res.text();
+    expect(body).toContain("BEGIN:VCALENDAR");
+    expect(body).toContain(`UID:${S5A_SHARETOKENS_ONLY_TOKEN}-install@`);
+    expect(body).toContain("END:VCALENDAR");
+  });
+});
