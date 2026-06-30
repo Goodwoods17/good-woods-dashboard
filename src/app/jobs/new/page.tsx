@@ -40,6 +40,8 @@ type PendingDoc = {
   label: string;
   driveUrl: string;
   version: string | null;
+  /** S7 — supersedes_id for new-job flow; always null (no prior docs to supersede). */
+  supersedesId?: string | null;
 };
 
 function digitsOnly(s: string): string {
@@ -751,6 +753,7 @@ function NewProjectDocumentsBlock({
     label: string;
     driveUrl: string;
     version: string | null;
+    supersedesId: string | null;
   }) => void;
   onRemove: (tempId: string) => void;
 }) {

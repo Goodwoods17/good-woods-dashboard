@@ -164,6 +164,7 @@ export function PinToggle({ doc }: { doc: ProjectDocument }) {
       onClick={toggle}
       data-testid="doc-pin-toggle"
       data-pinned="true"
+      data-doc-id={doc.id}
       aria-label={`Unpin "${doc.label}" from current spec`}
       aria-pressed={true}
       className={cn(
@@ -182,6 +183,7 @@ export function PinToggle({ doc }: { doc: ProjectDocument }) {
       onClick={toggle}
       data-testid="doc-pin-toggle"
       data-pinned="false"
+      data-doc-id={doc.id}
       aria-label={`Pin "${doc.label}" as current spec`}
       aria-pressed={false}
       className={cn(

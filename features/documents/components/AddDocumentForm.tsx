@@ -16,6 +16,9 @@ import { guessLabelFromUrl, parseDriveUrl } from "../lib/driveUrl";
  * version, save. Used inside DocumentsCard (JobDetail) and
  * NewProjectDocumentsBlock (/jobs/new).
  *
+ * Pass `existingDocs` to reveal the optional "Supersedes" select (S7);
+ * the selected doc's id is forwarded as `supersedesId` in the save payload.
+ *
  * Callers handle the actual save:
  *   - JobDetail: writes immediately via useDocuments().createDocument
  *   - /jobs/new: holds pending docs in local state, writes after the
@@ -23,12 +26,21 @@ import { guessLabelFromUrl, parseDriveUrl } from "../lib/driveUrl";
  */
 export function AddDocumentForm({
   defaultKind = "designer",
+  existingDocs = [],
   onSave,
   busy,
   compact,
 }: {
   defaultKind?: DocumentKind;
-  onSave: (doc: { kind: DocumentKind; label: string; driveUrl: string; version: string | null }) => void | Promise<void>;
+  /** Existing docs in this project, used to populate the Supersedes picker (S7). */
+  existingDocs?: ProjectDocument[];
+  onSave: (doc: {
+    kind: DocumentKind;
+    label: string;
+    driveUrl: string;
+    version: string | null;
+    supersedesId: string | null;
+  }) => void | Promise<void>;
   busy?: boolean;
   compact?: boolean;
 }) {
@@ -36,6 +48,7 @@ export function AddDocumentForm({
   const [kind, setKind] = useState<DocumentKind>(defaultKind);
   const [label, setLabel] = useState("");
   const [version, setVersion] = useState("");
+  const [supersedesId, setSupersedesId] = useState<string>("");
   const [labelTouched, setLabelTouched] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -55,6 +68,7 @@ export function AddDocumentForm({
     setKind(defaultKind);
     setLabel("");
     setVersion("");
+    setSupersedesId("");
     setLabelTouched(false);
     setErr(null);
   }
@@ -69,6 +83,7 @@ export function AddDocumentForm({
         label: label.trim(),
         driveUrl: url.trim(),
         version: version.trim() || null,
+        supersedesId: supersedesId || null,
       });
       reset();
     } catch (caught) {
@@ -103,7 +118,7 @@ export function AddDocumentForm({
         )}
         {parsed && parsed.kind === "folder" && (
           <p className="text-xs text-text-tertiary mt-1">
-            Folder detected. Preview won't render but the link will open in a new tab.
+            Folder detected. Preview won&apos;t render but the link will open in a new tab.
           </p>
         )}
       </div>
@@ -137,6 +152,35 @@ export function AddDocumentForm({
           />
         </div>
       </div>
+
+      {/* S7 — Supersedes picker: shown only when there are existing docs to link to. */}
+      {existingDocs.length > 0 && (
+        <div>
+          <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1.5">
+            Supersedes (optional)
+          </label>
+          <select
+            value={supersedesId}
+            onChange={(e) => setSupersedesId(e.target.value)}
+            data-testid="doc-supersedes-select"
+            className="w-full text-sm bg-white border border-border rounded-md px-3 py-2 text-text-primary focus:outline-none focus:border-border-strong focus:ring-2 focus:ring-accent-soft transition-colors duration-fast"
+          >
+            <option value="">None — this is an independent document</option>
+            {existingDocs.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.label}
+                {d.version ? ` (${d.version})` : ""}
+                {!d.isCurrent ? " — superseded" : ""}
+              </option>
+            ))}
+          </select>
+          {supersedesId && (
+            <p className="text-xs text-text-tertiary mt-1">
+              The selected document will be marked as superseded when this one is saved.
+            </p>
+          )}
+        </div>
+      )}
 
       <div>
         <label className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1.5">

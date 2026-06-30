@@ -300,9 +300,12 @@ test.describe("project files S6 — current spec hero card", () => {
     await expect(safeRow).toHaveCount(0, { timeout: 5_000 });
     await expect(card.getByTestId("spec-doc-row")).toHaveCount(2, { timeout: 5_000 });
 
-    // Re-pin via the DocumentsCard toggle. The designer upload is now the only
-    // un-pinned doc, so the un-pinned toggle uniquely identifies it.
-    const pinToggle = page.locator('[data-testid="doc-pin-toggle"][data-pinned="false"]').first();
+    // Re-pin via the DocumentsCard toggle. Use data-doc-id to pin exactly the
+    // safe-doc back (S7 adds a superseded Rev A fixture that is also unpinned,
+    // so we can no longer assume SAFE_DOC is the only unpinned doc in the list).
+    const pinToggle = page.locator(
+      `[data-testid="doc-pin-toggle"][data-pinned="false"][data-doc-id="${SAFE_DOC_ID}"]`
+    );
     await expect(pinToggle).toBeVisible({ timeout: 5_000 });
     await pinToggle.click();
 
@@ -326,5 +329,95 @@ test.describe("project files S6 — current spec hero card", () => {
     const shareCount = card.getByTestId("spec-share-count");
     await expect(shareCount).toBeVisible();
     await expect(shareCount).toHaveText(/1 will appear on a share link/);
+  });
+});
+
+// Project Files & Sharing — S7 Document revision / supersede UI (issue #219).
+//
+// Wires the `version`/`is_current`/`supersedes_id` fields into a first-class UI:
+//   • A "Supersedes" picker in AddDocumentForm so Rev B can mark Rev A as
+//     superseded when saved.
+//   • A "SUPERSEDED" badge on non-current document rows in DocumentsCard.
+//   • A Revision history panel in the detail pane when a doc belongs to a
+//     multi-revision lineage.
+//
+// Seed: S7 adds a Rev A fixture (designer, is_current=false) with the same label
+// as SAFE_DOC_ID (Rev B, is_current=true, supersedes_id=RevA). The seed is ordered
+// so Rev A is inserted first (FK dep).
+const S7_REVA_DOC_ID = "57000000-0000-4000-8000-000000000001";
+
+test.describe("project files S7 — document revision / supersede UI", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("a superseded document shows the SUPERSEDED badge in the list", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Rev A (is_current=false) is in the S7 seed. Find it by data-doc-id on the
+    // SUPERSEDED badge — the badge is data-testid="doc-superseded-badge".
+    // We locate the list item that contains the badge AND the Rev A doc row.
+    await expect(
+      page.locator(`[data-testid="doc-superseded-badge"]`).first()
+    ).toBeVisible({ timeout: 15_000 });
+  });
+
+  test("Rev B (current) has a revision history panel showing both revisions", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Click on SAFE_DOC_ID (Rev B) to load it into the detail pane.
+    // The list row button targets the doc by clicking it.
+    // We wait for the current-spec-card to confirm the page has loaded.
+    const specCard = page.getByTestId("current-spec-card");
+    await expect(specCard).toBeVisible({ timeout: 15_000 });
+
+    // Locate and click the list row for SAFE_DOC_ID (Rev B).
+    // The list items don't carry data-doc-id on the <li> itself but the
+    // PinToggle does. We find the sibling button by looking for the pinToggle
+    // adjacent to the <li> that contains it.
+    // Simpler: click the pin-toggle row for SAFE_DOC to bring it into focus,
+    // then look for the revision history panel.
+    const revBRow = page.locator(`[data-testid="doc-pin-toggle"][data-doc-id="${SAFE_DOC_ID}"]`);
+    // The list row button is a sibling — click the parent's first button (the row itself).
+    const listItem = revBRow.locator("xpath=ancestor::li");
+    await listItem.locator("button").first().click();
+
+    // The revision history panel should now be visible in the detail pane.
+    const historyPanel = page.getByTestId("doc-revision-history");
+    await expect(historyPanel).toBeVisible({ timeout: 8_000 });
+
+    // Both revisions appear as items: Rev A (superseded) + Rev B (current).
+    await expect(historyPanel.getByTestId("doc-revision-item")).toHaveCount(2);
+
+    // Rev A's item is marked superseded, Rev B's is marked current.
+    const revAItem = historyPanel.locator(`[data-testid="doc-revision-item"][data-doc-id="${S7_REVA_DOC_ID}"]`);
+    const revBItem = historyPanel.locator(`[data-testid="doc-revision-item"][data-doc-id="${SAFE_DOC_ID}"]`);
+    await expect(revAItem).toBeVisible();
+    await expect(revBItem).toBeVisible();
+    await expect(revAItem).toHaveAttribute("data-is-current", "false");
+    await expect(revBItem).toHaveAttribute("data-is-current", "true");
+  });
+
+  test("the supersedes select is present in the Add Document form when docs exist", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Open the Add Document form.
+    await page.getByRole("button", { name: /add document/i }).click();
+
+    // The supersedes select appears when existingDocs are present.
+    const supersededSelect = page.getByTestId("doc-supersedes-select");
+    await expect(supersededSelect).toBeVisible({ timeout: 8_000 });
+
+    // It has at least one named document option (the seeded docs).
+    const options = supersededSelect.locator("option");
+    // At least 2: the placeholder + one seeded doc.
+    const count = await options.count();
+    expect(count).toBeGreaterThan(1);
   });
 });

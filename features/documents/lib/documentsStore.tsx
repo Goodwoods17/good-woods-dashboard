@@ -35,6 +35,12 @@ type DocumentsContextValue = {
   createDocument: (doc: ProjectDocument) => Promise<void>;
   updateDocument: (id: string, patch: Partial<ProjectDocument>) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
+  /**
+   * S7 — marks `newDocId` as the successor revision of `supersededId`.
+   * Sets `supersedes_id` on the new doc and flips `is_current=false` on the
+   * old doc. Optimistic — rolls back both on error.
+   */
+  supersedeDocument: (newDocId: string, supersededId: string) => Promise<void>;
 };
 
 const DocumentsContext = createContext<DocumentsContextValue | null>(null);
@@ -194,6 +200,42 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
     [backend]
   );
 
+  const supersedeDocument = useCallback(
+    async (newDocId: string, supersededId: string) => {
+      const previous = docsRef.current;
+      // Optimistic: wire the lineage link + flip current off the old doc.
+      setDocuments((prev) =>
+        prev.map((d) => {
+          if (d.id === newDocId) return { ...d, supersedesId: supersededId };
+          if (d.id === supersededId) return { ...d, isCurrent: false };
+          return d;
+        })
+      );
+      if (backend !== "supabase") return;
+      try {
+        const sb = getSupabase();
+        const { error: e1 } = await sb
+          .from(DOCUMENTS_TABLE)
+          .update({ supersedes_id: supersededId })
+          .eq("id", newDocId);
+        if (e1) throw e1;
+
+        const { error: e2 } = await sb
+          .from(DOCUMENTS_TABLE)
+          .update({ is_current: false })
+          .eq("id", supersededId);
+        if (e2) throw e2;
+
+        setError(null);
+      } catch (e) {
+        setError(formatError(e));
+        setDocuments(previous);
+        throw e;
+      }
+    },
+    [backend]
+  );
+
   const value: DocumentsContextValue = {
     documents,
     loading,
@@ -203,6 +245,7 @@ export function DocumentsProvider({ children }: { children: ReactNode }) {
     createDocument,
     updateDocument,
     deleteDocument,
+    supersedeDocument,
   };
 
   return (

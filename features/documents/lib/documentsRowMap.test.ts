@@ -7,6 +7,7 @@ const uploadRow: DocumentRow = {
   drive_url: null, version: "R2", is_current: true, notes: null,
   uploaded_by: null, created_at: "2026-06-23T00:00:00Z",
   source: "upload", storage_path: "j1/d1.pdf", mime: "application/pdf", page_count: 3,
+  supersedes_id: null,
 };
 
 describe("documentsRowMap", () => {
@@ -17,11 +18,19 @@ describe("documentsRowMap", () => {
     expect(doc.mime).toBe("application/pdf");
     expect(doc.pageCount).toBe(3);
     expect(doc.driveUrl).toBeNull();
+    expect(doc.supersedesId).toBeNull();
   });
 
   it("round-trips an upload doc back to a row", () => {
     const doc: ProjectDocument = rowToDocument(uploadRow);
     expect(documentToRow(doc)).toEqual(uploadRow);
+  });
+
+  it("round-trips a doc that supersedes another", () => {
+    const row: DocumentRow = { ...uploadRow, id: "d2", supersedes_id: "d1", version: "R3", is_current: true };
+    const doc = rowToDocument(row);
+    expect(doc.supersedesId).toBe("d1");
+    expect(documentToRow(doc).supersedes_id).toBe("d1");
   });
 
   it("defaults a link doc's new fields to null", () => {
@@ -36,5 +45,6 @@ describe("documentsRowMap", () => {
     expect(row.storage_path).toBeNull();
     expect(row.mime).toBeNull();
     expect(row.page_count).toBeNull();
+    expect(row.supersedes_id).toBeNull();
   });
 });
