@@ -29,6 +29,8 @@ const ACTIVE_TOKEN = "e2edocviewactive00000000000000000000ab";
 const REVOKED_TOKEN = "e2edocviewrevoked0000000000000000000cd";
 // The seeded client-safe doc whose bytes the watermark route stamps (S4).
 const SAFE_DOC_ID = "52d00000-0000-4000-8000-000000000001";
+// The seeded shop drawing the S12 approval-routing test routes + signs off.
+const S12_DOC_ID = "51200000-0000-4000-8000-000000000001";
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -696,5 +698,86 @@ test.describe("project files S11 — designer upload portal (writing token)", ()
       .from("share_tokens")
       .update({ state: { requestedFiles: ["Sink elevation", "Hinge schedule"], submissions: [] } })
       .eq("token", S11_REQUEST_TOKEN);
+  });
+});
+
+// Project Files & Sharing — S12 parallel approval routing (issue #226).
+//
+// A shop drawing is routed to architect + GC + PM AT ONCE; each leaves a status;
+// the doc only reads "Approved" once ALL three sign off. The owner panel +
+// `document_approvals` table are feature-flagged behind
+// NEXT_PUBLIC_PROJECT_FILES_ENABLED (on in CI, dormant in prod). The seed plants
+// a dedicated shop drawing (S12_DOC_ID, is_current=false so it stays out of the
+// S6 current-spec counts) with NO approval slots; this test resets the slots
+// (service role) so it's deterministic on retry, then drives the full
+// route → partial-approve → fully-approve flow proving the parallel gate.
+test.describe("project files S12 — parallel approval routing", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("routes to 3 reviewers and reaches Approved only after ALL sign off", async ({ page }) => {
+    test.skip(!serviceRoleKey, "needs SUPABASE_SERVICE_ROLE_KEY to reset slots deterministically");
+    const sb = createClient(supabaseUrl!, serviceRoleKey!);
+    // Reset to un-routed so the flow starts from a known empty state on retry.
+    await sb.from("document_approvals").delete().eq("document_id", S12_DOC_ID);
+
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // Select the seeded shop drawing so its detail pane (with the routing panel)
+    // renders.
+    const row = page.locator(`[data-testid="doc-list-row"][data-doc-id="${S12_DOC_ID}"]`);
+    await expect(row).toBeVisible({ timeout: 15_000 });
+    await row.click();
+
+    const panel = page.getByTestId("document-approval-panel");
+    await expect(panel).toBeVisible({ timeout: 10_000 });
+
+    // Un-routed → the route button is shown. Click it to notify all 3 at once.
+    await panel.getByTestId("approval-route-btn").click();
+
+    // Three reviewer slots appear, all pending.
+    const rows = panel.getByTestId("approval-reviewer-row");
+    await expect(rows).toHaveCount(3, { timeout: 10_000 });
+
+    const overall = panel.getByTestId("approval-overall-status");
+    await expect(overall).toHaveAttribute("data-status", "pending");
+
+    const architect = panel.locator('[data-testid="approval-reviewer-row"][data-role="architect"]');
+    const gc = panel.locator('[data-testid="approval-reviewer-row"][data-role="gc"]');
+    const pm = panel.locator('[data-testid="approval-reviewer-row"][data-role="pm"]');
+
+    // Approve architect → that slot flips, but the DOC is still pending (gate).
+    await architect.getByTestId("approval-approve").click();
+    await expect(architect).toHaveAttribute("data-status", "approved");
+    await expect(overall).toHaveAttribute("data-status", "pending");
+
+    // Approve GC → still pending; PM hasn't signed off.
+    await gc.getByTestId("approval-approve").click();
+    await expect(gc).toHaveAttribute("data-status", "approved");
+    await expect(overall).toHaveAttribute("data-status", "pending");
+
+    // Approve PM → now ALL three are in; the doc finally reads Approved.
+    await pm.getByTestId("approval-approve").click();
+    await expect(pm).toHaveAttribute("data-status", "approved");
+    await expect(overall).toHaveAttribute("data-status", "approved", { timeout: 10_000 });
+
+    // A single "needs revision" routes the doc back regardless of the others.
+    await gc.getByTestId("approval-reject").click();
+    await expect(gc).toHaveAttribute("data-status", "needs_revision");
+    await expect(overall).toHaveAttribute("data-status", "needs_revision");
+
+    // Clean up so the demo job's routing is left empty for the next run, and
+    // remove the approval-request drafts this routing enqueued onto the shared
+    // notification queue (they're pending_approval, so they never counted toward
+    // any send budget, but leaving the DB pristine avoids surprises).
+    await sb.from("document_approvals").delete().eq("document_id", S12_DOC_ID);
+    await sb
+      .from("scheduling_notifications")
+      .delete()
+      .eq("job_id", DEMO_JOB_ID)
+      .eq("kind", "approval_request");
   });
 });

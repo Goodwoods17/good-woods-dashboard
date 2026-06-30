@@ -761,6 +761,36 @@ async function seedS11DocumentRequest(token) {
   console.log("OK seeded S11 designer upload portal fixtures (document_request tokens)");
 }
 
+// ─── Project Files S12 (issue #226) — parallel approval routing ──────────────
+// A dedicated shop-drawing document on the DEMO job that the e2e routes to
+// architect + GC + PM and approves one-by-one to prove "Approved only after ALL
+// sign off". Seeded is_current=false so it stays OUT of the S6 current-spec
+// counts (which hard-assert exactly 3 is_current docs + a share count of 1). No
+// approval rows are seeded — the e2e drives the full route → approve-all flow and
+// resets the slots to empty at the start (service role) so it's deterministic on
+// retry. The panel + table are feature-flagged behind
+// NEXT_PUBLIC_PROJECT_FILES_ENABLED (on in CI, dormant in prod).
+const S12_DOC_ID = "51200000-0000-4000-8000-000000000001";
+const S12_DOC = {
+  id: S12_DOC_ID,
+  project_id: "job-status-demo",
+  kind: "shop",
+  label: "Cabinet bank shop drawings S12",
+  drive_url: null,
+  version: "R1",
+  is_current: false,
+  source: "upload",
+  storage_path: `job-status-demo/${S12_DOC_ID}.pdf`,
+  mime: "application/pdf",
+  page_count: 2,
+  supersedes_id: null,
+};
+
+async function seedS12ApprovalDoc(token) {
+  await upsert(token, "documents", S12_DOC);
+  console.log("OK seeded S12 approval-routing shop drawing (no slots — e2e routes it)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -777,6 +807,7 @@ async function seedJob() {
   await seedS4PortalFile();
   await seedS5bFormShareToken(token);
   await seedS11DocumentRequest(token);
+  await seedS12ApprovalDoc(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

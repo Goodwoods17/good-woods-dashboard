@@ -30,6 +30,7 @@ import { useJob } from "@features/jobs/lib/jobsStore";
 import { useContact } from "@features/contacts/lib/contactsStore";
 import { buildRevisionChain, hasRevisionHistory } from "../lib/documentRevision";
 import { DocumentPinsPanel } from "@features/drawings/components/DocumentPinsPanel";
+import { DocumentApprovalPanel } from "./DocumentApprovalPanel";
 
 /**
  * Documents card on JobDetail. Tagged shelf with kind-filter chips,
@@ -205,6 +206,8 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                 <li key={d.id} className="flex items-stretch">
                   <button
                     type="button"
+                    data-testid="doc-list-row"
+                    data-doc-id={d.id}
                     onClick={() => setActiveId(d.id)}
                     className={cn(
                       "flex-1 min-w-0 text-left px-6 py-3 transition-colors duration-fast",
@@ -297,6 +300,16 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                 )}
                 {/* S9 — cross-link reverse panel: pieces that have a pin on this drawing. */}
                 <DocumentPinsPanel documentId={active.id} projectId={projectId} />
+                {/* S12 — parallel approval routing (architect + GC + PM). */}
+                {projectFilesEnabled() && (
+                  <div className="w-full mt-4 -mx-6">
+                    <DocumentApprovalPanel
+                      documentId={active.id}
+                      jobId={projectId}
+                      jobName={job?.name}
+                    />
+                  </div>
+                )}
               </div>
             ) : active ? (
               <div className="h-full flex flex-col">
@@ -364,6 +377,14 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                   <div className="border-t border-[rgba(26,25,22,0.05)]">
                     <RevisionHistoryPanel chain={activeRevisionChain} activeId={active.id} />
                   </div>
+                )}
+                {/* S12 — parallel approval routing (architect + GC + PM). */}
+                {projectFilesEnabled() && (
+                  <DocumentApprovalPanel
+                    documentId={active.id}
+                    jobId={projectId}
+                    jobName={job?.name}
+                  />
                 )}
               </div>
             ) : (

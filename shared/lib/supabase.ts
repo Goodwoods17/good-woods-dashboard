@@ -29,6 +29,7 @@ export const DOCUMENTS_TABLE = "documents";
 export const JOB_PIECES_TABLE = "job_pieces";
 export const JOB_PIECE_PINS_TABLE = "job_piece_pins";
 export const DOCUMENT_ANNOTATIONS_TABLE = "document_annotations";
+export const DOCUMENT_APPROVALS_TABLE = "document_approvals";
 export const FORM_TEMPLATES_TABLE = "form_templates";
 export const FORM_TEMPLATE_FIELDS_TABLE = "form_template_fields";
 export const FORM_INSTANCES_TABLE = "form_instances";
