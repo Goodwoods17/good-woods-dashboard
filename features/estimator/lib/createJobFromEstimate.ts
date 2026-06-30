@@ -36,6 +36,11 @@ export type SchedulingInput = {
 
 type Input = {
   client: string;
+  /**
+   * The billable contact (jobs.payer_id, NOT NULL FK -> contacts). Required:
+   * the DB rejects a null payer, so "Save as Job" cannot omit it.
+   */
+  payerId: string;
   project: string;
   lines: LineItem[];
   overheadPct: number;
@@ -51,6 +56,7 @@ type Input = {
 export function createJobFromEstimate(input: Input): Job {
   const {
     client,
+    payerId,
     project,
     lines,
     overheadPct,
@@ -208,6 +214,7 @@ export function createJobFromEstimate(input: Input): Job {
     code,
     name: project.trim(),
     client: client.trim(),
+    payerId,
     address: "",
     template: "full_project",
     pipelineStatus: "sold",
