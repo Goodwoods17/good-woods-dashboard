@@ -5,6 +5,7 @@ import { UploadCloud, CheckCircle2, Circle, Phone, Mail, ShieldCheck } from "luc
 import type { DocumentRequestBundle } from "../lib/documentRequestServer";
 import { buildRequestChecklist } from "../lib/documentRequestChecklist";
 import type { DocumentRequestSubmission } from "@shared/lib/types";
+import { PortalBrand } from "@shared/components/layout/PortalBrand";
 
 /**
  * The public, no-login designer UPLOAD portal (S11, ADR 0022 · milestone #12).
@@ -110,15 +111,13 @@ export function DocumentRequestPortalView({
 
   return (
     <main
-      className="min-h-screen bg-background px-4 py-8"
+      className="min-h-screen bg-background"
       data-testid="document-request-portal-view"
     >
-      <div className="mx-auto w-full max-w-2xl">
+      <PortalBrand pageType="file-request" />
+      <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <header className="text-center">
-          <p className="text-xs uppercase tracking-[0.12em] text-text-tertiary">
-            Good Woods · File request
-          </p>
-          <h1 className="mt-2 font-serif text-2xl text-text-primary" data-testid="portal-job-name">
+          <h1 className="font-serif text-2xl text-text-primary" data-testid="portal-job-name">
             {jobName}
           </h1>
           {recipientName ? (

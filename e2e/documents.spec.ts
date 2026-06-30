@@ -781,3 +781,60 @@ test.describe("project files S12 — parallel approval routing", () => {
       .eq("kind", "approval_request");
   });
 });
+
+// Project Files & Sharing — S13 branded portal domain + PortalBrand (issue #227).
+//
+// Smoke: the shared PortalBrand header is visible on the document view portal.
+// The branded domain itself (files.goodwoods.com) is a Vercel dashboard alias —
+// not testable in the local CI runner — but the PortalBrand component that
+// provides anti-phishing legitimacy IS rendered by the existing seeded token and
+// IS verifiable here. Also verifies that the inactive state carries the brand
+// (a revoked token shows the brand bar, not a blank chrome page).
+test.describe("project files S13 — branded portal header", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the PortalBrand header is visible on the document view portal", async ({ browser }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/d/${ACTIVE_TOKEN}`);
+
+      // The branded header MUST appear before the job content (legitimacy anchor).
+      const brand = guestPage.getByTestId("portal-brand");
+      await expect(brand).toBeVisible({ timeout: 15_000 });
+
+      // "Good Woods" wordmark is present inside the brand bar.
+      await expect(brand.getByText("Good Woods")).toBeVisible();
+
+      // The document portal view still renders correctly alongside the brand.
+      await expect(guestPage.getByTestId("document-portal-view")).toBeVisible({
+        timeout: 10_000,
+      });
+    } finally {
+      await guest.close();
+    }
+  });
+
+  test("the PortalBrand header appears on an inactive (revoked) portal page", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/d/${REVOKED_TOKEN}`);
+
+      // Even a revoked/inactive state should carry the brand so the recipient
+      // knows the link came from Good Woods (not a phishing page).
+      const brand = guestPage.getByTestId("portal-brand");
+      await expect(brand).toBeVisible({ timeout: 15_000 });
+      await expect(guestPage.getByTestId("document-portal-inactive")).toBeVisible({
+        timeout: 10_000,
+      });
+    } finally {
+      await guest.close();
+    }
+  });
+});
