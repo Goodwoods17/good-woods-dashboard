@@ -51,8 +51,12 @@ test.describe("drawings S8b — PiecePin overlay reads from pins collection", ()
     await sb.from("job_pieces").delete().eq("id", E2D_PIECE_ID);
     await sb.from("documents").delete().eq("id", E2D_DOC_ID);
 
-    // Seed the document (source:'upload' so the overlay is drawn; source:'link'
-    // disables the pin overlay in DrawingsView).
+    // Seed the document as a SKETCH — a sketch renders the blank dot-grid
+    // DrawingStage (with the pin overlay) directly, no stored file needed. An
+    // 'upload' doc with storage_path:null can never resolve a signed URL, so
+    // DrawingDoc falls through to <DrawingSkeleton/> which does NOT render the
+    // overlay (the pins) — that's why the pin button never appeared. ('link'
+    // docs also disable the pin overlay.)
     const { error: docErr } = await sb.from("documents").insert({
       id: E2D_DOC_ID,
       project_id: DEMO_JOB_ID,
@@ -69,7 +73,7 @@ test.describe("drawings S8b — PiecePin overlay reads from pins collection", ()
       notes: null,
       uploaded_by: null,
       created_at: new Date().toISOString(),
-      source: "upload",
+      source: "sketch",
       storage_path: null,
       mime: null,
       page_count: 1,
