@@ -1079,10 +1079,11 @@ test.describe("scheduling slice 16 — capacity-aware quote dates in estimator",
     await expect(page.getByText("New estimate")).toBeVisible({ timeout: 15_000 });
 
     // "Client" is now a required contact picker (jobs.payer_id is a NOT NULL
-    // FK), not a free-text field. Pick the seeded payer contact.
-    await page.getByRole("button", { name: /Who pays for this project/i }).click();
-    await page.getByPlaceholder("Type to filter").fill("E2E Test Client");
-    await page.getByRole("button", { name: "E2E Test Client", exact: true }).click();
+    // FK), not a free-text field. Open it and pick the seeded payer contact.
+    const clientPicker = page.getByTestId("estimator-client-picker");
+    await clientPicker.getByRole("button").first().click();
+    await clientPicker.getByPlaceholder("Type to filter").fill("E2E Test Client");
+    await clientPicker.getByText("E2E Test Client", { exact: true }).click();
     await page.getByLabel("Project", { exact: true }).fill("S16 Capacity Test");
 
     // The Save as Job button becomes enabled.

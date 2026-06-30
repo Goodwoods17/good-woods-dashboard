@@ -25,11 +25,13 @@ export function ProjectSection({
           <span className="block text-xs uppercase tracking-[0.06em] text-text-tertiary mb-1.5">
             Client<span className="text-accent"> *</span>
           </span>
-          <ContactCombobox
-            value={payerId}
-            onChange={onPayer}
-            placeholder="Who pays for this project"
-          />
+          <div data-testid="estimator-client-picker">
+            <ContactCombobox
+              value={payerId}
+              onChange={onPayer}
+              placeholder="Who pays for this project"
+            />
+          </div>
         </label>
         <FieldInput
           label="Project"
