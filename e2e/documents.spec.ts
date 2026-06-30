@@ -23,6 +23,9 @@ const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 // Service-role key — only the S11 upload test needs it (to verify the created
 // row + clean it up so the shared demo job's current-spec count stays pristine).
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+// Anon (publishable) key — the S14 belt-and-suspenders RLS test needs it to
+// drive a real browser-grade anon REST client and prove the deny at runtime.
+const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const DEMO_JOB_ID = "job-status-demo";
 const ACTIVE_TOKEN = "e2edocviewactive00000000000000000000ab";
@@ -835,6 +838,90 @@ test.describe("project files S13 — branded portal header", () => {
       });
     } finally {
       await guest.close();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S14 (issue #228) — RLS belt-and-suspenders on the default-deny tables.
+//
+// document_annotations / job_pieces / job_blockers previously relied on RLS
+// default-deny for the anon role (no explicit anon policy). Migration
+// 20260722000000 adds an explicit `*_anon_none` deny policy. This smoke proves
+// the runtime property against the seeded local Postgres: seed a sentinel row
+// in each table via service role (RLS-bypassing), then an UNAUTHENTICATED
+// anon-key client sees ZERO rows (deny), while service role still reads it back
+// (the legitimate server path is intact, no regression).
+// ---------------------------------------------------------------------------
+test.describe("project files S14 — anon-deny belt-and-suspenders RLS", () => {
+  test.skip(
+    !supabaseUrl || !serviceRoleKey || !anonKey,
+    "needs NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY + NEXT_PUBLIC_SUPABASE_ANON_KEY"
+  );
+
+  test("an anonymous browser client reads ZERO rows from the default-deny tables; service role still can", async () => {
+    const SENTINEL = "e2e-228-sentinel";
+
+    const sb = createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: { persistSession: false },
+    });
+
+    // Clean any leftovers from a prior failed run.
+    await sb.from("document_annotations").delete().eq("document_id", SENTINEL);
+    await sb.from("job_pieces").delete().eq("project_id", SENTINEL);
+    await sb.from("job_blockers").delete().eq("reason", SENTINEL);
+
+    // 1. Seed one sentinel row per table via service role (bypasses RLS).
+    const { error: annErr } = await sb.from("document_annotations").insert({
+      document_id: SENTINEL,
+      project_id: SENTINEL,
+      type: "ink",
+      data: { sentinel: true },
+      color: "#000000",
+    });
+    expect(annErr).toBeNull();
+
+    const { error: pieceErr } = await sb.from("job_pieces").insert({
+      project_id: SENTINEL,
+      kind: "cabinet",
+      label: "S14 sentinel piece",
+    });
+    expect(pieceErr).toBeNull();
+
+    // job_blockers.job_id FKs jobs(id); reuse the seeded demo job.
+    const { error: blockerErr } = await sb.from("job_blockers").insert({
+      job_id: DEMO_JOB_ID,
+      reason: SENTINEL,
+    });
+    expect(blockerErr).toBeNull();
+
+    try {
+      // 2. An UNAUTHENTICATED browser-grade client (anon key, never signed in).
+      const anon = createClient(supabaseUrl!, anonKey!, {
+        auth: { persistSession: false },
+      });
+
+      // 3. Every default-deny table must return zero rows for anon.
+      for (const probe of [
+        { table: "document_annotations" as const, col: "document_id" },
+        { table: "job_pieces" as const, col: "project_id" },
+        { table: "job_blockers" as const, col: "reason" },
+      ]) {
+        const { data } = await anon.from(probe.table).select("*").eq(probe.col, SENTINEL);
+        expect(data ?? []).toHaveLength(0);
+      }
+
+      // 4. Service role still reads the rows back — no regression on the server path.
+      const { data: svcAnn } = await sb
+        .from("document_annotations")
+        .select("id")
+        .eq("document_id", SENTINEL);
+      expect((svcAnn ?? []).length).toBeGreaterThan(0);
+    } finally {
+      // 5. Clean up the sentinel rows.
+      await sb.from("document_annotations").delete().eq("document_id", SENTINEL);
+      await sb.from("job_pieces").delete().eq("project_id", SENTINEL);
+      await sb.from("job_blockers").delete().eq("reason", SENTINEL);
     }
   });
 });
