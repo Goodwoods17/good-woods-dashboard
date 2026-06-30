@@ -360,6 +360,33 @@ export type JobPiece = {
   visibility?: string;
 };
 
+/**
+ * The role a located pin plays on its sheet. A real cabinet appears on several
+ * drawing sheets (a plan, an elevation, a section/detail); `role` records which.
+ * Validated in TS (not a DB CHECK) so the vocabulary can evolve without a
+ * migration — mirrors the `job_pieces.status` posture.
+ */
+export type PinRole = "plan" | "elevation" | "section" | "detail" | "other";
+
+/**
+ * ADR 0023: a single located reference from a piece to a (document, page) at a
+ * normalized (0–1) point — N per piece, exactly one `isPrimary`. Promotes the
+ * embedded `JobPiece.pin_*` fields (dropped in S8c). The primary pin preserves
+ * every current single-pin behaviour (checklist marker, jump-to-it target).
+ */
+export type JobPiecePin = {
+  id: string;
+  jobPieceId: string;
+  documentId: string;
+  page?: number | null;
+  x?: number | null;
+  y?: number | null;
+  role?: PinRole | null;
+  isPrimary: boolean;
+  createdAt: string;
+  createdBy?: string | null;
+};
+
 export type AnnotationType = "ink" | "highlight" | "shape" | "text";
 
 /** Ink/highlight payload: normalized input points [x, y, pressure]. */
