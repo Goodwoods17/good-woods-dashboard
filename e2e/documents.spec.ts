@@ -421,3 +421,116 @@ test.describe("project files S7 — document revision / supersede UI", () => {
     expect(count).toBeGreaterThan(1);
   });
 });
+
+// Project Files & Sharing — S10 Install photos gallery (issue #224).
+//
+// Activates the previously-disabled "Files" tab on the job detail page. Photos
+// (kind:photo, source:upload) are stored in the existing `job-documents` bucket.
+// Photos are displayed in a milestone-tagged before/after timeline; clicking a
+// photo opens an issue-annotation lightbox.
+//
+// These tests exercise the tab navigation and UI shell without requiring
+// Supabase storage — they verify the tab is enabled, the empty state renders,
+// and the upload form (milestone + position pickers, upload button) is present.
+// The full upload smoke (upload → tagged → appears in timeline) requires a
+// seeded Supabase environment (same guards as other S* tests).
+test.describe("project files S10 — install photos gallery", () => {
+  // The "Files" tab navigation is always exercisable as long as we can log in.
+  test.skip(
+    !email || !password,
+    "needs E2E_EMAIL / E2E_PASSWORD"
+  );
+
+  test("the Files tab is enabled and navigable on the job detail page", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // The Files tab must be present and clickable (no longer disabled).
+    const filesTab = page.getByRole("button", { name: /^files$/i });
+    await expect(filesTab).toBeVisible({ timeout: 15_000 });
+    await expect(filesTab).not.toBeDisabled();
+
+    // Clicking it loads the install photos tab.
+    await filesTab.click();
+    const photosTab = page.getByTestId("install-photos-tab");
+    await expect(photosTab).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("the empty state renders with an upload call-to-action", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^files$/i }).click();
+
+    // If no photos exist, the empty state shows; otherwise the timeline shows.
+    // Either way, the "Add photo" button is present.
+    const addBtn = page.getByTestId("photo-toggle-upload");
+    await expect(addBtn).toBeVisible({ timeout: 8_000 });
+  });
+
+  test("the upload form shows milestone and position pickers", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^files$/i }).click();
+    await page.getByTestId("photo-toggle-upload").click();
+
+    const uploadRow = page.getByTestId("photo-upload-row");
+    await expect(uploadRow).toBeVisible({ timeout: 8_000 });
+
+    // Milestone select with at least the Install option.
+    const milestoneSelect = page.locator("#photo-milestone");
+    await expect(milestoneSelect).toBeVisible();
+    await expect(milestoneSelect.locator("option[value='install']")).toHaveCount(1);
+
+    // Before and after position toggles.
+    await expect(page.getByTestId("photo-position-before")).toBeVisible();
+    await expect(page.getByTestId("photo-position-after")).toBeVisible();
+
+    // Upload button is present.
+    await expect(page.getByTestId("photo-upload-btn")).toBeVisible();
+  });
+
+  test("upload an install photo — tagged to milestone — appears in timeline", async ({ page }) => {
+    test.skip(!supabaseUrl, "needs a seeded Supabase");
+
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    await page.getByRole("button", { name: /^files$/i }).click();
+
+    // Open the upload form.
+    await page.getByTestId("photo-toggle-upload").click();
+    await expect(page.getByTestId("photo-upload-row")).toBeVisible({ timeout: 8_000 });
+
+    // Select "Install" + "After".
+    await page.locator("#photo-milestone").selectOption("install");
+    await page.getByTestId("photo-position-after").click();
+
+    // Upload a tiny 1×1 white PNG via file-chooser.
+    const [filechooser] = await Promise.all([
+      page.waitForEvent("filechooser"),
+      page.getByTestId("photo-upload-btn").click(),
+    ]);
+    // 1×1 white PNG (67 bytes base64-decoded).
+    const buffer = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwADhQGAWjR9awAAAABJRU5ErkJggg==",
+      "base64"
+    );
+    await filechooser.setFiles([{
+      name: "smoke-install.png",
+      mimeType: "image/png",
+      buffer,
+    }]);
+
+    // After upload the form closes; the timeline should show the photo.
+    const timeline = page.getByTestId("photos-timeline");
+    await expect(timeline).toBeVisible({ timeout: 15_000 });
+
+    // The uploaded photo thumb appears (data-doc-id not known, but a thumb exists).
+    await expect(page.getByTestId("photo-thumb").first()).toBeVisible({ timeout: 10_000 });
+
+    // The "After" position label is visible in the timeline.
+    await expect(page.getByTestId("position-label-after")).toBeVisible();
+  });
+});
