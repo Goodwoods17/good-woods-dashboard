@@ -31,6 +31,8 @@ import { removeDrawing } from "../lib/storage";
 import { usePieces, useProjectPieces } from "../lib/piecesStore";
 import { usePiecePins } from "../lib/piecePinsStore";
 import { useAnnotations, useDocAnnotations } from "../lib/annotationsStore";
+import { PiecePinPanel } from "./PiecePinPanel";
+import { isPinnedOnDocument } from "../lib/multiPinLogic";
 import { useMarkupHistory } from "../lib/useMarkupHistory";
 import { PEN_COLORS, HIGHLIGHTER_COLORS } from "../lib/strokes";
 import { nextStatus } from "../lib/pipelines";
@@ -49,7 +51,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
   // S8b: pins come from the job_piece_pins collection (ADR 0023).
-  const { pins } = usePiecePins();
+  // S9: also expose createPin/updatePin/deletePin for the multi-pin panel.
+  const { pins, createPin, updatePin, deletePin } = usePiecePins();
   const { createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -59,6 +62,9 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const [currentPage, setCurrentPage] = useState(1);
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
   const [selectedPieceId, setSelectedPieceId] = useState<string | null>(null);
+  // S9: when adding a secondary pin to an existing piece, store its id here.
+  // handlePlace checks this before falling through to the new-piece flow.
+  const [addingPinForPieceId, setAddingPinForPieceId] = useState<string | null>(null);
   const [showChecklist, setShowChecklist] = useState(true);
   const [showDots, setShowDots] = useState(true);
   const [penColor, setPenColor] = useState<string>(PEN_COLORS[0]);
@@ -75,6 +81,11 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const piecesById = useMemo(
     () => new Map(pieces.map((p) => [p.id, p])),
     [pieces]
+  );
+  // S9: lookup map for document names used by PiecePinPanel.
+  const docsById = useMemo(
+    () => new Map(docs.map((d) => [d.id, d])),
+    [docs]
   );
   const docPins = useMemo(
     () => pins.filter(
@@ -129,6 +140,7 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   function selectTool(t: Tool) {
     setActiveTool(t);
     setPendingPin(null);
+    setAddingPinForPieceId(null);
     if (t !== "select") setSelectedAnnId(null);
     setEditingText(null);
   }
@@ -149,8 +161,37 @@ export function DrawingsView({ jobId }: { jobId: string }) {
 
   function handlePlace(x: number, y: number) {
     if (activeTool !== "pin") return;
+    // S9: if we're adding a pin to an existing piece (not creating a new one),
+    // create the pin immediately — no piece-create form needed.
+    if (addingPinForPieceId && active) {
+      const target = pieces.find((p) => p.id === addingPinForPieceId);
+      if (target && !isPinnedOnDocument(pins, addingPinForPieceId, active.id)) {
+        void createPin({
+          id: newId(),
+          jobPieceId: addingPinForPieceId,
+          documentId: active.id,
+          page: currentPage,
+          x,
+          y,
+          role: null,
+          isPrimary: false,
+          createdAt: new Date().toISOString(),
+          createdBy: user?.email ?? null,
+        });
+      }
+      setAddingPinForPieceId(null);
+      setActiveTool("pan");
+      return;
+    }
     setPendingPin({ x, y });
     setActiveTool("pan");
+  }
+
+  // S9: arms the "add secondary pin" flow for an existing selected piece.
+  function handleRequestAddPin(pieceId: string) {
+    setAddingPinForPieceId(pieceId);
+    setPendingPin(null);
+    setActiveTool("pin");
   }
 
   async function handleNewSketch() {
@@ -435,6 +476,16 @@ export function DrawingsView({ jobId }: { jobId: string }) {
               onSelect={(p) => setSelectedPieceId(p.id)} onAdvance={handleAdvance}
               onSetStatus={handleSetStatus} onSetCutMethod={handleSetCutMethod}
               onDelete={handleDeletePiece} />
+            {/* S9: per-piece pin management panel when a piece is selected */}
+            {selectedPieceId && active && (
+              <PiecePinPanel
+                pieceId={selectedPieceId}
+                activeDocId={active.id}
+                activeDocIsLink={active.source === "link"}
+                docsById={docsById}
+                onRequestAddPin={() => handleRequestAddPin(selectedPieceId)}
+              />
+            )}
           </aside>
         )}
       </div>
