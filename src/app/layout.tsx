@@ -9,6 +9,7 @@ import { JobBlockersProvider } from "@features/jobs/lib/jobBlockersStore";
 import { ContactsProvider } from "@features/contacts/lib/contactsStore";
 import { DocumentsProvider } from "@features/documents/lib/documentsStore";
 import { PiecesProvider } from "@features/drawings/lib/piecesStore";
+import { PiecePinsProvider } from "@features/drawings/lib/piecePinsStore";
 import { AnnotationsProvider } from "@features/drawings/lib/annotationsStore";
 import { CatalogProvider } from "@features/catalog/lib/catalogStore";
 import { WorkCardsProvider } from "@features/shop/lib/workCardsStore";
@@ -65,13 +66,15 @@ export default function RootLayout({
                                 <JobTradesProvider>
                                   <PartnerPeopleProvider>
                                     <PiecesProvider>
-                                      <AnnotationsProvider>
-                                        <FormTemplatesProvider>
-                                          <FormInstancesProvider>
-                                            <AppShell>{children}</AppShell>
-                                          </FormInstancesProvider>
-                                        </FormTemplatesProvider>
-                                      </AnnotationsProvider>
+                                      <PiecePinsProvider>
+                                        <AnnotationsProvider>
+                                          <FormTemplatesProvider>
+                                            <FormInstancesProvider>
+                                              <AppShell>{children}</AppShell>
+                                            </FormInstancesProvider>
+                                          </FormTemplatesProvider>
+                                        </AnnotationsProvider>
+                                      </PiecePinsProvider>
                                     </PiecesProvider>
                                   </PartnerPeopleProvider>
                                 </JobTradesProvider>

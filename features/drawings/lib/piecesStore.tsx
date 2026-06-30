@@ -3,12 +3,15 @@
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
 } from "react";
-import { JOB_PIECES_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
-import type { JobPiece } from "@shared/lib/types";
-import { rowToPiece, pieceToRow, type PieceRow } from "./piecesRowMap";
+import { JOB_PIECES_TABLE, JOB_PIECE_PINS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
+import type { JobPiece, JobPiecePin } from "@shared/lib/types";
+import { rowToPiece, pieceToRow, partialPieceToRow, type PieceRow } from "./piecesRowMap";
+import { pinToRow } from "./piecePinsRowMap";
 import { optimistic } from "@shared/lib/optimistic";
 
 const STORAGE_KEY = "gw_job_pieces_v1";
+// S8b: pins also have a localStorage key for the combined-rollback path.
+const PINS_STORAGE_KEY = "gw_job_piece_pins_v1";
 type Backend = "supabase" | "localStorage";
 
 type PiecesContextValue = {
@@ -20,6 +23,12 @@ type PiecesContextValue = {
 };
 
 const PiecesContext = createContext<PiecesContextValue | null>(null);
+
+function newPinId(): string {
+  return typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `pin_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
+}
 
 function localLoad(): JobPiece[] {
   if (typeof window === "undefined") return [];
@@ -33,6 +42,20 @@ function localLoad(): JobPiece[] {
 function localSave(pieces: JobPiece[]) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(pieces));
+}
+
+function localLoadPins(): JobPiecePin[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(PINS_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as JobPiecePin[]) : [];
+  } catch {
+    return [];
+  }
+}
+function localSavePins(pins: JobPiecePin[]) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PINS_STORAGE_KEY, JSON.stringify(pins));
 }
 
 export function PiecesProvider({ children }: { children: ReactNode }) {
@@ -109,15 +132,49 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   }, [backend]);
 
   const createPiece = useCallback(async (p: JobPiece) => {
+    // S8b: if pin location is present in the JobPiece (passed from DrawingsView
+    // handleCreate), extract it as a primary pin row for job_piece_pins. The pin
+    // fields are NOT written to job_pieces — pieceToRow no longer includes them.
+    const primaryPin: JobPiecePin | null =
+      p.pinDocumentId != null && p.pinX != null && p.pinY != null
+        ? {
+            id: newPinId(),
+            jobPieceId: p.id,
+            documentId: p.pinDocumentId,
+            page: p.pinPage ?? null,
+            x: p.pinX,
+            y: p.pinY,
+            role: null,
+            isPrimary: true,
+            createdAt: p.createdAt,
+            createdBy: p.createdBy ?? null,
+          }
+        : null;
+
     await optimistic({
       ref: piecesRef,
       setState: setPieces,
       apply: (cur) => [...cur, p],
       rollback: (cur) => cur.filter((x) => x.id !== p.id),
       persist: async () => {
-        if (backend !== "supabase") return;
-        const { error } = await getSupabase().from(JOB_PIECES_TABLE).insert(pieceToRow(p));
-        if (error) throw error;
+        if (backend !== "supabase") {
+          // localStorage path: save pin to the pins localStorage so
+          // PiecePinsProvider's localLoad picks it up.
+          if (primaryPin) localSavePins([...localLoadPins(), primaryPin]);
+          return;
+        }
+        const sb = getSupabase();
+        // Insert piece — pieceToRow no longer includes pin_* columns (S8b).
+        const { error: pe } = await sb.from(JOB_PIECES_TABLE).insert(pieceToRow(p));
+        if (pe) throw pe;
+        if (!primaryPin) return;
+        // Atomic create: insert primary pin. On failure roll back the piece insert
+        // (combined rollback — no cross-table Postgres transaction from the client).
+        const { error: pinErr } = await sb.from(JOB_PIECE_PINS_TABLE).insert(pinToRow(primaryPin));
+        if (pinErr) {
+          await sb.from(JOB_PIECES_TABLE).delete().eq("id", p.id);
+          throw pinErr;
+        }
       },
     });
   }, [backend]);
@@ -133,7 +190,12 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
       rollback: (cur) => cur.map((x) => (x.id === id ? prev : x)),
       persist: async () => {
         if (backend !== "supabase") return;
-        const { error } = await getSupabase().from(JOB_PIECES_TABLE).update(pieceToRow(merged)).eq("id", id);
+        // Narrow update: only send the columns that changed — pin_* are never
+        // included (they live in job_piece_pins after S8b).
+        const { error } = await getSupabase()
+          .from(JOB_PIECES_TABLE)
+          .update(partialPieceToRow(patch))
+          .eq("id", id);
         if (error) throw error;
       },
     });
