@@ -22,9 +22,9 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const DEMO_JOB_ID = "job-status-demo";
 
 // Stable fixture IDs for this spec (hex 8-4-4-4-12, namespace e2d8 = "e2e drawings").
-const E2D_DOC_ID   = "e2d80000-0000-4000-8000-000000000001";
+const E2D_DOC_ID = "e2d80000-0000-4000-8000-000000000001";
 const E2D_PIECE_ID = "e2d80000-0000-4000-8000-000000000002";
-const E2D_PIN_ID   = "e2d80000-0000-4000-8000-000000000003";
+const E2D_PIN_ID = "e2d80000-0000-4000-8000-000000000003";
 
 async function login(page: Page) {
   await page.goto("/login");
@@ -60,7 +60,12 @@ test.describe("drawings S8b — PiecePin overlay reads from pins collection", ()
       label: "S8b Test Drawing",
       drive_url: null,
       version: null,
-      is_current: true,
+      // is_current:false on purpose — this fixture lives on the SHARED
+      // job-status-demo job, and a current + uploaded + client-safe-kind ("shop")
+      // doc would leak into documents.spec.ts's S6 current-spec-card counts. The
+      // drawings overlay reads docs by project_id only (not is_current), so this
+      // still renders in the sidebar.
+      is_current: false,
       notes: null,
       uploaded_by: null,
       created_at: new Date().toISOString(),
@@ -122,15 +127,18 @@ test.describe("drawings S8b — PiecePin overlay reads from pins collection", ()
       timeout: 15_000,
     });
 
-    // The test document appears in the sidebar and becomes active.
-    const docButton = page.getByRole("button", { name: "S8b Test Drawing" });
+    // The test document appears in the sidebar and becomes active. Anchor the
+    // name at the start so it matches ONLY the doc-select button ("S8b Test
+    // Drawing Shop") and not the row's "Delete S8b Test Drawing" button.
+    const docButton = page.getByRole("button", { name: /^S8b Test Drawing/ });
     await expect(docButton).toBeVisible({ timeout: 10_000 });
     await docButton.click();
 
-    // The PiecePin button for the seeded pin should render in the overlay.
-    // The button's aria-label contains the piece code/label and status — use
-    // data-testid-free locator to avoid TYPOGRAPHIC_GLYPH pitfall (no → or —).
-    const pinButton = page.getByRole("button", { name: /S8B/i });
+    // The PiecePin button for the seeded pin should render in the overlay. Its
+    // aria-label is "S8B, not_started" — anchor on the leading code + comma so
+    // we don't also match the "S8b Test Drawing" doc/delete buttons. (No → or —
+    // in the matched text, avoiding the TYPOGRAPHIC_GLYPH pitfall.)
+    const pinButton = page.getByRole("button", { name: /^S8B,/ });
     await expect(pinButton).toBeVisible({ timeout: 10_000 });
     // Confirm position style comes from pin.x/pin.y, not piece columns:
     // left should be ~50% (x=0.5) and top ~25% (y=0.25).
