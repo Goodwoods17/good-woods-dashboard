@@ -106,12 +106,15 @@ test.describe("drawings S8b — PiecePin overlay reads from pins collection", ()
     });
     expect(pieceErr).toBeNull();
 
-    // Seed the primary pin — position (0.5, 0.25) on page 1 of the document.
+    // Seed the primary pin — position (0.5, 0.25) on the sketch's page. A sketch
+    // is single-page and DrawingDoc reports it as page 0 (DrawingDoc.tsx:30), so
+    // in-app pins placed on a sketch get page:0. Match that here, or the overlay's
+    // `pin.page === currentPage` filter (currentPage=0 for a sketch) drops the pin.
     const { error: pinErr } = await sb.from("job_piece_pins").insert({
       id: E2D_PIN_ID,
       job_piece_id: E2D_PIECE_ID,
       document_id: E2D_DOC_ID,
-      page: 1,
+      page: 0,
       x: 0.5,
       y: 0.25,
       role: null,
