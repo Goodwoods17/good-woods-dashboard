@@ -9,6 +9,7 @@ import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
 import { SiteAccessForm } from "@features/jobs/components/SiteAccessForm";
 import { DocumentsCard } from "@features/documents/components/DocumentsCard";
+import { CurrentSpecCard } from "@features/documents/components/CurrentSpecCard";
 import { TradesCard } from "@features/partners/components/TradesCard";
 import { ScheduleHealthWidget } from "@features/scheduling/components/ScheduleHealthWidget";
 import { formatCAD, formatDate } from "@shared/lib/format";
@@ -100,6 +101,9 @@ export function OverviewTab({ job }: { job: Job }) {
 
   return (
     <div className="flex flex-col gap-4 max-w-6xl">
+      {/* Canonical current spec hero card — shows is_current docs + pin toggles (S6). */}
+      <CurrentSpecCard projectId={job.id} />
+
       {/* Compact schedule-health summary — only renders when SCHEDULING_ENABLED. */}
       <ScheduleHealthWidget job={job} />
 
