@@ -15,6 +15,8 @@ export type DocumentRow = {
   storage_path: string | null;
   mime: string | null;
   page_count: number | null;
+  /** S7 — revision lineage back-pointer; null = original / no link. */
+  supersedes_id: string | null;
 };
 
 export function rowToDocument(row: DocumentRow): ProjectDocument {
@@ -33,6 +35,7 @@ export function rowToDocument(row: DocumentRow): ProjectDocument {
     storagePath: row.storage_path,
     mime: row.mime,
     pageCount: row.page_count,
+    supersedesId: row.supersedes_id,
   };
 }
 
@@ -52,5 +55,6 @@ export function documentToRow(doc: ProjectDocument): DocumentRow {
     storage_path: doc.storagePath ?? null,
     mime: doc.mime ?? null,
     page_count: doc.pageCount ?? null,
+    supersedes_id: doc.supersedesId ?? null,
   };
 }

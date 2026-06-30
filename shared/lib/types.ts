@@ -316,6 +316,13 @@ export type ProjectDocument = {
   mime?: string | null;
   /** PDF page count (1 for images); null until known. */
   pageCount?: number | null;
+  /**
+   * S7 · Revision lineage back-pointer. When set, this document is the
+   * successor revision of the referenced document; the referenced doc should
+   * have `is_current=false`. Traverse the chain (newest → oldest) via
+   * `buildRevisionChain` for the full revision history.
+   */
+  supersedesId?: string | null;
 };
 
 export type PieceKind = "cabinet" | "end_panel" | "scribe" | "toe_kick" | "filler";

@@ -530,11 +530,34 @@ async function seedS18ShareLinks(token) {
 // so the e2e can prove no-login view, internal-exclusion, and revoke-kills-access
 // without depending on file bytes in Storage (a missing object just signs to a
 // null URL; the curated-set membership is what the test asserts).
+//
+// S7 adds a fourth doc — Rev A (is_current=false) — as the superseded ancestor of
+// S2_SAFE_DOC_ID (Rev B). Rev A must be inserted BEFORE Rev B so the FK is
+// satisfied. supersedes_id on Rev B points at Rev A.
 const S2_SAFE_DOC_ID = "52d00000-0000-4000-8000-000000000001";
 const S2_CNC_DOC_ID = "52d00000-0000-4000-8000-000000000002";
 const S2_DRIVE_DOC_ID = "52d00000-0000-4000-8000-000000000003";
+const S7_REVA_DOC_ID = "57000000-0000-4000-8000-000000000001";
 const S2_DOCS = [
   {
+    // S7 — Rev A: the ancestor revision (superseded). Inserted FIRST (FK dep).
+    // Explicit created_at in the past so the document list sorts Rev A below Rev B.
+    id: S7_REVA_DOC_ID,
+    project_id: "job-status-demo",
+    kind: "designer",
+    label: "Kitchen elevations",
+    drive_url: null,
+    version: "R1",
+    is_current: false,
+    source: "upload",
+    storage_path: `job-status-demo/${S7_REVA_DOC_ID}.pdf`,
+    mime: "application/pdf",
+    page_count: 3,
+    supersedes_id: null,
+    created_at: "2026-06-01T00:00:00Z",
+  },
+  {
+    // S2 / S7 — Rev B: the current revision that supersedes Rev A.
     id: S2_SAFE_DOC_ID,
     project_id: "job-status-demo",
     kind: "designer",
@@ -546,6 +569,7 @@ const S2_DOCS = [
     storage_path: `job-status-demo/${S2_SAFE_DOC_ID}.pdf`,
     mime: "application/pdf",
     page_count: 4,
+    supersedes_id: S7_REVA_DOC_ID,
   },
   {
     id: S2_CNC_DOC_ID,
@@ -559,6 +583,7 @@ const S2_DOCS = [
     storage_path: `job-status-demo/${S2_CNC_DOC_ID}.nc`,
     mime: "application/octet-stream",
     page_count: null,
+    supersedes_id: null,
   },
   {
     id: S2_DRIVE_DOC_ID,
@@ -572,6 +597,7 @@ const S2_DOCS = [
     storage_path: null,
     mime: null,
     page_count: null,
+    supersedes_id: null,
   },
 ];
 
