@@ -29,6 +29,7 @@ import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
 import { useJob } from "@features/jobs/lib/jobsStore";
 import { useContact } from "@features/contacts/lib/contactsStore";
 import { buildRevisionChain, hasRevisionHistory } from "../lib/documentRevision";
+import { DocumentPinsPanel } from "@features/drawings/components/DocumentPinsPanel";
 
 /**
  * Documents card on JobDetail. Tagged shelf with kind-filter chips,
@@ -294,6 +295,8 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                 {activeHasHistory && (
                   <RevisionHistoryPanel chain={activeRevisionChain} activeId={active.id} />
                 )}
+                {/* S9 — cross-link reverse panel: pieces that have a pin on this drawing. */}
+                <DocumentPinsPanel documentId={active.id} projectId={projectId} />
               </div>
             ) : active ? (
               <div className="h-full flex flex-col">
