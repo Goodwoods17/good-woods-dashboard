@@ -5,7 +5,7 @@ import { JOB_ITEMS_TABLE, JOB_PIECES_TABLE, getSupabase, hasSupabase } from "@sh
 import { useLiveRows } from "@shared/lib/useLiveRows";
 import type { JobPiece } from "@shared/lib/types";
 import { rowToJobItem, jobItemToInsertRow, type JobItemRow } from "./jobItemRowMap";
-import { rowToPiece, pieceToRow, type PieceRow } from "@features/drawings/lib/piecesRowMap";
+import { rowToPiece, type PieceRow } from "@features/drawings/lib/piecesRowMap";
 import { nextStatus as drawingNextStatus } from "@features/drawings/lib/pipelines";
 import { nextStatus } from "./statusCycle";
 import { recordStatusChange } from "./eventStore";
@@ -199,9 +199,15 @@ export function useJobProgress(jobId: string): UseJobProgress {
         rollback: (cur) => cur.map((x) => (x.id === id ? prev : x)),
         persist: async () => {
           if (backend !== "supabase") return;
+          // Narrow update: only touch status columns — never send pin_* which
+          // are now owned by job_piece_pins (S8b). Other piece columns are not
+          // changed by a cycle, so sending them is unnecessary.
           const { error } = await getSupabase()
             .from(JOB_PIECES_TABLE)
-            .update(pieceToRow(merged))
+            .update({
+              status: merged.status,
+              status_updated_at: merged.statusUpdatedAt ?? null,
+            })
             .eq("id", id);
           if (error) throw error;
         },

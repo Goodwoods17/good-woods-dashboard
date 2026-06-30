@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Trash2, ListChecks, SquarePen, Grid3x3 } from "lucide-react";
 import { useJob } from "@features/jobs/lib/jobsStore";
@@ -29,6 +29,7 @@ import { MarkupLayer } from "./MarkupLayer";
 import { TextNoteEditor } from "./TextNoteEditor";
 import { removeDrawing } from "../lib/storage";
 import { usePieces, useProjectPieces } from "../lib/piecesStore";
+import { usePiecePins } from "../lib/piecePinsStore";
 import { useAnnotations, useDocAnnotations } from "../lib/annotationsStore";
 import { useMarkupHistory } from "../lib/useMarkupHistory";
 import { PEN_COLORS, HIGHLIGHTER_COLORS } from "../lib/strokes";
@@ -47,6 +48,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const { user } = useAuth();
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
+  // S8b: pins come from the job_piece_pins collection (ADR 0023).
+  const { pins } = usePiecePins();
   const { createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -65,10 +68,21 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const [editingText, setEditingText] = useState<{ id?: string; x: number; y: number; value: string } | null>(null);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0] ?? null;
-  // Slice 3: pins + ink both filter by document AND current page.
-  const docPins = pieces.filter(
-    (p) => p.pinDocumentId === active?.id && p.pinX != null && (p.pinPage ?? 1) === currentPage
+
+  // S8b: pins that reference this document on the current page. One marker per
+  // pin row — the primary pin bridges the current single-pin UX. We derive the
+  // piece for each pin via a Map lookup so the render is O(pins) not O(pins×pieces).
+  const piecesById = useMemo(
+    () => new Map(pieces.map((p) => [p.id, p])),
+    [pieces]
   );
+  const docPins = useMemo(
+    () => pins.filter(
+      (pin) => pin.documentId === active?.id && (pin.page ?? 1) === currentPage
+    ),
+    [pins, active?.id, currentPage]
+  );
+
   const docAnnotations = useDocAnnotations(active?.id ?? null, currentPage);
   const selectedAnnotation = docAnnotations.find((a) => a.id === selectedAnnId) ?? null;
 
@@ -156,6 +170,9 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   async function handleCreate(d: { kind: PieceKind; label: string; code?: string; subtype?: string }) {
     if (!pendingPin || !active) return;
     const id = newId();
+    // S8b: pass pin location via the optional JobPiece.pin* fields. createPiece
+    // extracts them and inserts a primary pin row in job_piece_pins atomically —
+    // the pin fields are NOT written to the job_pieces row (pieceToRow drops them).
     await createPiece({
       id, projectId: jobId, kind: d.kind, label: d.label, code: d.code ?? null,
       subtype: d.subtype ?? null, room: null, cutMethod: null, status: "not_started",
@@ -370,10 +387,19 @@ export function DrawingsView({ jobId }: { jobId: string }) {
               onPageChange={setCurrentPage} showDots={showDots}
               overlay={
                 <>
-                  {docPins.map((p) => (
-                    <PiecePin key={p.id} piece={p} selected={selectedPieceId === p.id}
-                      onSelect={() => setSelectedPieceId(p.id)} />
-                  ))}
+                  {docPins.map((pin) => {
+                    const piece = piecesById.get(pin.jobPieceId);
+                    if (!piece) return null;
+                    return (
+                      <PiecePin
+                        key={pin.id}
+                        pin={pin}
+                        piece={piece}
+                        selected={selectedPieceId === piece.id}
+                        onSelect={() => setSelectedPieceId(piece.id)}
+                      />
+                    );
+                  })}
                   <MarkupLayer annotations={docAnnotations} activeTool={activeTool}
                     penColor={penColor} highlighterColor={highlighterColor} shapeKind={shapeKind}
                     selectedId={selectedAnnId} onSelect={setSelectedAnnId}
