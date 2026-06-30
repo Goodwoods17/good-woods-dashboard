@@ -248,3 +248,83 @@ test.describe("project files S4 — dynamic watermark on the shared view", () =>
     expect(res.status()).toBe(410);
   });
 });
+
+// Project Files & Sharing — S6 Pinned spec / canonical current-set hero card (issue #218).
+//
+// The `CurrentSpecCard` appears at the top of the job OverviewTab showing every
+// is_current document. Each row has a pin-toggle; clicking "Unpin" removes the doc
+// from the set. The DocumentsCard list also shows a "Pin / Current" toggle on every
+// row so staff can promote docs without leaving the page.
+//
+// The S2 seed marks all three demo documents `is_current=true` (the designer
+// upload SAFE_DOC_ID, the CNC toolpath, and the Drive-link concept — each its own
+// kind/label lineage), so the card renders three rows immediately on page load.
+// Needs the same seeded Supabase + e2e user as S2.
+test.describe("project files S6 — current spec hero card", () => {
+  test.skip(
+    !email || !password || !supabaseUrl,
+    "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase"
+  );
+
+  test("the CurrentSpecCard renders at the top of the OverviewTab with seeded is_current docs", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // The hero card is present (S6 — the seed marks all three demo docs is_current).
+    const card = page.getByTestId("current-spec-card");
+    await expect(card).toBeVisible({ timeout: 15_000 });
+
+    // All three seeded is_current docs are shown, including the designer upload.
+    await expect(card.getByTestId("spec-doc-row")).toHaveCount(3, { timeout: 10_000 });
+    await expect(
+      card.locator(`[data-testid="spec-doc-row"][data-doc-id="${SAFE_DOC_ID}"]`)
+    ).toBeVisible();
+  });
+
+  test("the pin toggle in DocumentsCard changes the current-spec membership", async ({ page }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    const card = page.getByTestId("current-spec-card");
+    await expect(card).toBeVisible({ timeout: 15_000 });
+
+    // Seed: all three demo docs are pinned. Scope to the designer upload row.
+    await expect(card.getByTestId("spec-doc-row")).toHaveCount(3, { timeout: 10_000 });
+    const safeRow = card.locator(`[data-testid="spec-doc-row"][data-doc-id="${SAFE_DOC_ID}"]`);
+    await expect(safeRow).toBeVisible();
+
+    // Unpin the designer upload — its row leaves the set (3 → 2); the others stay.
+    await safeRow.getByTestId("spec-doc-unpin").click();
+    await expect(safeRow).toHaveCount(0, { timeout: 5_000 });
+    await expect(card.getByTestId("spec-doc-row")).toHaveCount(2, { timeout: 5_000 });
+
+    // Re-pin via the DocumentsCard toggle. The designer upload is now the only
+    // un-pinned doc, so the un-pinned toggle uniquely identifies it.
+    const pinToggle = page.locator('[data-testid="doc-pin-toggle"][data-pinned="false"]').first();
+    await expect(pinToggle).toBeVisible({ timeout: 5_000 });
+    await pinToggle.click();
+
+    // The designer upload row reappears (2 → 3), restoring the seeded state.
+    await expect(safeRow).toHaveCount(1, { timeout: 5_000 });
+    await expect(card.getByTestId("spec-doc-row")).toHaveCount(3, { timeout: 5_000 });
+  });
+
+  test("when the PROJECT_FILES flag is on, the spec-share-count reflects client-safe docs", async ({
+    page,
+  }) => {
+    await login(page);
+    await page.goto(`/jobs/${DEMO_JOB_ID}`);
+
+    // PROJECT_FILES is enabled in e2e (CI sets NEXT_PUBLIC_PROJECT_FILES_ENABLED=true).
+    const card = page.getByTestId("current-spec-card");
+    await expect(card).toBeVisible({ timeout: 15_000 });
+
+    // The seeded designer upload is is_current, uploaded (not link), and a client-safe kind.
+    // So spec-share-count should read "1 will appear on a share link."
+    const shareCount = card.getByTestId("spec-share-count");
+    await expect(shareCount).toBeVisible();
+    await expect(shareCount).toHaveText(/1 will appear on a share link/);
+  });
+});

@@ -23,6 +23,7 @@ import { useDocuments, useProjectDocuments } from "../lib/documentsStore";
 import { parseDriveUrl } from "../lib/driveUrl";
 import { AddDocumentForm } from "./AddDocumentForm";
 import { DocumentShareSection } from "./DocumentShareSection";
+import { PinToggle } from "./CurrentSpecCard";
 import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
 import { useJob } from "@features/jobs/lib/jobsStore";
 import { useContact } from "@features/contacts/lib/contactsStore";
@@ -178,12 +179,12 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
               </li>
             ) : (
               filtered.map((d) => (
-                <li key={d.id}>
+                <li key={d.id} className="flex items-stretch">
                   <button
                     type="button"
                     onClick={() => setActiveId(d.id)}
                     className={cn(
-                      "w-full text-left px-6 py-3 transition-colors duration-fast",
+                      "flex-1 min-w-0 text-left px-6 py-3 transition-colors duration-fast",
                       active?.id === d.id ? "bg-surface-muted/60" : "hover:bg-surface-muted/40"
                     )}
                   >
@@ -221,6 +222,10 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                       )}
                     </div>
                   </button>
+                  {/* Pin toggle sits outside the row button to avoid nesting interactive elements. */}
+                  <div className="flex items-center pr-3 shrink-0">
+                    <PinToggle doc={d} />
+                  </div>
                 </li>
               ))
             )}
