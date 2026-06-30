@@ -397,8 +397,8 @@ test.describe("project files S7 — document revision / supersede UI", () => {
     const revBItem = historyPanel.locator(`[data-testid="doc-revision-item"][data-doc-id="${SAFE_DOC_ID}"]`);
     await expect(revAItem).toBeVisible();
     await expect(revBItem).toBeVisible();
-    await expect(revAItem.locator("[data-is-current='false']")).toHaveCount(1);
-    await expect(revBItem.locator("[data-is-current='true']")).toHaveCount(1);
+    await expect(revAItem).toHaveAttribute("data-is-current", "false");
+    await expect(revBItem).toHaveAttribute("data-is-current", "true");
   });
 
   test("the supersedes select is present in the Add Document form when docs exist", async ({
