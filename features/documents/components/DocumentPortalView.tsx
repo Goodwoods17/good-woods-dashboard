@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { FileText, Phone, Mail, History, ExternalLink, ShieldAlert } from "lucide-react";
 import { DOCUMENT_KIND_LABELS } from "@shared/lib/types";
+import { PortalBrand } from "@shared/components/layout/PortalBrand";
 import type { DocumentPortalBundle } from "../lib/documentShareServer";
 
 /**
@@ -47,13 +48,11 @@ export function DocumentPortalView({
   }, [token, documents.length]);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8" data-testid="document-portal-view">
-      <div className="mx-auto w-full max-w-2xl">
+    <main className="min-h-screen bg-background" data-testid="document-portal-view">
+      <PortalBrand pageType="documents" />
+      <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <header className="text-center">
-          <p className="text-xs uppercase tracking-[0.12em] text-text-tertiary">
-            Good Woods · Project documents
-          </p>
-          <h1 className="mt-2 font-serif text-2xl text-text-primary" data-testid="portal-job-name">
+          <h1 className="font-serif text-2xl text-text-primary" data-testid="portal-job-name">
             {jobName}
           </h1>
           {recipientName ? (

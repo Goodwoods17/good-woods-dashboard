@@ -3,6 +3,7 @@ import { formatDate } from "@shared/lib/format";
 import { cn } from "@shared/lib/utils";
 import type { ClientScheduleView as ClientScheduleViewModel } from "../lib/clientPortal";
 import { AddToCalendar } from "./AddToCalendar";
+import { PortalBrand } from "@shared/components/layout/PortalBrand";
 
 /**
  * The public, no-login client schedule portal (S18, issue #106). Purely
@@ -29,13 +30,11 @@ export function ClientScheduleView({
   const updated = view.status === "date_updated";
 
   return (
-    <main className="min-h-screen bg-background px-4 py-10" data-testid="client-schedule-view">
-      <div className="mx-auto w-full max-w-xl">
+    <main className="min-h-screen bg-background" data-testid="client-schedule-view">
+      <PortalBrand pageType="schedule" />
+      <div className="mx-auto w-full max-w-xl px-4 py-10">
         <header className="text-center">
-          <p className="text-xs uppercase tracking-[0.12em] text-text-tertiary">
-            Good Woods · Project schedule
-          </p>
-          <h1 className="mt-2 font-serif text-2xl text-text-primary" data-testid="client-job-name">
+          <h1 className="font-serif text-2xl text-text-primary" data-testid="client-job-name">
             {jobName}
           </h1>
           {recipientName ? (

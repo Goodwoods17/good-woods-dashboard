@@ -9,6 +9,7 @@ import type { ShareAnswerPatch, ShareAnswers } from "../lib/shareLink";
 import { missingVisibleRequiredFields } from "../lib/shareLink";
 import { isFieldVisible } from "../lib/conditionals";
 import { CompletionMeter } from "./CompletionMeter";
+import { PortalBrand } from "@shared/components/layout/PortalBrand";
 
 /**
  * The bare, no-login fill page rendered behind a /f/<token> link. Lists the
@@ -102,20 +103,7 @@ export function PublicFillView({
 
   return (
     <main className="min-h-screen bg-background">
-      {/* Branded header — 44px min touch target on mobile, full-bleed tint bar */}
-      <div className="border-b border-border bg-canvas-top px-4 py-3 sm:px-6">
-        <div className="mx-auto flex max-w-xl items-center gap-3">
-          {/* Wordmark — serif logotype matching the dashboard identity */}
-          <span
-            className="font-serif text-lg font-semibold tracking-tight text-text-primary"
-            aria-label="Good Woods"
-          >
-            Good Woods
-          </span>
-          <span className="text-border-strong">·</span>
-          <span className="text-sm text-text-tertiary">Spacecraft Joinery</span>
-        </div>
-      </div>
+      <PortalBrand pageType="form" />
 
       <div className="mx-auto w-full max-w-xl px-4 py-8 sm:py-12">
         <header className="mb-6">
