@@ -24,14 +24,17 @@ import {
   FORM_INSTANCES_TABLE,
   FORM_INSTANCE_FIELDS_TABLE,
   FORM_SHARE_LINKS_TABLE,
+  SHARE_TOKENS_TABLE,
   getSupabase,
   hasSupabase,
 } from "@shared/lib/supabase";
+import { formShareLinkToRow } from "./formShareLinksRowMap";
+import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import {
-  formShareLinkToRow,
-  rowToFormShareLink,
-  type FormShareLinkRow,
-} from "./formShareLinksRowMap";
+  formShareLinkToShareTokenRow,
+  formShareLinkToShareTokenState,
+  shareTokenRowToFormShareLink,
+} from "./formShareTokenMap";
 import { generateShareToken } from "./shareLink";
 import { stampSentAt } from "./shareLinkTracking";
 import { formatError } from "@shared/lib/formatError";
@@ -218,10 +221,20 @@ async function supabaseLoad(): Promise<{
   shareLinks: FormShareLink[];
 }> {
   const sb = getSupabase();
+  // S5b (ADR 0022): the owner's share-link READ is cut to the generalized
+  // `share_tokens` registry (capability_type=form). The store still dual-writes
+  // the legacy `form_share_links` table (mirror), but reads only this — so the
+  // status pill is driven by the same rows the public /f portal stamps. The
+  // owner store reads ONCE at mount (no realtime resync), so the public-side
+  // stamps must mirror back into share_tokens for the pill never to diverge.
   const [insRes, fldRes, linksRes] = await Promise.all([
     sb.from(FORM_INSTANCES_TABLE).select("*").order("sort_order", { ascending: true }),
     sb.from(FORM_INSTANCE_FIELDS_TABLE).select("*").order("sort_order", { ascending: true }),
-    sb.from(FORM_SHARE_LINKS_TABLE).select("*").order("created_at", { ascending: true }),
+    sb
+      .from(SHARE_TOKENS_TABLE)
+      .select("*")
+      .eq("capability_type", "form")
+      .order("created_at", { ascending: true }),
   ]);
   if (insRes.error) throw insRes.error;
   if (fldRes.error) throw fldRes.error;
@@ -229,7 +242,7 @@ async function supabaseLoad(): Promise<{
   return {
     instances: (insRes.data as FormInstanceRow[] | null)?.map(rowToFormInstance) ?? [],
     fields: (fldRes.data as FormInstanceFieldRow[] | null)?.map(rowToFormInstanceField) ?? [],
-    shareLinks: (linksRes.data as FormShareLinkRow[] | null)?.map(rowToFormShareLink) ?? [],
+    shareLinks: (linksRes.data as ShareTokenRow[] | null)?.map(shareTokenRowToFormShareLink) ?? [],
   };
 }
 
@@ -663,12 +676,19 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       setShareLinks((prev) => [...prev, link]);
       if (backend !== "supabase") return link;
       const sb = getSupabase();
-      const { error: err } = await sb.from(FORM_SHARE_LINKS_TABLE).insert(formShareLinkToRow(link));
+      // Dual-WRITE (S5b, ADR 0022): write the generalized `share_tokens` row
+      // first — that is the row the portal + owner pill now READ, so its success
+      // gates the mint. Then mirror the legacy `form_share_links` row (best-effort
+      // during the overlap; the id is shared so revoke-by-id later hits both).
+      const { error: err } = await sb
+        .from(SHARE_TOKENS_TABLE)
+        .insert(formShareLinkToShareTokenRow(link));
       if (err) {
         setError(formatError(err));
         setShareLinks((prev) => prev.filter((l) => l.id !== link.id));
         throw err;
       }
+      await sb.from(FORM_SHARE_LINKS_TABLE).insert(formShareLinkToRow(link));
       setError(null);
       return link;
     },
@@ -683,11 +703,16 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();
+        // Dual-write the revoke: the read path (`share_tokens`) first, then the
+        // legacy mirror. The id is shared across both rows, so the same logical
+        // link is stamped in each.
         const { error: err } = await sb
-          .from(FORM_SHARE_LINKS_TABLE)
+          .from(SHARE_TOKENS_TABLE)
           .update({ revoked_at: revokedAt })
-          .eq("id", linkId);
+          .eq("id", linkId)
+          .eq("capability_type", "form");
         if (err) throw err;
+        await sb.from(FORM_SHARE_LINKS_TABLE).update({ revoked_at: revokedAt }).eq("id", linkId);
         setError(null);
       } catch (e) {
         setError(formatError(e));
@@ -708,11 +733,16 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();
+        // sentAt lives in the `share_tokens` state jsonb — write the whole
+        // recomputed state (carries lockedFieldIds + recipientType + every set
+        // stamp), then mirror the legacy dedicated `sent_at` column.
         const { error: err } = await sb
-          .from(FORM_SHARE_LINKS_TABLE)
-          .update({ sent_at: stamped.sentAt })
-          .eq("id", linkId);
+          .from(SHARE_TOKENS_TABLE)
+          .update({ state: formShareLinkToShareTokenState(stamped) })
+          .eq("id", linkId)
+          .eq("capability_type", "form");
         if (err) throw err;
+        await sb.from(FORM_SHARE_LINKS_TABLE).update({ sent_at: stamped.sentAt }).eq("id", linkId);
         setError(null);
       } catch (e) {
         setError(formatError(e));
@@ -726,15 +756,26 @@ export function FormInstancesProvider({ children }: { children: ReactNode }) {
   const updateShareLinkLocks = useCallback(
     async (linkId: string, lockedFieldIds: string[]) => {
       const prev = shareLinksRef.current;
+      const target = prev.find((l) => l.id === linkId);
       setShareLinks((links) => links.map((l) => (l.id === linkId ? { ...l, lockedFieldIds } : l)));
       if (backend !== "supabase") return;
       try {
         const sb = getSupabase();
-        const { error: err } = await sb
+        // lockedFieldIds is the server-side security gate; it lives in the
+        // `share_tokens` state jsonb. Write the whole recomputed state, then
+        // mirror the legacy dedicated column.
+        if (target) {
+          const { error: err } = await sb
+            .from(SHARE_TOKENS_TABLE)
+            .update({ state: formShareLinkToShareTokenState({ ...target, lockedFieldIds }) })
+            .eq("id", linkId)
+            .eq("capability_type", "form");
+          if (err) throw err;
+        }
+        await sb
           .from(FORM_SHARE_LINKS_TABLE)
           .update({ locked_field_ids: lockedFieldIds })
           .eq("id", linkId);
-        if (err) throw err;
         setError(null);
       } catch (e) {
         setError(formatError(e));

@@ -2,7 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { EmailDeliverer } from "./sendShareLinkServer";
 
 // A tiny in-memory Supabase double: enough surface for sendShareLinkEmail's
-// select(...).eq(...).maybeSingle() reads + the update(...).eq(...) stamp.
+// select(...).eq(...).eq(...).maybeSingle() reads + the update(...).eq(...).eq(...)
+// stamp. The builder is thenable so an awaited update chain (any number of eq()
+// filters) resolves; the patch is recorded exactly once (first eq() after update).
 type Row = Record<string, unknown>;
 
 function makeFakeSupabase(opts: {
@@ -14,6 +16,7 @@ function makeFakeSupabase(opts: {
     from(table: string) {
       const builder = {
         _patch: null as Row | null,
+        _applied: false,
         select() {
           return builder;
         },
@@ -22,21 +25,24 @@ function makeFakeSupabase(opts: {
           return builder;
         },
         eq() {
-          // For an update chain, terminal eq() applies the patch.
-          if (builder._patch) {
+          if (builder._patch && !builder._applied) {
+            builder._applied = true;
             opts.onUpdate?.(table, builder._patch);
-            return Promise.resolve({ data: null, error: null });
           }
           return builder;
         },
         maybeSingle() {
+          // S5b: the link READ is cut to share_tokens (capability_type=form).
           const data =
-            table === "form_share_links"
+            table === "share_tokens"
               ? opts.link
               : table === "form_instances"
                 ? opts.instance
                 : null;
           return Promise.resolve({ data, error: null });
+        },
+        then<T>(resolve: (v: { data: null; error: null }) => T) {
+          return Promise.resolve({ data: null, error: null }).then(resolve);
         },
       };
       return builder;
@@ -52,23 +58,25 @@ vi.mock("@supabase/supabase-js", () => ({
   createClient: () => fakeState.sb,
 }));
 
+// S5b: a `share_tokens` row (capability_type=form) — the row the read path now
+// returns. recipientType / lockedFieldIds / sentAt live in the state jsonb.
 const LINK_ROW = {
   id: "l1",
-  instance_id: "i1",
+  capability_type: "form",
+  form_instance_id: "i1",
+  job_id: null,
+  document_id: null,
   token: "tok_abcdefghijklmnopqrstuvwxyz123456",
   recipient_name: "Casey Client",
-  recipient_type: "customer",
-  locked_field_ids: [],
-  sent_at: null,
   viewed_at: null,
-  started_at: null,
-  submitted_at: null,
-  progress: null,
   revoked_at: null,
-  submit_ip: null,
-  submit_user_agent: null,
+  expires_at: null,
+  view_count: 0,
+  ip: null,
+  ua: null,
   created_at: "2026-06-25T00:00:00.000Z",
   created_by: null,
+  state: { recipientType: "customer", lockedFieldIds: [] },
 };
 
 const INSTANCE_ROW = {
@@ -147,7 +155,10 @@ describe("sendShareLinkEmail", () => {
   it("does NOT re-stamp sent_at on a reminder (keeps the original sent date)", async () => {
     const updates: { table: string; patch: Record<string, unknown> }[] = [];
     fakeState.sb = makeFakeSupabase({
-      link: { ...LINK_ROW, sent_at: "2026-06-20T00:00:00.000Z" },
+      link: {
+        ...LINK_ROW,
+        state: { ...LINK_ROW.state, sentAt: "2026-06-20T00:00:00.000Z" },
+      },
       instance: { ...INSTANCE_ROW },
       onUpdate: (table, patch) => updates.push({ table, patch }),
     });
