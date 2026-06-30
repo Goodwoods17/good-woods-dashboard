@@ -198,7 +198,29 @@ export type ShareTokenState = {
   recipientType?: RecipientType;
   startedAt?: string;
   submittedAt?: string;
+  // S11 (document_request) — the no-login designer UPLOAD portal. The owner mints
+  // the link with a list of requested items (`requestedFiles`, above); each
+  // accepted upload appends one record here (server-written only — never client-
+  // trusted). `requestIndex` ties a submission to the requested item it satisfies
+  // (null = an unfiled extra). `bytes` feeds the per-token total-byte quota.
+  submissions?: DocumentRequestSubmission[];
   [key: string]: unknown;
+};
+
+// One accepted upload on a `document_request` link. Server-written; the
+// `id` (submission id) is surfaced on the recipient's confirmation receipt.
+export type DocumentRequestSubmission = {
+  id: string;
+  /** The `documents` row created for this upload. */
+  documentId: string;
+  /** Original (sanitised) client filename — display only, never a storage path. */
+  filename: string;
+  /** The SNIFFED mime (never the client-claimed type). */
+  mime: string;
+  bytes: number;
+  /** Index into `requestedFiles` this upload satisfies (null = unfiled extra). */
+  requestIndex: number | null;
+  createdAt: string;
 };
 
 // Scheduling S18 (issue #106) — a no-login token link to ONE job's client
