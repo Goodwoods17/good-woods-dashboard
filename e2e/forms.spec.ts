@@ -1083,3 +1083,53 @@ test.describe("forms P3 slice 1 — conditional fields (showWhen)", () => {
     }
   });
 });
+
+// ─── Forms S5b (issue #217) — retrofit the LIVE /f portal onto share_tokens ───
+// Project Files milestone #12, ADR 0022. The /f READ + the public submit/send
+// WRITES are cut from the legacy `form_share_links` table to the generalized
+// `share_tokens` registry (capability_type=form; recipientType / lockedFieldIds /
+// the owner-pill stamps ride the state jsonb). The seed plants a form link ONLY
+// in share_tokens (never in the legacy table) so a green /f render + persisted
+// submit PROVE the read+write path is truly cut — not silently still reading legacy.
+const S5B_SHARETOKENS_ONLY_TOKEN = "e2eformsharetokensonly0000000000000ab";
+
+test.describe("forms slice 5b — retrofit /f portal onto share_tokens", () => {
+  test.skip(!email || !password, "needs E2E_EMAIL / E2E_PASSWORD + a seeded Supabase");
+
+  test("a share_tokens-only form link renders /f and a submit persists end-to-end", async ({
+    browser,
+  }) => {
+    const guest = await browser.newContext();
+    try {
+      const guestPage = await guest.newPage();
+      await guestPage.goto(`/f/${S5B_SHARETOKENS_ONLY_TOKEN}`);
+
+      // The bare fill page renders (read truly cut to share_tokens) — not inactive.
+      await expect(guestPage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+      await expect(guestPage.getByTestId("share-link-inactive")).toHaveCount(0);
+
+      const checkbox = guestPage.getByRole("checkbox", { name: "Retrofit checkbox" }).first();
+      await expect(checkbox).toBeVisible();
+      await checkbox.check();
+
+      // The public submit WRITE dual-writes the stamps; the field answer of record
+      // persists to form_instance_fields. Reopen in a fresh context → it resumes.
+      await guestPage.getByTestId("submit-form").click();
+      await expect(guestPage.getByTestId("submit-saved")).toBeVisible({ timeout: 15_000 });
+
+      const guest2 = await browser.newContext();
+      try {
+        const resumePage = await guest2.newPage();
+        await resumePage.goto(`/f/${S5B_SHARETOKENS_ONLY_TOKEN}`);
+        await expect(resumePage.getByTestId("public-fill-form")).toBeVisible({ timeout: 15_000 });
+        await expect(
+          resumePage.getByRole("checkbox", { name: "Retrofit checkbox" }).first()
+        ).toBeChecked({ timeout: 15_000 });
+      } finally {
+        await guest2.close();
+      }
+    } finally {
+      await guest.close();
+    }
+  });
+});

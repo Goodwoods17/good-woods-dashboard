@@ -644,6 +644,55 @@ async function seedS4PortalFile() {
   console.log("OK seeded S4 watermark source file (job-documents storage object)");
 }
 
+// ─── Forms S5b (issue #217) — retrofit the LIVE /f portal onto share_tokens ──
+// Milestone #12, ADR 0022. The /f READ + the public submit/send WRITES are cut
+// to the generalized `share_tokens` registry (capability_type=form; the
+// form-specific bits — recipientType / lockedFieldIds / sent/started/submitted /
+// progress — ride the state jsonb; submit_ip/submit_user_agent map onto ip/ua).
+// This seed plants a standalone form instance + one checkbox field, then a share
+// link ONLY in share_tokens (NEVER in the legacy form_share_links table) so a
+// green /f render PROVES the read path is truly cut — not silently still legacy.
+const S5B_FORM_INSTANCE_ID = "f5b00000-0000-4000-8000-000000000001";
+const S5B_FORM_FIELD_ID = "f5b00000-0000-4000-8000-000000000002";
+const S5B_SHARETOKENS_ONLY_TOKEN = "e2eformsharetokensonly0000000000000ab";
+const S5B_FORM_INSTANCE = {
+  id: S5B_FORM_INSTANCE_ID,
+  template_id: null,
+  job_id: null, // standalone — no PDF auto-file on submit
+  title: "E2E Retrofit Form",
+  phase: null,
+  status: "draft",
+  sort_order: 0,
+};
+const S5B_FORM_FIELD = {
+  id: S5B_FORM_FIELD_ID,
+  instance_id: S5B_FORM_INSTANCE_ID,
+  label: "Retrofit checkbox",
+  type: "checkbox",
+  config: {},
+  sort_order: 0,
+};
+const S5B_SHARE_TOKEN_ONLY = {
+  id: "f5b00000-0000-4000-8000-000000000003",
+  capability_type: "form",
+  form_instance_id: S5B_FORM_INSTANCE_ID,
+  token: S5B_SHARETOKENS_ONLY_TOKEN,
+  recipient_name: "E2E Retrofit Client",
+  viewed_at: null,
+  revoked_at: null,
+  expires_at: null,
+  view_count: 0,
+  created_by: "claude-smoke-test@spacecraftjoinery.local",
+  state: { recipientType: "customer", lockedFieldIds: [] },
+};
+
+async function seedS5bFormShareToken(token) {
+  await upsert(token, "form_instances", S5B_FORM_INSTANCE);
+  await upsert(token, "form_instance_fields", S5B_FORM_FIELD);
+  await upsert(token, "share_tokens", S5B_SHARE_TOKEN_ONLY);
+  console.log("OK seeded S5b form share link (share_tokens only — read-cut proof)");
+}
+
 // Seed the sentinel job (and its required payer contact) the e2e render test reads.
 async function seedJob() {
   const token = await signIn();
@@ -658,6 +707,7 @@ async function seedJob() {
   await seedS18ShareLinks(token);
   await seedS2DocumentShares(token);
   await seedS4PortalFile();
+  await seedS5bFormShareToken(token);
   console.log(`OK seeded e2e jobs ${E2E_JOB.code}, ${DEMO_JOB.code}, ${BUFFER_BURN_JOB.code}`);
 }
 

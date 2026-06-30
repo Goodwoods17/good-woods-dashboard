@@ -190,6 +190,14 @@ export type ShareTokenState = {
   sentAt?: string;
   // S3 — how often the recipient wishes to hear from us.
   notifyPreference?: "everything" | "major" | "digest";
+  // S5b (form) — the form-specific bits the legacy `form_share_links` table
+  // carried as dedicated columns, moved into `state` per the retrofit (ADR 0022).
+  // `recipientType` is the issued-to category; `startedAt`/`submittedAt` are the
+  // owner-only status-pill stamps (viewed_at / revoked_at stay typed columns,
+  // submit_ip/submit_user_agent map onto the shared `ip`/`ua` columns).
+  recipientType?: RecipientType;
+  startedAt?: string;
+  submittedAt?: string;
   [key: string]: unknown;
 };
 
