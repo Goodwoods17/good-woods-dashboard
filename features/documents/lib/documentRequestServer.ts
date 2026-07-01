@@ -285,18 +285,21 @@ export async function handleDesignerUpload(
   };
   const submissions = [...priorSubmissions, submission];
 
-  // Append the submission to the token's state (and stamp the audit ip/ua, which
-  // are server-set, never client-supplied). Best-effort: the file is already
-  // stored + the row exists, so a state-write hiccup must not 500 the upload.
-  await sb
-    .from(SHARE_TOKENS_TABLE)
-    .update({
-      state: { ...share.state, submissions },
-      ip: params.ip ?? share.ip ?? null,
-      ua: params.ua ?? share.ua ?? null,
-    })
-    .eq("token", params.token)
-    .eq("capability_type", DOCUMENT_REQUEST);
+  // Persist the submission ATOMICALLY (#268): a single-statement, row-locked `||`
+  // append (append_share_token_submission RPC) so a concurrent upload on the same
+  // token can't drop this one — the old read-modify-write (read stale snapshot →
+  // write {...state, submissions}) lost concurrent submissions last-write-wins.
+  // The audit ip/ua are server-set, never client-supplied (coalesced in the RPC).
+  // Best-effort: the object + row already landed, so a state-write hiccup (or a
+  // deploy that predates the migration → RPC absent) must not 500 the upload; the
+  // metadata just isn't recorded until it succeeds. The `submissions` array above
+  // is the optimistic local view used only for this response's checklist.
+  await sb.rpc("append_share_token_submission", {
+    p_token: params.token,
+    p_submission: submission,
+    p_ip: params.ip ?? null,
+    p_ua: params.ua ?? null,
+  });
 
   // Best-effort staff alert — never blocks or fails the upload.
   void notifyStaffOfUpload({ jobId: share.jobId, recipientName: share.recipientName, displayName });
