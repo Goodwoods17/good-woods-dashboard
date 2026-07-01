@@ -14,7 +14,7 @@ import { JOB_PIECE_PINS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supa
 import type { JobPiecePin } from "@shared/lib/types";
 import { rowToPin, pinToRow, type PinRow } from "./piecePinsRowMap";
 import { optimistic } from "@shared/lib/optimistic";
-import { byPrimaryFirst } from "./multiPinLogic";
+import { byPrimaryFirst, pinMatchesPage } from "./multiPinLogic";
 
 // S8a (ADR 0023): the pins store + live subscription land BEFORE any UI reads
 // the new table. Dual-read holds during the overlap — the embedded
@@ -217,4 +217,21 @@ export function usePinsForPiece(jobPieceId: string): JobPiecePin[] {
 export function usePinsForDocument(documentId: string): JobPiecePin[] {
   const { pins } = usePiecePins();
   return useMemo(() => pins.filter((p) => p.documentId === documentId), [pins, documentId]);
+}
+
+/**
+ * Pins to render in the drawing overlay: those on the active document AND the
+ * current page. The page match uses the single `pinMatchesPage` convention
+ * (#270) so the overlay, creation, and display can't drift (that drift was the
+ * page-0 bug). `documentId` may be null (no active doc) → no pins.
+ */
+export function usePinsForDocPage(documentId: string | null, page: number): JobPiecePin[] {
+  const { pins } = usePiecePins();
+  return useMemo(
+    () =>
+      documentId === null
+        ? []
+        : pins.filter((p) => p.documentId === documentId && pinMatchesPage(p, page)),
+    [pins, documentId, page]
+  );
 }

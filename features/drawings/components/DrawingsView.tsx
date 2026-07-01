@@ -29,7 +29,7 @@ import { MarkupLayer } from "./MarkupLayer";
 import { TextNoteEditor } from "./TextNoteEditor";
 import { removeDrawing } from "../lib/storage";
 import { usePieces, useProjectPieces } from "../lib/piecesStore";
-import { usePiecePins } from "../lib/piecePinsStore";
+import { usePiecePins, usePinsForDocPage } from "../lib/piecePinsStore";
 import { useAnnotations, useDocAnnotations } from "../lib/annotationsStore";
 import { PiecePinPanel } from "./PiecePinPanel";
 import { isPinnedOnDocument } from "../lib/multiPinLogic";
@@ -82,10 +82,10 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const piecesById = useMemo(() => new Map(pieces.map((p) => [p.id, p])), [pieces]);
   // S9: lookup map for document names used by PiecePinPanel.
   const docsById = useMemo(() => new Map(docs.map((d) => [d.id, d])), [docs]);
-  const docPins = useMemo(
-    () => pins.filter((pin) => pin.documentId === active?.id && (pin.page ?? 1) === currentPage),
-    [pins, active?.id, currentPage]
-  );
+  // Overlay pins for the active doc + current page — via the single-source
+  // selector (#270) so the page-match convention (pinMatchesPage) lives in one
+  // tested place and can't drift from creation/display (the page-0 bug).
+  const docPins = usePinsForDocPage(active?.id ?? null, currentPage);
 
   const docAnnotations = useDocAnnotations(active?.id ?? null, currentPage);
   const selectedAnnotation = docAnnotations.find((a) => a.id === selectedAnnId) ?? null;
