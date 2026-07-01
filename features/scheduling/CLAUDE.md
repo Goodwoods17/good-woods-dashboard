@@ -295,7 +295,6 @@ features/scheduling/
 ├── lib/
 │   ├── clientPortal.ts            pure: client-safe schedule view (status / % done /
 │   │                              next step / firm install + soft mid-phase ranges) (+ test)
-│   ├── scheduleShareLinksRowMap.ts row ↔ ScheduleShareLink (legacy table; still dual-written)
 │   ├── scheduleShareTokenMap.ts    ScheduleShareLink ↔ share_tokens row (S5a retrofit; snapshot→state)
 │   └── scheduleShareLinkServer.ts  server-only: loadScheduleShareLink(token) (service role; reads share_tokens)
 └── components/
@@ -311,12 +310,11 @@ supabase/migrations/
 **S5a retrofit (Project Files milestone #12, ADR 0022).** The client portal
 now rides the generalized `share_tokens` registry. `/s/<token>` + the ICS feed
 READ `share_tokens` (capability_type=schedule; the `committed_date_snapshot`
-column moves into `state.committedDateSnapshot`). The owner store DUAL-WRITES
-both `share_tokens` and the legacy `schedule_share_links` (id shared across both
-rows so revoke-by-id hits each) so the legacy table stays a rollback-safe mirror
-until the S5b Forms retrofit proves the mechanics; only then is it dropped.
-`viewed_at` read-receipts + the ICS `stampView=false` semantics are preserved
-verbatim by `loadCapabilityRow`.
+column moves into `state.committedDateSnapshot`). The owner store READS + WRITES
+`share_tokens` exclusively; the legacy `schedule_share_links` mirror was dropped
+in #269 once the S5b Forms retrofit proved the mechanics (verify passed: zero
+rows). `viewed_at` read-receipts + the ICS `stampView=false` semantics are
+preserved verbatim by `loadCapabilityRow`.
 
 A tokenized, READ-ONLY, no-login client view of ONE job's schedule, reusing the
 Forms P2 share-link pattern (opaque token = capability, service-role read,

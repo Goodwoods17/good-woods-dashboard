@@ -8,15 +8,9 @@
  * the first active link's public URL). Both components stay render-of-state.
  */
 import { useCallback, useEffect, useState } from "react";
-import {
-  getSupabase,
-  hasSupabase,
-  SCHEDULE_SHARE_LINKS_TABLE,
-  SHARE_TOKENS_TABLE,
-} from "@shared/lib/supabase";
+import { getSupabase, hasSupabase, SHARE_TOKENS_TABLE } from "@shared/lib/supabase";
 import type { Job, ScheduleShareLink } from "@shared/lib/types";
 import { generateCapabilityToken } from "@shared/lib/capabilityToken";
-import { scheduleShareLinkToRow } from "./scheduleShareLinksRowMap";
 import {
   scheduleShareLinkToShareTokenRow,
   shareTokenRowToScheduleShareLink,
@@ -25,12 +19,10 @@ import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 
 // ─── Data access ──────────────────────────────────────────────────────────────
 //
-// S5a (milestone #12, ADR 0022): reads are CUT to the generalized `share_tokens`
-// registry (capability_type=schedule); writes are DUAL-WRITTEN to both the
-// legacy `schedule_share_links` table and `share_tokens` during the overlap, so
-// the legacy table stays a faithful mirror (rollback-safe) until the S5b Forms
-// retrofit proves the mechanics. The id is shared across both rows so a
-// revoke-by-id stamps the same logical link in each.
+// S5a (milestone #12, ADR 0022): reads + writes both ride the generalized
+// `share_tokens` registry (capability_type=schedule). The legacy
+// `schedule_share_links` mirror was retired in #269 once the S5b Forms retrofit
+// proved the mechanics (verify passed: zero rows).
 
 /** All schedule share links for a job, newest first (read from share_tokens). */
 export async function loadScheduleShareLinks(jobId: string): Promise<ScheduleShareLink[]> {
@@ -62,9 +54,8 @@ export async function loadActiveScheduleShareLink(
 }
 
 /**
- * Dual-write a new share link to both share_tokens (the read path) and the
- * legacy schedule_share_links table (kept mirrored until S5b). Returns true only
- * when the share_tokens write — the one the portal now reads — succeeds.
+ * Write a new share link to share_tokens (the read path). Returns true only when
+ * that write — the one the portal reads — succeeds.
  */
 export async function insertScheduleShareLink(link: ScheduleShareLink): Promise<boolean> {
   if (!hasSupabase()) return false;
@@ -72,13 +63,10 @@ export async function insertScheduleShareLink(link: ScheduleShareLink): Promise<
   const { error } = await sb
     .from(SHARE_TOKENS_TABLE)
     .insert(scheduleShareLinkToShareTokenRow(link));
-  if (error) return false;
-  // Legacy mirror (best-effort; the read path no longer depends on it).
-  await sb.from(SCHEDULE_SHARE_LINKS_TABLE).insert(scheduleShareLinkToRow(link));
-  return true;
+  return !error;
 }
 
-/** Stamp `revoked_at` on a share link in BOTH tables (id is shared across them). */
+/** Stamp `revoked_at` on a share link in share_tokens. */
 export async function revokeScheduleShareLink(id: string, revokedAt: string): Promise<void> {
   if (!hasSupabase()) return;
   const sb = getSupabase();
@@ -87,8 +75,6 @@ export async function revokeScheduleShareLink(id: string, revokedAt: string): Pr
     .update({ revoked_at: revokedAt })
     .eq("id", id)
     .eq("capability_type", "schedule");
-  // Legacy mirror.
-  await sb.from(SCHEDULE_SHARE_LINKS_TABLE).update({ revoked_at: revokedAt }).eq("id", id);
 }
 
 // ─── Hooks ────────────────────────────────────────────────────────────────────
