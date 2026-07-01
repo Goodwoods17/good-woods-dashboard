@@ -511,14 +511,14 @@ const S5A_SHARE_TOKEN_ONLY = {
 };
 
 async function seedS18ShareLinks(token) {
-  for (const row of S18_LINKS) {
-    await upsert(token, "schedule_share_links", row);
-  }
+  // #269: the legacy schedule_share_links table is dropped — seed the schedule
+  // portal links ONLY into share_tokens (the sole read path now). S18_LINKS is
+  // still the source data that S18_SHARE_TOKENS is derived from.
   for (const row of S18_SHARE_TOKENS) {
     await upsert(token, "share_tokens", row);
   }
   await upsert(token, "share_tokens", S5A_SHARE_TOKEN_ONLY);
-  console.log("OK seeded S18 client schedule portal share links (legacy + share_tokens)");
+  console.log("OK seeded S18 client schedule portal share links (share_tokens)");
 }
 
 // ─── Project Files S2 (issue #213) — document VIEW portal fixtures ───────────

@@ -34,7 +34,6 @@ export const FORM_TEMPLATES_TABLE = "form_templates";
 export const FORM_TEMPLATE_FIELDS_TABLE = "form_template_fields";
 export const FORM_INSTANCES_TABLE = "form_instances";
 export const FORM_INSTANCE_FIELDS_TABLE = "form_instance_fields";
-export const FORM_SHARE_LINKS_TABLE = "form_share_links";
 export const INVOICES_TABLE = "invoices";
 export const INVOICE_LINES_TABLE = "invoice_lines";
 export const QUICKBOOKS_CONNECTION_TABLE = "quickbooks_connection";
@@ -47,9 +46,9 @@ export const SCHEDULING_PHASE_CAPACITY_TABLE = "scheduling_phase_capacity";
 export const COMMITMENT_LEDGER_TABLE = "commitment_ledger";
 export const COMMITMENT_REVISIONS_TABLE = "commitment_revisions";
 export const PRIORITY_BUMPS_TABLE = "priority_bumps";
-export const SCHEDULE_SHARE_LINKS_TABLE = "schedule_share_links";
 export const SCHEDULING_GOOGLE_CONNECTIONS_TABLE = "scheduling_google_connections";
 export const SCHEDULING_GOOGLE_EVENTS_TABLE = "scheduling_google_events";
-// ADR 0022 — the generalized no-login capability-link registry that the two
-// per-feature share tables (form_share_links + schedule_share_links) consolidate onto.
+// ADR 0022 — the generalized no-login capability-link registry. The two former
+// per-feature share tables (form_share_links + schedule_share_links) consolidated
+// onto this and were dropped in #269.
 export const SHARE_TOKENS_TABLE = "share_tokens";

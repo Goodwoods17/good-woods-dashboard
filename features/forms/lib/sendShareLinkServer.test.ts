@@ -147,8 +147,12 @@ describe("sendShareLinkEmail", () => {
     expect(call.to).toBe("casey@example.com");
     expect(call.html).toContain("https://app.test/f/tok_abcdefghijklmnopqrstuvwxyz123456");
     expect(call.subject).toContain("Pre-Install Check");
-    // sent_at was stamped exactly once on the share-links table.
-    const stamps = updates.filter((u) => u.table === "form_share_links" && "sent_at" in u.patch);
+    // sentAt was stamped exactly once, into the share_tokens state jsonb.
+    const stamps = updates.filter(
+      (u) =>
+        u.table === "share_tokens" &&
+        (u.patch.state as Record<string, unknown> | undefined)?.sentAt != null
+    );
     expect(stamps).toHaveLength(1);
   });
 
@@ -175,8 +179,12 @@ describe("sendShareLinkEmail", () => {
 
     expect(res).toEqual({ ok: true, mode: "reminder", emailId: "email_456" });
     expect(deliver.mock.calls[0][0].subject).toMatch(/reminder/i);
-    // No sent_at re-stamp — it was already set.
-    const stamps = updates.filter((u) => u.table === "form_share_links" && "sent_at" in u.patch);
+    // No sentAt re-stamp — it was already set (no share_tokens state write).
+    const stamps = updates.filter(
+      (u) =>
+        u.table === "share_tokens" &&
+        (u.patch.state as Record<string, unknown> | undefined)?.sentAt != null
+    );
     expect(stamps).toHaveLength(0);
   });
 
@@ -227,6 +235,6 @@ describe("sendShareLinkEmail", () => {
       deliver: async () => ({ id: null, error: "domain not verified" }),
     });
     expect(res).toEqual({ ok: false, reason: "send_failed" });
-    expect(updates.filter((u) => "sent_at" in u.patch)).toHaveLength(0);
+    expect(updates.filter((u) => u.table === "share_tokens")).toHaveLength(0);
   });
 });
