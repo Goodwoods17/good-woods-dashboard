@@ -14,6 +14,7 @@ import {
   Eye,
 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { PillButton } from "@shared/components/ui/PillButton";
 import {
   DOCUMENT_KIND_LABELS,
   DOCUMENT_KIND_ORDER,
@@ -125,7 +126,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
 
   return (
     <section className="bg-surface rounded-xl shadow-resting overflow-hidden">
-      <header className="px-6 py-4 flex items-center justify-between gap-3 border-b border-[rgba(26,25,22,0.05)]">
+      <header className="px-6 py-4 flex items-center justify-between gap-3 border-b border-hairline">
         <div>
           <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary font-semibold">
             Documents
@@ -134,16 +135,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
             Drive links and uploaded drawings. Click any row to preview without leaving the page.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setAdding((p) => !p)}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors duration-fast",
-            adding
-              ? "bg-surface-muted text-text-secondary hover:text-text-primary"
-              : "bg-ink-pill text-white hover:bg-accent-active"
-          )}
-        >
+        <PillButton variant={adding ? "subtle" : "primary"} onClick={() => setAdding((p) => !p)}>
           {adding ? (
             <>
               <ChevronUp className="h-3.5 w-3.5" strokeWidth={2} />
@@ -155,16 +147,12 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
               Add document
             </>
           )}
-        </button>
+        </PillButton>
       </header>
 
       {adding && (
-        <div className="px-6 py-4 bg-surface-muted/30 border-b border-[rgba(26,25,22,0.05)]">
-          <AddDocumentForm
-            onSave={handleAdd}
-            busy={savingNew}
-            existingDocs={docs}
-          />
+        <div className="px-6 py-4 bg-surface-muted/30 border-b border-hairline">
+          <AddDocumentForm onSave={handleAdd} busy={savingNew} existingDocs={docs} />
         </div>
       )}
 
@@ -172,7 +160,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         <DocumentShareSection docs={docs} designerEmail={designerEmail} />
       )}
 
-      <div className="px-6 py-3 flex flex-wrap items-center gap-1.5 border-b border-[rgba(26,25,22,0.05)]">
+      <div className="px-6 py-3 flex flex-wrap items-center gap-1.5 border-b border-hairline">
         <Chip
           active={filter === "all"}
           onClick={() => setFilter("all")}
@@ -196,7 +184,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
         <EmptyState onAdd={() => setAdding(true)} />
       ) : (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-0">
-          <ul className="lg:col-span-2 lg:border-r border-[rgba(26,25,22,0.05)] divide-y divide-[rgba(26,25,22,0.05)] max-h-[480px] overflow-y-auto">
+          <ul className="lg:col-span-2 lg:border-r border-hairline divide-y divide-hairline max-h-[480px] overflow-y-auto">
             {filtered.length === 0 ? (
               <li className="px-6 py-6 text-sm text-text-tertiary text-center">
                 No documents of this type yet.
@@ -313,7 +301,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
               </div>
             ) : active ? (
               <div className="h-full flex flex-col">
-                <div className="px-6 py-3 flex items-center justify-between gap-3 border-b border-[rgba(26,25,22,0.05)]">
+                <div className="px-6 py-3 flex items-center justify-between gap-3 border-b border-hairline">
                   <div className="min-w-0">
                     <div className="text-sm font-medium text-text-primary truncate">
                       {active.label}
@@ -374,7 +362,7 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
                 )}
                 {/* S7 — revision history panel below the preview. */}
                 {activeHasHistory && (
-                  <div className="border-t border-[rgba(26,25,22,0.05)]">
+                  <div className="border-t border-hairline">
                     <RevisionHistoryPanel chain={activeRevisionChain} activeId={active.id} />
                   </div>
                 )}
@@ -404,18 +392,9 @@ export function DocumentsCard({ projectId }: { projectId: string }) {
  * document belongs to a multi-revision lineage. Lists all revisions oldest →
  * newest with the current revision highlighted.
  */
-function RevisionHistoryPanel({
-  chain,
-  activeId,
-}: {
-  chain: ProjectDocument[];
-  activeId: string;
-}) {
+function RevisionHistoryPanel({ chain, activeId }: { chain: ProjectDocument[]; activeId: string }) {
   return (
-    <div
-      data-testid="doc-revision-history"
-      className="px-6 py-4 w-full text-left"
-    >
+    <div data-testid="doc-revision-history" className="px-6 py-4 w-full text-left">
       <div className="flex items-center gap-1.5 mb-2">
         <History className="h-3.5 w-3.5 text-text-tertiary" strokeWidth={1.75} />
         <span className="text-[10px] uppercase tracking-[0.06em] text-text-tertiary font-semibold">
@@ -507,14 +486,10 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         Paste a Google Drive link for the designer drawings, Toolpath CNC files, shop drawings,
         architect plans, appliance specs, or permits.
       </p>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
-      >
+      <PillButton size="md" onClick={onAdd}>
         <Plus className="h-4 w-4" strokeWidth={2} />
         Add the first document
-      </button>
+      </PillButton>
     </div>
   );
 }

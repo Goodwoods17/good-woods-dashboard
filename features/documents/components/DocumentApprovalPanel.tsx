@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Check, RotateCcw, ShieldCheck, Users } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { PillButton } from "@shared/components/ui/PillButton";
 import {
   APPROVAL_STATUS_META,
   REVIEWER_ROLES,
@@ -65,7 +66,7 @@ export function DocumentApprovalPanel({
   return (
     <section
       data-testid="document-approval-panel"
-      className="border-t border-[rgba(26,25,22,0.05)] px-6 py-4 w-full text-left"
+      className="border-t border-hairline px-6 py-4 w-full text-left"
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <div className="flex items-center gap-1.5">
@@ -100,21 +101,14 @@ export function DocumentApprovalPanel({
             Route this drawing to the architect, GC, and PM at once. It moves to Approved only after
             all three sign off.
           </p>
-          <button
-            type="button"
+          <PillButton
             data-testid="approval-route-btn"
             disabled={busy}
             onClick={() => void handleRoute()}
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-full bg-ink-pill px-3 py-1.5",
-              "text-xs font-medium text-white duration-fast hover:bg-accent-active",
-              "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
-              "disabled:opacity-50"
-            )}
           >
             <Users className="h-3.5 w-3.5" strokeWidth={1.75} />
             Route for approval
-          </button>
+          </PillButton>
         </div>
       ) : (
         <ul className="space-y-1.5">
