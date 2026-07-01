@@ -27,10 +27,21 @@ const STORAGE_KEY = "gw_job_pieces_v1";
 const PINS_STORAGE_KEY = "gw_job_piece_pins_v1";
 type Backend = "supabase" | "localStorage";
 
+/**
+ * The primary pin to place a new piece on, passed EXPLICITLY to createPiece
+ * (#271 — replaces the vestigial pin* fields that used to ride on JobPiece).
+ */
+export type PrimaryPinInput = {
+  documentId: string;
+  page: number | null;
+  x: number;
+  y: number;
+};
+
 type PiecesContextValue = {
   pieces: JobPiece[];
   backend: Backend;
-  createPiece: (p: JobPiece) => Promise<void>;
+  createPiece: (p: JobPiece, pin?: PrimaryPinInput) => Promise<void>;
   updatePiece: (id: string, patch: Partial<JobPiece>) => Promise<void>;
   deletePiece: (id: string) => Promise<void>;
 };
@@ -148,25 +159,24 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   }, [backend]);
 
   const createPiece = useCallback(
-    async (p: JobPiece) => {
-      // S8b: if pin location is present in the JobPiece (passed from DrawingsView
-      // handleCreate), extract it as a primary pin row for job_piece_pins. The pin
-      // fields are NOT written to job_pieces — pieceToRow no longer includes them.
-      const primaryPin: JobPiecePin | null =
-        p.pinDocumentId != null && p.pinX != null && p.pinY != null
-          ? {
-              id: newId(),
-              jobPieceId: p.id,
-              documentId: p.pinDocumentId,
-              page: p.pinPage ?? null,
-              x: p.pinX,
-              y: p.pinY,
-              role: null,
-              isPrimary: true,
-              createdAt: p.createdAt,
-              createdBy: p.createdBy ?? null,
-            }
-          : null;
+    async (p: JobPiece, pin?: PrimaryPinInput) => {
+      // #271: the piece's primary pin is passed EXPLICITLY (not smuggled through
+      // vestigial JobPiece.pin* fields). When present, it becomes the primary pin
+      // row in job_piece_pins; nothing pin-shaped is written to job_pieces.
+      const primaryPin: JobPiecePin | null = pin
+        ? {
+            id: newId(),
+            jobPieceId: p.id,
+            documentId: pin.documentId,
+            page: pin.page,
+            x: pin.x,
+            y: pin.y,
+            role: null,
+            isPrimary: true,
+            createdAt: p.createdAt,
+            createdBy: p.createdBy ?? null,
+          }
+        : null;
 
       await optimistic({
         ref: piecesRef,
