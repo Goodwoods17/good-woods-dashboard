@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { UploadCloud, CheckCircle2, Circle, ShieldCheck } from "lucide-react";
 import type { DocumentRequestBundle } from "../lib/documentRequestServer";
 import { buildRequestChecklist } from "../lib/documentRequestChecklist";
+import { MAX_UPLOAD_BYTES } from "../lib/uploadQuota";
 import type { DocumentRequestSubmission } from "@shared/lib/types";
 import { PortalBrand } from "@shared/components/layout/PortalBrand";
 import { PortalContactCard } from "@shared/components/layout/PortalContactCard";
@@ -18,6 +19,9 @@ import { PortalContactCard } from "@shared/components/layout/PortalContactCard";
  * checklist re-derives client-side from the running submission list so the status
  * colours update live without a reload.
  */
+
+/** Max upload size in MB, derived from the shared byte ceiling for display. */
+const MAX_UPLOAD_MB = Math.round(MAX_UPLOAD_BYTES / (1024 * 1024));
 
 const STATUS_STYLES: Record<
   "none" | "partial" | "complete",
@@ -66,6 +70,12 @@ export function DocumentRequestPortalView({
     const file = fileRef.current?.files?.[0];
     if (!file) {
       setError("Choose a file first.");
+      return;
+    }
+    // Client-side size pre-check: reject oversized files before the network
+    // round-trip. The server still enforces MAX_UPLOAD_BYTES authoritatively.
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`That file is too large — the maximum is ${MAX_UPLOAD_MB} MB.`);
       return;
     }
     setBusy(true);
@@ -219,7 +229,8 @@ export function DocumentRequestPortalView({
 
           <p className="mt-3 flex items-center gap-1.5 text-xs text-text-tertiary">
             <ShieldCheck className="h-3.5 w-3.5" strokeWidth={1.75} />
-            PDF, PNG, JPEG, or WEBP. Files go straight to the Good Woods shop.
+            PDF, PNG, JPEG or WEBP · max {MAX_UPLOAD_MB} MB. Files go straight to the Good Woods
+            shop.
           </p>
         </section>
 
