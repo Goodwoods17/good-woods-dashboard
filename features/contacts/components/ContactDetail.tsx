@@ -183,7 +183,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                       key={j.id}
                       className={cn(
                         "hover:bg-surface-muted/40 transition-colors duration-fast",
-                        idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                        idx > 0 && "border-t border-hairline"
                       )}
                     >
                       <td className="px-4 py-3">
@@ -278,7 +278,7 @@ export function ContactDetail({ contact }: { contact: Contact }) {
                         key={r.contact.id}
                         className={cn(
                           "hover:bg-surface-muted/40 transition-colors duration-fast",
-                          idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                          idx > 0 && "border-t border-hairline"
                         )}
                       >
                         <td className="px-4 py-3">

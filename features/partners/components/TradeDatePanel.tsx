@@ -89,7 +89,7 @@ export function TradeDatePanel({
   return (
     <div
       data-testid="trade-date-panel"
-      className="mt-3 pt-3 border-t border-[rgba(26,25,22,0.05)] space-y-2 pl-0.5"
+      className="mt-3 pt-3 border-t border-hairline space-y-2 pl-0.5"
     >
       {/* Requested date row */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">

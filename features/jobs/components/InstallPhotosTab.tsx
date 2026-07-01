@@ -1,16 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import {
-  Camera,
-  ImageOff,
-  Loader2,
-  Plus,
-  Trash2,
-  X,
-  ZoomIn,
-  AlertCircle,
-} from "lucide-react";
+import { Camera, ImageOff, Loader2, Plus, Trash2, X, ZoomIn, AlertCircle } from "lucide-react";
 import type { MilestoneStage, ProjectDocument } from "@shared/lib/types";
 import { MILESTONE_STAGES } from "@shared/lib/types";
 import { useDocuments, useProjectDocuments } from "@features/documents/lib/documentsStore";
@@ -18,6 +9,7 @@ import { useAuth } from "@shared/lib/authStore";
 import { uploadDrawing } from "@features/drawings/lib/storage";
 import { resolveDocumentUrl } from "@features/drawings/lib/storage";
 import { cn } from "@shared/lib/utils";
+import { PillButton } from "@shared/components/ui/PillButton";
 import {
   parsePhotoTag,
   serializePhotoTag,
@@ -168,13 +160,7 @@ function IssueDot({
 /**
  * Single photo thumbnail in the grid. Loads a signed URL from Storage.
  */
-function PhotoThumb({
-  doc,
-  onClick,
-}: {
-  doc: ProjectDocument;
-  onClick: () => void;
-}) {
+function PhotoThumb({ doc, onClick }: { doc: ProjectDocument; onClick: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const tag = parsePhotoTag(doc.notes);
@@ -186,12 +172,18 @@ function PhotoThumb({
     setFailed(false);
     if (doc.storagePath) {
       resolveDocumentUrl(doc.storagePath)
-        .then((u) => { if (!cancelled) setUrl(u); })
-        .catch(() => { if (!cancelled) setFailed(true); });
+        .then((u) => {
+          if (!cancelled) setUrl(u);
+        })
+        .catch(() => {
+          if (!cancelled) setFailed(true);
+        });
     } else {
       setFailed(true);
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [doc.storagePath]);
 
   return (
@@ -263,11 +255,14 @@ function PhotoLightbox({
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [tag, setTag] = useState<PhotoTag>(() => parsePhotoTag(doc.notes) ?? {
-    milestone: "install",
-    position: "after",
-    issues: [],
-  });
+  const [tag, setTag] = useState<PhotoTag>(
+    () =>
+      parsePhotoTag(doc.notes) ?? {
+        milestone: "install",
+        position: "after",
+        issues: [],
+      }
+  );
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
   const [editingNote, setEditingNote] = useState("");
   const imgWrapRef = useRef<HTMLDivElement>(null);
@@ -276,12 +271,18 @@ function PhotoLightbox({
     let cancelled = false;
     if (doc.storagePath) {
       resolveDocumentUrl(doc.storagePath)
-        .then((u) => { if (!cancelled) setUrl(u); })
-        .catch(() => { if (!cancelled) setFailed(true); });
+        .then((u) => {
+          if (!cancelled) setUrl(u);
+        })
+        .catch(() => {
+          if (!cancelled) setFailed(true);
+        });
     } else {
       setFailed(true);
     }
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [doc.storagePath]);
 
   // Keep editing note in sync when selection changes.
@@ -480,7 +481,9 @@ function PhotoLightbox({
                             />
                           ) : (
                             <p className="text-xs text-text-secondary truncate">
-                              {issue.note || <span className="italic text-text-tertiary">No note</span>}
+                              {issue.note || (
+                                <span className="italic text-text-tertiary">No note</span>
+                              )}
                             </p>
                           )}
                         </div>
@@ -510,13 +513,7 @@ function PhotoLightbox({
 
 // ─── Upload form ──────────────────────────────────────────────────────────────
 
-function PhotoUploadRow({
-  jobId,
-  onUploaded,
-}: {
-  jobId: string;
-  onUploaded: () => void;
-}) {
+function PhotoUploadRow({ jobId, onUploaded }: { jobId: string; onUploaded: () => void }) {
   const { createDocument } = useDocuments();
   const { user } = useAuth();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -585,7 +582,9 @@ function PhotoUploadRow({
           className="min-h-[36px] rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm text-text-primary transition-colors duration-fast focus:outline-none focus:ring-2 focus:ring-accent-soft disabled:opacity-50"
         >
           {MILESTONE_STAGES.map(({ key, label }) => (
-            <option key={key} value={key}>{label}</option>
+            <option key={key} value={key}>
+              {label}
+            </option>
           ))}
         </select>
       </div>
@@ -640,9 +639,7 @@ function PhotoUploadRow({
         </button>
       </div>
 
-      {err && (
-        <p className="w-full text-xs text-status-blocked">{err}</p>
-      )}
+      {err && <p className="w-full text-xs text-status-blocked">{err}</p>}
     </div>
   );
 }
@@ -651,26 +648,19 @@ function PhotoUploadRow({
 
 function EmptyState({ onAddClick }: { onAddClick: () => void }) {
   return (
-    <div
-      className="px-6 py-16 text-center"
-      data-testid="photos-empty-state"
-    >
+    <div className="px-6 py-16 text-center" data-testid="photos-empty-state">
       <Camera className="h-8 w-8 text-text-tertiary mx-auto mb-3" strokeWidth={1.25} />
       <h4 className="font-serif text-title font-medium text-text-primary mb-1">
         No install photos yet
       </h4>
       <p className="text-sm text-text-secondary max-w-sm mx-auto leading-relaxed mb-5">
-        Upload before and after photos for each milestone. Tap any photo to mark
-        issues with numbered pins.
+        Upload before and after photos for each milestone. Tap any photo to mark issues with
+        numbered pins.
       </p>
-      <button
-        type="button"
-        onClick={onAddClick}
-        className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
-      >
+      <PillButton size="md" onClick={onAddClick}>
         <Plus className="h-4 w-4" strokeWidth={2} />
         Upload the first photo
-      </button>
+      </PillButton>
     </div>
   );
 }
@@ -685,7 +675,7 @@ export function InstallPhotosTab({ jobId }: { jobId: string }) {
 
   const photos = sortedPhotos(allDocs);
   const timeline = groupByMilestone(photos);
-  const activePhoto = activePhotoId ? allDocs.find((d) => d.id === activePhotoId) ?? null : null;
+  const activePhoto = activePhotoId ? (allDocs.find((d) => d.id === activePhotoId) ?? null) : null;
 
   const handleSaveTag = useCallback(
     async (notes: string) => {
@@ -695,13 +685,10 @@ export function InstallPhotosTab({ jobId }: { jobId: string }) {
     [activePhotoId, updateDocument]
   );
 
-  const handleDelete = useCallback(
-    async () => {
-      if (!activePhotoId) return;
-      await deleteDocument(activePhotoId);
-    },
-    [activePhotoId, deleteDocument]
-  );
+  const handleDelete = useCallback(async () => {
+    if (!activePhotoId) return;
+    await deleteDocument(activePhotoId);
+  }, [activePhotoId, deleteDocument]);
 
   return (
     <div data-testid="install-photos-tab" className="space-y-6">
@@ -731,12 +718,7 @@ export function InstallPhotosTab({ jobId }: { jobId: string }) {
         </button>
       </div>
 
-      {showUpload && (
-        <PhotoUploadRow
-          jobId={jobId}
-          onUploaded={() => setShowUpload(false)}
-        />
-      )}
+      {showUpload && <PhotoUploadRow jobId={jobId} onUploaded={() => setShowUpload(false)} />}
 
       {photos.length === 0 ? (
         <EmptyState onAddClick={() => setShowUpload(true)} />

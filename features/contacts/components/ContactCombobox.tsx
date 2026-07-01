@@ -4,11 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, ChevronsUpDown, ExternalLink, Plus, X } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { useContacts } from "../lib/contactsStore";
-import {
-  ROLE_TAG_LABELS,
-  type Contact,
-  type RoleTag,
-} from "@shared/lib/types";
+import { ROLE_TAG_LABELS, type Contact, type RoleTag } from "@shared/lib/types";
 
 type Props = {
   value: string | null;
@@ -55,19 +51,17 @@ export function ContactCombobox({
     }
   }, [open]);
 
-  const selected = useMemo(
-    () => contacts.find((c) => c.id === value) ?? null,
-    [contacts, value]
-  );
+  const selected = useMemo(() => contacts.find((c) => c.id === value) ?? null, [contacts, value]);
 
   const filtered = useMemo(() => {
     const active = contacts.filter((c) => !c.archivedAt);
-    const byRole = rolePreference.length === 0
-      ? active
-      : [
-          ...active.filter((c) => c.roleTags.some((t) => rolePreference.includes(t))),
-          ...active.filter((c) => !c.roleTags.some((t) => rolePreference.includes(t))),
-        ];
+    const byRole =
+      rolePreference.length === 0
+        ? active
+        : [
+            ...active.filter((c) => c.roleTags.some((t) => rolePreference.includes(t))),
+            ...active.filter((c) => !c.roleTags.some((t) => rolePreference.includes(t))),
+          ];
     const q = query.trim().toLowerCase();
     if (q.length === 0) return byRole.slice(0, 20);
     return byRole.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 20);
@@ -125,7 +119,7 @@ export function ContactCombobox({
 
       {open && (
         <div className="absolute z-10 mt-1 w-full bg-white rounded-lg shadow-floating overflow-hidden max-h-[80vh] flex flex-col">
-          <div className="border-b border-[rgba(26,25,22,0.05)] px-3 py-2 shrink-0">
+          <div className="border-b border-hairline px-3 py-2 shrink-0">
             <input
               autoFocus
               type="text"
@@ -150,15 +144,11 @@ export function ContactCombobox({
             <>
               <ul role="listbox" className="max-h-64 overflow-y-auto py-1">
                 {filtered.length === 0 ? (
-                  <li className="px-3 py-2 text-sm text-text-tertiary">
-                    No matches
-                  </li>
+                  <li className="px-3 py-2 text-sm text-text-tertiary">No matches</li>
                 ) : (
                   filtered.map((c) => {
                     const isSel = c.id === value;
-                    const matchedRole = c.roleTags.find((t) =>
-                      rolePreference.includes(t)
-                    );
+                    const matchedRole = c.roleTags.find((t) => rolePreference.includes(t));
                     return (
                       <li key={c.id}>
                         <button
@@ -183,10 +173,7 @@ export function ContactCombobox({
                             )}
                           </span>
                           {isSel && (
-                            <Check
-                              className="h-3.5 w-3.5 text-accent shrink-0"
-                              strokeWidth={2}
-                            />
+                            <Check className="h-3.5 w-3.5 text-accent shrink-0" strokeWidth={2} />
                           )}
                         </button>
                       </li>
@@ -197,7 +184,7 @@ export function ContactCombobox({
               <button
                 type="button"
                 onClick={() => setShowCreate(true)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary border-t border-[rgba(26,25,22,0.05)] transition-colors duration-fast"
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-text-secondary hover:bg-surface-muted hover:text-text-primary border-t border-hairline transition-colors duration-fast"
               >
                 <Plus className="h-3.5 w-3.5" strokeWidth={2} />
                 {query.trim().length > 0 ? `Create "${query.trim()}"` : "Create contact"}

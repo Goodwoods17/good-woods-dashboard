@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
+import { PillButton } from "@shared/components/ui/PillButton";
 import { formatCAD } from "@shared/lib/format";
 import {
   useInventory,
@@ -105,14 +106,10 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         Add the materials you keep on hand, set a reorder point, and this page tells you what to
         restock before a job stalls.
       </p>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-ink-pill px-4 py-2 text-sm font-medium text-white transition-colors duration-fast hover:bg-accent-active"
-      >
+      <PillButton size="md" className="mt-5 min-h-[40px]" onClick={onAdd}>
         <Plus className="h-4 w-4" strokeWidth={2} />
         Add item
-      </button>
+      </PillButton>
     </div>
   );
 }

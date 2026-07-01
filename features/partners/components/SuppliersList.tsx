@@ -69,7 +69,7 @@ export function SuppliersList({ query }: { query: string }) {
               key={s.id}
               className={cn(
                 "transition-colors duration-fast hover:bg-surface-muted/40",
-                idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                idx > 0 && "border-t border-hairline"
               )}
             >
               <td className="px-4 py-3.5">

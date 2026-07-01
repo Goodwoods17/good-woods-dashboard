@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Plus, ScanLine } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { Modal } from "@shared/components/ui/Modal";
+import { PillButton } from "@shared/components/ui/PillButton";
 import { Field } from "@shared/components/forms/FormField";
 import { useReface } from "../lib/refaceStore";
 import { defaultOrderSettings, type RefaceProject } from "../lib/types";
@@ -46,13 +47,10 @@ export function RefaceView() {
         title="Reface Studio"
         subtitle={`${projects.length} measurement project${projects.length === 1 ? "" : "s"}`}
         actions={
-          <button
-            onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
-          >
+          <PillButton size="md" onClick={() => setCreating(true)}>
             <Plus className="h-4 w-4" strokeWidth={2} />
             New project
-          </button>
+          </PillButton>
         }
       />
       <div className="px-8 py-6 max-w-6xl">
@@ -85,13 +83,10 @@ function EmptyState({ onCreate }: { onCreate: () => void }) {
         Photograph a kitchen, pin and size every door, drawer front, end panel and toe kick, then
         cost the New Surrey door order and export the Wood Doors form.
       </p>
-      <button
-        onClick={onCreate}
-        className="mt-5 inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-4 py-2 text-sm font-medium hover:bg-accent-active transition-colors duration-fast"
-      >
+      <PillButton size="md" className="mt-5" onClick={onCreate}>
         <Plus className="h-4 w-4" strokeWidth={2} />
         New project
-      </button>
+      </PillButton>
     </div>
   );
 }

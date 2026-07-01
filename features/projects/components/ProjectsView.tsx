@@ -2,22 +2,11 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  ArrowDownUp,
-  ChevronDown,
-  ChevronRight,
-  ChevronUp,
-  Inbox,
-  Search,
-} from "lucide-react";
+import { ArrowDownUp, ChevronDown, ChevronRight, ChevronUp, Inbox, Search } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
 import { useContacts } from "@features/contacts/lib/contactsStore";
-import {
-  computeMargin,
-  PIPELINE_LABELS,
-  type PipelineStatus,
-} from "@shared/lib/types";
+import { computeMargin, PIPELINE_LABELS, type PipelineStatus } from "@shared/lib/types";
 import { formatCAD, formatDate } from "@shared/lib/format";
 import { StatusBadge } from "@shared/components/ui/StatusBadge";
 import { MarginCell } from "@shared/components/ui/MarginCell";
@@ -199,7 +188,7 @@ export function ProjectsView() {
                       key={j.id}
                       className={cn(
                         "hover:bg-surface-muted/40 transition-colors duration-fast",
-                        idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                        idx > 0 && "border-t border-hairline"
                       )}
                     >
                       <td className="px-4 py-3 text-xs text-text-tertiary font-mono tabular-nums">
@@ -216,9 +205,7 @@ export function ProjectsView() {
                       <td className="px-4 py-3 text-text-secondary">
                         {payerName(j.payerId, j.client)}
                       </td>
-                      <td className="px-4 py-3 text-text-tertiary text-xs">
-                        {j.source ?? ""}
-                      </td>
+                      <td className="px-4 py-3 text-text-tertiary text-xs">{j.source ?? ""}</td>
                       <td className="px-4 py-3">
                         <StatusBadge status={j.pipelineStatus} />
                       </td>
@@ -252,13 +239,7 @@ export function ProjectsView() {
   );
 }
 
-function Th({
-  children,
-  align,
-}: {
-  children?: React.ReactNode;
-  align?: "right";
-}) {
+function Th({ children, align }: { children?: React.ReactNode; align?: "right" }) {
   return (
     <th
       className={cn(
@@ -294,13 +275,7 @@ function SortButton({
   );
 }
 
-function EmptyState({
-  query,
-  statusFilter,
-}: {
-  query: string;
-  statusFilter: StatusFilter;
-}) {
+function EmptyState({ query, statusFilter }: { query: string; statusFilter: StatusFilter }) {
   const filtered = query.length > 0 || statusFilter !== "all";
   return (
     <div className="bg-white rounded-xl shadow-resting p-12 text-center">

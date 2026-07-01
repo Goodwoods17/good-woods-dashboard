@@ -48,7 +48,7 @@ export function DocumentPinsPanel({
   const count = rows.length;
 
   return (
-    <div data-testid="doc-pins-panel" className="border-t border-[rgba(26,25,22,0.05)] px-6 py-4">
+    <div data-testid="doc-pins-panel" className="border-t border-hairline px-6 py-4">
       <div className="flex items-center gap-1.5 mb-3">
         <MapPin className="h-3.5 w-3.5 text-text-tertiary" strokeWidth={1.75} />
         <span className="text-[10px] uppercase tracking-[0.06em] text-text-tertiary font-semibold">

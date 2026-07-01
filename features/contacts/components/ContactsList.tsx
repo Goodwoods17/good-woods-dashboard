@@ -21,10 +21,7 @@ function formatLastTouched(iso: string | null | undefined): string {
 
 export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
   return (
-    <div
-      data-testid="contacts-list"
-      className="bg-white rounded-xl shadow-resting overflow-hidden"
-    >
+    <div data-testid="contacts-list" className="bg-white rounded-xl shadow-resting overflow-hidden">
       <table className="w-full text-sm">
         <thead>
           <tr className="bg-surface-muted">
@@ -45,7 +42,7 @@ export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
                 key={c.id}
                 className={cn(
                   "transition-colors duration-fast hover:bg-surface-muted/40",
-                  idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                  idx > 0 && "border-t border-hairline"
                 )}
               >
                 <td className="px-4 py-3.5">
@@ -69,12 +66,7 @@ export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
                       >
                         {c.name}
                       </Link>
-                      {c.parentId && (
-                        <ParentLine
-                          parentId={c.parentId}
-                          rollups={rollups}
-                        />
-                      )}
+                      {c.parentId && <ParentLine parentId={c.parentId} rollups={rollups} />}
                     </div>
                   </div>
                 </td>
@@ -95,10 +87,7 @@ export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
                   {formatLastTouched(c.lastTouchedAt)}
                 </td>
                 <td className="px-4 py-3.5">
-                  <WarmthChip
-                    isAnchor={c.isAnchor}
-                    daysSinceTouch={r.daysSinceTouch}
-                  />
+                  <WarmthChip isAnchor={c.isAnchor} daysSinceTouch={r.daysSinceTouch} />
                 </td>
               </tr>
             );
@@ -109,27 +98,13 @@ export function ContactsList({ rollups }: { rollups: ContactRollup[] }) {
   );
 }
 
-function ParentLine({
-  parentId,
-  rollups,
-}: {
-  parentId: string;
-  rollups: ContactRollup[];
-}) {
+function ParentLine({ parentId, rollups }: { parentId: string; rollups: ContactRollup[] }) {
   const parent = rollups.find((r) => r.contact.id === parentId)?.contact;
   if (!parent) return null;
-  return (
-    <div className="text-xs text-text-tertiary truncate">at {parent.name}</div>
-  );
+  return <div className="text-xs text-text-tertiary truncate">at {parent.name}</div>;
 }
 
-function Th({
-  children,
-  align,
-}: {
-  children: React.ReactNode;
-  align?: "right";
-}) {
+function Th({ children, align }: { children: React.ReactNode; align?: "right" }) {
   return (
     <th
       className={cn(

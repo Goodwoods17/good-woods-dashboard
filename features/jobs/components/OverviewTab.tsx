@@ -155,7 +155,7 @@ export function OverviewTab({ job }: { job: Job }) {
       {populated.length > 0 && (
         <section className="bg-surface rounded-xl shadow-resting p-6">
           <h3 className="text-xs uppercase tracking-[0.06em] text-text-tertiary mb-3">Parties</h3>
-          <ul className="divide-y divide-[rgba(26,25,22,0.05)]">
+          <ul className="divide-y divide-hairline">
             {populated.map(({ key, contact }) => (
               <li
                 key={key}

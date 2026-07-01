@@ -107,7 +107,7 @@ export function SubtradeDetail({ subtrade }: { subtrade: Subtrade }) {
                         key={l.id}
                         className={cn(
                           "hover:bg-surface-muted/40 transition-colors duration-fast",
-                          idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                          idx > 0 && "border-t border-hairline"
                         )}
                       >
                         <td className="px-4 py-3">
@@ -121,7 +121,9 @@ export function SubtradeDetail({ subtrade }: { subtrade: Subtrade }) {
                           ) : (
                             <span className="text-text-tertiary">Unknown project</span>
                           )}
-                          {job && <div className="text-xs text-text-tertiary font-mono">{job.code}</div>}
+                          {job && (
+                            <div className="text-xs text-text-tertiary font-mono">{job.code}</div>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           {lineTrade ? <TradePill trade={lineTrade} size="sm" /> : "—"}
@@ -130,7 +132,11 @@ export function SubtradeDetail({ subtrade }: { subtrade: Subtrade }) {
                           {STATUS_LABEL[l.status] ?? l.status}
                         </td>
                         <td className="px-4 py-3 text-right tabular-nums text-text-secondary">
-                          {l.cost != null ? formatCAD(l.cost) : <span className="text-text-disabled">—</span>}
+                          {l.cost != null ? (
+                            formatCAD(l.cost)
+                          ) : (
+                            <span className="text-text-disabled">—</span>
+                          )}
                         </td>
                       </tr>
                     );
