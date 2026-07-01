@@ -36,7 +36,13 @@ export async function GET(
     status: 200,
     headers: {
       "Content-Type": result.contentType,
-      "Content-Disposition": `inline; filename="${result.filename}"`,
+      // A watermarked result is always application/pdf — safe to view inline. A
+      // PASSTHROUGH (a kind we can't render-stamp) streams the STORED mime, and the
+      // authed upload path only validates mime client-side, so a stored text/html
+      // could execute same-origin if rendered. Force attachment (download) for the
+      // passthrough, and always send nosniff so the browser can't override the type.
+      "Content-Disposition": `${result.watermarked ? "inline" : "attachment"}; filename="${result.filename}"`,
+      "X-Content-Type-Options": "nosniff",
       "Cache-Control": "no-store, max-age=0",
       "X-Watermark": result.watermarked ? "applied" : "none",
     },
