@@ -367,10 +367,6 @@ export type JobPiece = {
   statusUpdatedBy?: string | null;
   source: PieceSource;
   sourceRef?: string | null;
-  pinDocumentId?: string | null;
-  pinPage?: number | null;
-  pinX?: number | null;
-  pinY?: number | null;
   sortOrder: number;
   dimensions?: string | null;
   material?: string | null;

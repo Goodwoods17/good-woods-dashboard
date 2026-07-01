@@ -223,35 +223,34 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   }) {
     if (!pendingPin || !active) return;
     const id = newId();
-    // S8b: pass pin location via the optional JobPiece.pin* fields. createPiece
-    // extracts them and inserts a primary pin row in job_piece_pins atomically —
-    // the pin fields are NOT written to the job_pieces row (pieceToRow drops them).
-    await createPiece({
-      id,
-      projectId: jobId,
-      kind: d.kind,
-      label: d.label,
-      code: d.code ?? null,
-      subtype: d.subtype ?? null,
-      room: null,
-      cutMethod: null,
-      status: "not_started",
-      statusUpdatedAt: null,
-      statusUpdatedBy: null,
-      source: "manual",
-      sourceRef: null,
-      pinDocumentId: active.id,
-      pinPage: currentPage,
-      pinX: pendingPin.x,
-      pinY: pendingPin.y,
-      sortOrder: pieces.length,
-      dimensions: null,
-      material: null,
-      edgeband: null,
-      parentRef: null,
-      createdBy: user?.email ?? null,
-      createdAt: new Date().toISOString(),
-    });
+    // #271: the primary pin is passed EXPLICITLY as createPiece's 2nd arg (not
+    // smuggled through vestigial JobPiece.pin* fields). createPiece inserts it as
+    // the primary pin row in job_piece_pins; nothing pin-shaped hits job_pieces.
+    await createPiece(
+      {
+        id,
+        projectId: jobId,
+        kind: d.kind,
+        label: d.label,
+        code: d.code ?? null,
+        subtype: d.subtype ?? null,
+        room: null,
+        cutMethod: null,
+        status: "not_started",
+        statusUpdatedAt: null,
+        statusUpdatedBy: null,
+        source: "manual",
+        sourceRef: null,
+        sortOrder: pieces.length,
+        dimensions: null,
+        material: null,
+        edgeband: null,
+        parentRef: null,
+        createdBy: user?.email ?? null,
+        createdAt: new Date().toISOString(),
+      },
+      { documentId: active.id, page: currentPage, x: pendingPin.x, y: pendingPin.y }
+    );
     setPendingPin(null);
     setSelectedPieceId(id);
   }
