@@ -5,7 +5,6 @@ import {
   DOCUMENTS_TABLE,
   FORM_INSTANCES_TABLE,
   FORM_INSTANCE_FIELDS_TABLE,
-  FORM_SHARE_LINKS_TABLE,
   JOBS_TABLE,
   SHARE_TOKENS_TABLE,
 } from "@shared/lib/supabase";
@@ -37,11 +36,10 @@ import {
  * SUPABASE_SERVICE_ROLE_KEY (a server-only env var, never NEXT_PUBLIC_*), so it
  * is only ever imported by server components / route handlers under src/app/f.
  *
- * S5b (ADR 0022): the share-link READ is cut to the generalized `share_tokens`
- * registry (capability_type=form), scoped so a foreign-type token reads as
- * not_found. The answers of record stay in `form_instance_fields` (unchanged).
- * The legacy `form_share_links` table is still dual-written during the overlap
- * but nothing READS it here anymore.
+ * ADR 0022: the share-link READ + WRITE both live on the generalized
+ * `share_tokens` registry (capability_type=form), scoped so a foreign-type token
+ * reads as not_found. The answers of record stay in `form_instance_fields`
+ * (unchanged). (The legacy `form_share_links` mirror was retired in #269.)
  */
 
 export type ShareLinkBundle = {
@@ -68,9 +66,7 @@ export async function loadShareLink(token: string): Promise<ShareLinkLoadResult>
   // as not_found) → revoked check → stamp viewed_at on first view. Forms links are
   // minted with expires_at NULL (never expire), so the generalized "expired"
   // reason is unreachable here; collapse it into not_found for the inactive union.
-  // S5b (ADR 0022): the READ is cut to the generalized `share_tokens` registry;
-  // the legacy `form_share_links` table is still dual-written by the owner store
-  // during the overlap but nothing READS it here anymore.
+  // ADR 0022: the READ lives on the generalized `share_tokens` registry.
   const res = await loadCapabilityRow<ShareTokenRow>(sb, SHARE_TOKENS_TABLE, token, {
     capabilityType: "form",
   });
@@ -131,13 +127,12 @@ export async function submitShareLink(
   const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  // S5b (ADR 0022): the READ is cut to the generalized `share_tokens` registry
+  // ADR 0022: the READ lives on the generalized `share_tokens` registry
   // (capability_type=form so a foreign-type token reads as not_found), reusing the
   // shared capability-load head. `stampView: false` — a submit must NOT masquerade
   // as a first open; viewed_at is stamped explicitly below only when still null.
   // The answers of record stay in `form_instance_fields` (unchanged); only the
-  // share-link stamps move. The legacy `form_share_links` table is still
-  // dual-written below for the overlap.
+  // share-link stamps move.
   const res = await loadCapabilityRow<ShareTokenRow>(sb, SHARE_TOKENS_TABLE, token, {
     capabilityType: "form",
     stampView: false,
@@ -195,7 +190,7 @@ export async function submitShareLink(
     submitUserAgent: audit?.userAgent ?? link.submitUserAgent,
   };
 
-  // Dual-write the stamps. The read path (`share_tokens`) first: the form-specific
+  // Stamp the submission on the read path (`share_tokens`): the form-specific
   // stamps (started/submitted/progress) live in the state jsonb, while viewed_at
   // and the IP+UA audit pair land on the shared typed columns viewed_at / ip / ua.
   const tokenStamp: Record<string, unknown> = {
@@ -209,18 +204,6 @@ export async function submitShareLink(
     .update(tokenStamp)
     .eq("id", link.id)
     .eq("capability_type", "form");
-
-  // Legacy mirror (best-effort during the overlap; the read path no longer
-  // depends on it). Same dedicated columns the legacy table has always carried.
-  const stamp: Record<string, unknown> = {
-    submitted_at: now,
-    progress,
-  };
-  if (link.viewedAt === null) stamp.viewed_at = now;
-  if (link.startedAt === null) stamp.started_at = now;
-  if (audit?.ip) stamp.submit_ip = audit.ip;
-  if (audit?.userAgent) stamp.submit_user_agent = audit.userAgent;
-  await sb.from(FORM_SHARE_LINKS_TABLE).update(stamp).eq("id", link.id);
 
   // Auto-file the signoff PDF on the job when the instance is job-attached.
   // Fetch the instance row now (we need job_id). Best-effort: a PDF generation

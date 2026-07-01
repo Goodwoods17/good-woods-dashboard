@@ -132,8 +132,14 @@ test.describe("project files S2 — document view portal", () => {
     await section.getByTestId("document-share-mint").click();
     await expect(rows).toHaveCount(before + 1);
 
-    // Revoke the first row → it drops out of the active list.
-    await rows.first().getByTestId("document-share-revoke").click();
+    // Revoke the first row. Revoke is now a two-tap arm/confirm: the first tap
+    // arms the button (label changes to "Tap again to confirm"), the second tap
+    // on the same row actually revokes and drops it from the active list.
+    const revokeBtn = rows.first().getByTestId("document-share-revoke");
+    await revokeBtn.click();
+    await expect(revokeBtn).toHaveAttribute("data-armed", "true");
+    await expect(revokeBtn).toHaveText(/Tap again to confirm/);
+    await revokeBtn.click();
     await expect(rows).toHaveCount(before);
   });
 });
