@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { DndContext, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { AlertOctagon, Plus, ChevronDown } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
+import { PillButton } from "@shared/components/ui/PillButton";
 import { cn } from "@shared/lib/utils";
 import { useIsMobile } from "@shared/lib/useIsMobile";
 import { useJobs } from "@features/jobs/lib/jobsStore";
@@ -356,14 +357,10 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         Add a work unit, a piece of a job moving through the shop, and it shows up at its station
         here. Drag it forward as it progresses.
       </p>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-5 inline-flex min-h-[40px] items-center gap-1.5 rounded-full bg-ink-pill px-4 py-2 text-sm font-medium text-white transition-colors duration-fast hover:bg-accent-active"
-      >
+      <PillButton size="md" className="mt-5 min-h-[40px]" onClick={onAdd}>
         <Plus className="h-4 w-4" strokeWidth={2} />
         New unit
-      </button>
+      </PillButton>
     </div>
   );
 }

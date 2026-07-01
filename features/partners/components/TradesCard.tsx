@@ -69,7 +69,7 @@ export function TradesCard({ jobId }: { jobId: string }) {
       )}
 
       {lines.length > 0 && (
-        <ul className="divide-y divide-[rgba(26,25,22,0.05)] mb-3">
+        <ul className="divide-y divide-hairline mb-3">
           {lines.map((line) => (
             <TradeLineRow
               key={line.id}

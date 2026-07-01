@@ -108,7 +108,7 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
                       key={`${o.itemId}-${idx}`}
                       className={cn(
                         "hover:bg-surface-muted/40 transition-colors duration-fast",
-                        idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                        idx > 0 && "border-t border-hairline"
                       )}
                     >
                       <td className="px-4 py-3">
@@ -154,7 +154,10 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
         <aside className="space-y-6">
           <PeopleSection kind="supplier" companyId={supplier.id} />
 
-          {(supplier.website || supplier.address || supplier.accountNumber || supplier.leadTimeNote) && (
+          {(supplier.website ||
+            supplier.address ||
+            supplier.accountNumber ||
+            supplier.leadTimeNote) && (
             <Section title="Details">
               <dl className="px-5 py-4 space-y-3 text-sm">
                 {supplier.website && (
@@ -184,7 +187,9 @@ export function SupplierDetail({ supplier }: { supplier: CatalogSupplier }) {
                     }
                   />
                 )}
-                {supplier.accountNumber && <Fact label="Account #" value={supplier.accountNumber} />}
+                {supplier.accountNumber && (
+                  <Fact label="Account #" value={supplier.accountNumber} />
+                )}
                 {supplier.leadTimeNote && <Fact label="Lead time" value={supplier.leadTimeNote} />}
               </dl>
             </Section>

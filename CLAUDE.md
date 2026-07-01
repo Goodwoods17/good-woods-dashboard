@@ -3,7 +3,7 @@
 The shop-management dashboard for Good Woods (Spacecraft Joinery).
 This is the project-wide source of truth for _how the code is built_.
 Feature-specific rules live in each `features/<name>/CLAUDE.md`; the
-visual direction lives in `docs/DESIGN.md` / `PRODUCT.md`; the
+visual direction lives in `docs/build-direction-spec.md` / `PRODUCT.md`; the
 woodworking vocabulary lives in `docs/domain.md`. When those conflict
 with this file on a project-wide matter, this file wins.
 
@@ -28,7 +28,7 @@ not merely the literal thing asked for. Andrew is a domain expert
 
 - **Next.js 14** (App Router) + **React 18** + **TypeScript** (strict)
 - **Supabase** (Postgres + Auth + RLS) via `@supabase/ssr`
-- **Tailwind CSS** with custom design tokens (see `docs/DESIGN.md`)
+- **Tailwind CSS** with custom design tokens (see `docs/build-direction-spec.md`)
 - **Anthropic SDK** for the briefing feature
 - Charts: `recharts` · DnD: `@dnd-kit` · Icons: `lucide-react` ·
   PDF: `@react-pdf/renderer` · Motion: `framer-motion`
@@ -51,7 +51,7 @@ shared/
   └── lib/*.ts             format, supabase client, auth store, types, utils
 supabase/migrations/*.sql  Schema changes, timestamp-prefixed
 scripts/*.ts               One-off tooling, run with tsx
-docs/                      domain.md, DESIGN.md, decisions/ (ADRs), plans/, roadmap.md
+docs/                      domain.md, build-direction-spec.md, decisions/ (ADRs), plans/, roadmap.md
 ```
 
 A route page should be a few lines: import the feature's view and
@@ -71,7 +71,7 @@ render it. All real logic lives under `features/` or `shared/`.
 - **Shared code rule**: anything used by 2+ features goes in `shared/`,
   never copy-pasted between feature folders.
 - **Styling**: Tailwind only, using the design tokens from
-  `docs/DESIGN.md` (e.g. `bg-ink-pill`, `shadow-resting`,
+  `docs/build-direction-spec.md` (e.g. `bg-ink-pill`, `shadow-resting`,
   `duration-fast`). Don't hardcode hex colors or magic spacing when a
   token exists.
 - **Money**: format with `formatCAD` from `@shared/lib/format`. Never

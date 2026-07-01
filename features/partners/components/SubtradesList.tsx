@@ -12,10 +12,7 @@ export function SubtradesList({ query }: { query: string }) {
   const { subtrades } = useSubtrades();
   const { trades } = useTrades();
 
-  const tradeById = useMemo(
-    () => new Map(trades.map((t) => [t.id, t])),
-    [trades]
-  );
+  const tradeById = useMemo(() => new Map(trades.map((t) => [t.id, t])), [trades]);
 
   const rows = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -69,7 +66,7 @@ export function SubtradesList({ query }: { query: string }) {
                 key={s.id}
                 className={cn(
                   "transition-colors duration-fast hover:bg-surface-muted/40",
-                  idx > 0 && "border-t border-[rgba(26,25,22,0.05)]"
+                  idx > 0 && "border-t border-hairline"
                 )}
               >
                 <td className="px-4 py-3.5">
