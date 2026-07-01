@@ -693,6 +693,19 @@ test.describe("project files S11 — designer upload portal (writing token)", ()
     expect(doc.storage_path.startsWith(`${DEMO_JOB_ID}/`)).toBe(true);
     expect(doc.storage_path).not.toContain("..");
 
+    // #268: the append RPC actually PERSISTED the submission to the token state.
+    // The HTTP response builds its checklist from an OPTIMISTIC local array, so
+    // re-read the DB to prove the atomic append landed — a broken/absent RPC would
+    // leave state.submissions empty here.
+    const { data: tokRow } = await sb
+      .from("share_tokens")
+      .select("state")
+      .eq("token", S11_REQUEST_TOKEN)
+      .maybeSingle();
+    const persisted =
+      (tokRow?.state as { submissions?: Array<{ id?: string }> } | null)?.submissions ?? [];
+    expect(persisted.some((s) => s.id === body.submissionId)).toBe(true);
+
     // ── Clean up so the shared demo job's current-spec count is left pristine
     //    (the uploaded doc is is_current designer → would otherwise inflate S6).
     await sb.storage.from("job-documents").remove([doc.storage_path]);
