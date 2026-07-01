@@ -816,6 +816,11 @@ test.describe("project files S13 — branded portal header", () => {
       await expect(guestPage.getByTestId("document-portal-view")).toBeVisible({
         timeout: 10_000,
       });
+
+      // REGRESSION: the /d portal must render CHROMELESS — an anonymous share-link
+      // recipient must NOT see the internal app shell (sidebar nav to Pipeline,
+      // Invoices, P&L, CRM…). /d/ was missing from AppShell BARE_PATHS.
+      await expect(guestPage.getByTestId("app-chrome")).toHaveCount(0);
     } finally {
       await guest.close();
     }
