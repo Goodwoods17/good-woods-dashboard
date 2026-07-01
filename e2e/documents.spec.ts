@@ -239,6 +239,11 @@ test.describe("project files S4 — dynamic watermark on the shared view", () =>
     expect(res.status()).toBe(200);
     expect(res.headers()["content-type"]).toContain("application/pdf");
     expect(res.headers()["x-watermark"]).toBe("applied");
+    // Security headers (#267): always nosniff; a watermarked pdf is safe inline.
+    // A passthrough of a non-render-stampable stored mime is forced to attachment
+    // (download) so a stored text/html can't execute same-origin.
+    expect(res.headers()["x-content-type-options"]).toBe("nosniff");
+    expect(res.headers()["content-disposition"]).toContain("inline");
 
     const bytes = new Uint8Array(await res.body());
 
