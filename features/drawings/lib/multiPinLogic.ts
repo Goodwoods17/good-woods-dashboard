@@ -9,6 +9,17 @@ export function isPinnedOnDocument(
   return pins.some((p) => p.jobPieceId === pieceId && p.documentId === documentId);
 }
 
+// The SINGLE page-match convention for pins (#270). A pin is created with
+// `page: currentPage`, and DrawingDoc reports the current page as 0 for a SKETCH
+// (single dot-grid canvas) and 1+ for an image/PDF. So a pin's page is
+// authoritative; a null page (only legacy/backfilled pins) defaults to 0 — the
+// first page, which is also the sole page of a sketch — so it can never be
+// stranded off a sketch (the page-0 bug class this replaces: the old overlay
+// filter used `?? 1`, which hid every sketch pin because 1 !== 0).
+export function pinMatchesPage(pin: JobPiecePin, page: number): boolean {
+  return (pin.page ?? 0) === page;
+}
+
 export type PinPatch = { id: string; patch: Partial<JobPiecePin> };
 
 /**

@@ -3,6 +3,7 @@ import type { JobPiecePin } from "@shared/lib/types";
 import {
   isPinnedOnDocument,
   buildSetPrimaryPatches,
+  pinMatchesPage,
   PIN_ROLE_LABELS,
   PIN_ROLES,
 } from "./multiPinLogic";
@@ -19,6 +20,26 @@ function mkPin(overrides: Partial<JobPiecePin> = {}): JobPiecePin {
     ...overrides,
   };
 }
+
+// ─── pinMatchesPage (the single page-match convention, #270) ────────────────
+describe("pinMatchesPage", () => {
+  it("matches a SKETCH pin (page 0) on page 0 — the page-0 bug this replaces", () => {
+    expect(pinMatchesPage(mkPin({ page: 0 }), 0)).toBe(true);
+    expect(pinMatchesPage(mkPin({ page: 0 }), 1)).toBe(false);
+  });
+
+  it("matches an image/PDF pin on its own page (1+)", () => {
+    expect(pinMatchesPage(mkPin({ page: 2 }), 2)).toBe(true);
+    expect(pinMatchesPage(mkPin({ page: 2 }), 1)).toBe(false);
+    expect(pinMatchesPage(mkPin({ page: 1 }), 1)).toBe(true);
+  });
+
+  it("defaults a null/undefined page to page 0 (first page — never stranded off a sketch)", () => {
+    expect(pinMatchesPage(mkPin({ page: null }), 0)).toBe(true);
+    expect(pinMatchesPage(mkPin({ page: null }), 1)).toBe(false);
+    expect(pinMatchesPage(mkPin({ page: undefined }), 0)).toBe(true);
+  });
+});
 
 // ─── isPinnedOnDocument ────────────────────────────────────────────────────
 
@@ -103,8 +124,12 @@ describe("PIN_ROLE_LABELS", () => {
   });
 
   it("covers the five canonical roles", () => {
-    expect(Object.keys(PIN_ROLE_LABELS).sort()).toEqual(
-      ["detail", "elevation", "other", "plan", "section"]
-    );
+    expect(Object.keys(PIN_ROLE_LABELS).sort()).toEqual([
+      "detail",
+      "elevation",
+      "other",
+      "plan",
+      "section",
+    ]);
   });
 });
