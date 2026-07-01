@@ -1,13 +1,26 @@
 "use client";
 
 import {
-  createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
 } from "react";
-import { JOB_PIECES_TABLE, JOB_PIECE_PINS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supabase";
+import {
+  JOB_PIECES_TABLE,
+  JOB_PIECE_PINS_TABLE,
+  getSupabase,
+  hasSupabase,
+} from "@shared/lib/supabase";
 import type { JobPiece, JobPiecePin } from "@shared/lib/types";
 import { rowToPiece, pieceToRow, partialPieceToRow, type PieceRow } from "./piecesRowMap";
 import { pinToRow } from "./piecePinsRowMap";
 import { optimistic } from "@shared/lib/optimistic";
+import { newId } from "@shared/lib/utils";
 
 const STORAGE_KEY = "gw_job_pieces_v1";
 // S8b: pins also have a localStorage key for the combined-rollback path.
@@ -23,12 +36,6 @@ type PiecesContextValue = {
 };
 
 const PiecesContext = createContext<PiecesContextValue | null>(null);
-
-function newPinId(): string {
-  return typeof crypto !== "undefined" && "randomUUID" in crypto
-    ? crypto.randomUUID()
-    : `pin_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-}
 
 function localLoad(): JobPiece[] {
   if (typeof window === "undefined") return [];
@@ -66,7 +73,9 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
   // so we cannot read post-`setPieces` state synchronously; the ref gives every
   // mutator a deterministic, race-safe view (rapid same-id updates compose).
   const piecesRef = useRef<JobPiece[]>([]);
-  useEffect(() => { piecesRef.current = pieces; }, [pieces]);
+  useEffect(() => {
+    piecesRef.current = pieces;
+  }, [pieces]);
 
   // Per-instance channel suffix. supabase-js returns the *existing* channel for a
   // duplicate name, so a second <PiecesProvider> would call `.on()` on an
@@ -84,7 +93,10 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     (async () => {
       if (backend === "localStorage") {
-        if (!cancelled) { setPieces(localLoad()); setLoading(false); }
+        if (!cancelled) {
+          setPieces(localLoad());
+          setLoading(false);
+        }
         return;
       }
       const { data, error } = await getSupabase().from(JOB_PIECES_TABLE).select("*");
@@ -93,7 +105,9 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
         setLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [backend]);
 
   useEffect(() => {
@@ -128,94 +142,107 @@ export function PiecesProvider({ children }: { children: ReactNode }) {
         }
       )
       .subscribe();
-    return () => { sb.removeChannel(channel); };
+    return () => {
+      sb.removeChannel(channel);
+    };
   }, [backend]);
 
-  const createPiece = useCallback(async (p: JobPiece) => {
-    // S8b: if pin location is present in the JobPiece (passed from DrawingsView
-    // handleCreate), extract it as a primary pin row for job_piece_pins. The pin
-    // fields are NOT written to job_pieces — pieceToRow no longer includes them.
-    const primaryPin: JobPiecePin | null =
-      p.pinDocumentId != null && p.pinX != null && p.pinY != null
-        ? {
-            id: newPinId(),
-            jobPieceId: p.id,
-            documentId: p.pinDocumentId,
-            page: p.pinPage ?? null,
-            x: p.pinX,
-            y: p.pinY,
-            role: null,
-            isPrimary: true,
-            createdAt: p.createdAt,
-            createdBy: p.createdBy ?? null,
+  const createPiece = useCallback(
+    async (p: JobPiece) => {
+      // S8b: if pin location is present in the JobPiece (passed from DrawingsView
+      // handleCreate), extract it as a primary pin row for job_piece_pins. The pin
+      // fields are NOT written to job_pieces — pieceToRow no longer includes them.
+      const primaryPin: JobPiecePin | null =
+        p.pinDocumentId != null && p.pinX != null && p.pinY != null
+          ? {
+              id: newId(),
+              jobPieceId: p.id,
+              documentId: p.pinDocumentId,
+              page: p.pinPage ?? null,
+              x: p.pinX,
+              y: p.pinY,
+              role: null,
+              isPrimary: true,
+              createdAt: p.createdAt,
+              createdBy: p.createdBy ?? null,
+            }
+          : null;
+
+      await optimistic({
+        ref: piecesRef,
+        setState: setPieces,
+        apply: (cur) => [...cur, p],
+        rollback: (cur) => cur.filter((x) => x.id !== p.id),
+        persist: async () => {
+          if (backend !== "supabase") {
+            // localStorage path: save pin to the pins localStorage so
+            // PiecePinsProvider's localLoad picks it up.
+            if (primaryPin) localSavePins([...localLoadPins(), primaryPin]);
+            return;
           }
-        : null;
+          const sb = getSupabase();
+          // Insert piece — pieceToRow no longer includes pin_* columns (S8b).
+          const { error: pe } = await sb.from(JOB_PIECES_TABLE).insert(pieceToRow(p));
+          if (pe) throw pe;
+          if (!primaryPin) return;
+          // Atomic create: insert primary pin. On failure roll back the piece insert
+          // (combined rollback — no cross-table Postgres transaction from the client).
+          const { error: pinErr } = await sb
+            .from(JOB_PIECE_PINS_TABLE)
+            .insert(pinToRow(primaryPin));
+          if (pinErr) {
+            await sb.from(JOB_PIECES_TABLE).delete().eq("id", p.id);
+            throw pinErr;
+          }
+        },
+      });
+    },
+    [backend]
+  );
 
-    await optimistic({
-      ref: piecesRef,
-      setState: setPieces,
-      apply: (cur) => [...cur, p],
-      rollback: (cur) => cur.filter((x) => x.id !== p.id),
-      persist: async () => {
-        if (backend !== "supabase") {
-          // localStorage path: save pin to the pins localStorage so
-          // PiecePinsProvider's localLoad picks it up.
-          if (primaryPin) localSavePins([...localLoadPins(), primaryPin]);
-          return;
-        }
-        const sb = getSupabase();
-        // Insert piece — pieceToRow no longer includes pin_* columns (S8b).
-        const { error: pe } = await sb.from(JOB_PIECES_TABLE).insert(pieceToRow(p));
-        if (pe) throw pe;
-        if (!primaryPin) return;
-        // Atomic create: insert primary pin. On failure roll back the piece insert
-        // (combined rollback — no cross-table Postgres transaction from the client).
-        const { error: pinErr } = await sb.from(JOB_PIECE_PINS_TABLE).insert(pinToRow(primaryPin));
-        if (pinErr) {
-          await sb.from(JOB_PIECES_TABLE).delete().eq("id", p.id);
-          throw pinErr;
-        }
-      },
-    });
-  }, [backend]);
+  const updatePiece = useCallback(
+    async (id: string, patch: Partial<JobPiece>) => {
+      const prev = piecesRef.current.find((x) => x.id === id);
+      if (!prev) return;
+      const merged = { ...prev, ...patch };
+      await optimistic({
+        ref: piecesRef,
+        setState: setPieces,
+        apply: (cur) => cur.map((x) => (x.id === id ? merged : x)),
+        rollback: (cur) => cur.map((x) => (x.id === id ? prev : x)),
+        persist: async () => {
+          if (backend !== "supabase") return;
+          // Narrow update: only send the columns that changed — pin_* are never
+          // included (they live in job_piece_pins after S8b).
+          const { error } = await getSupabase()
+            .from(JOB_PIECES_TABLE)
+            .update(partialPieceToRow(patch))
+            .eq("id", id);
+          if (error) throw error;
+        },
+      });
+    },
+    [backend]
+  );
 
-  const updatePiece = useCallback(async (id: string, patch: Partial<JobPiece>) => {
-    const prev = piecesRef.current.find((x) => x.id === id);
-    if (!prev) return;
-    const merged = { ...prev, ...patch };
-    await optimistic({
-      ref: piecesRef,
-      setState: setPieces,
-      apply: (cur) => cur.map((x) => (x.id === id ? merged : x)),
-      rollback: (cur) => cur.map((x) => (x.id === id ? prev : x)),
-      persist: async () => {
-        if (backend !== "supabase") return;
-        // Narrow update: only send the columns that changed — pin_* are never
-        // included (they live in job_piece_pins after S8b).
-        const { error } = await getSupabase()
-          .from(JOB_PIECES_TABLE)
-          .update(partialPieceToRow(patch))
-          .eq("id", id);
-        if (error) throw error;
-      },
-    });
-  }, [backend]);
-
-  const deletePiece = useCallback(async (id: string) => {
-    const removed = piecesRef.current.find((x) => x.id === id);
-    if (!removed) return;
-    await optimistic({
-      ref: piecesRef,
-      setState: setPieces,
-      apply: (cur) => cur.filter((x) => x.id !== id),
-      rollback: (cur) => [...cur, removed],
-      persist: async () => {
-        if (backend !== "supabase") return;
-        const { error } = await getSupabase().from(JOB_PIECES_TABLE).delete().eq("id", id);
-        if (error) throw error;
-      },
-    });
-  }, [backend]);
+  const deletePiece = useCallback(
+    async (id: string) => {
+      const removed = piecesRef.current.find((x) => x.id === id);
+      if (!removed) return;
+      await optimistic({
+        ref: piecesRef,
+        setState: setPieces,
+        apply: (cur) => cur.filter((x) => x.id !== id),
+        rollback: (cur) => [...cur, removed],
+        persist: async () => {
+          if (backend !== "supabase") return;
+          const { error } = await getSupabase().from(JOB_PIECES_TABLE).delete().eq("id", id);
+          if (error) throw error;
+        },
+      });
+    },
+    [backend]
+  );
 
   const value = useMemo<PiecesContextValue>(
     () => ({ pieces, backend, createPiece, updatePiece, deletePiece }),
@@ -233,9 +260,10 @@ export function usePieces(): PiecesContextValue {
 export function useProjectPieces(projectId: string): JobPiece[] {
   const { pieces } = usePieces();
   return useMemo(
-    () => pieces
-      .filter((p) => p.projectId === projectId)
-      .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)),
+    () =>
+      pieces
+        .filter((p) => p.projectId === projectId)
+        .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt.localeCompare(b.createdAt)),
     [pieces, projectId]
   );
 }

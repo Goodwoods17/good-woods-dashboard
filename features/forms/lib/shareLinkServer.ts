@@ -132,20 +132,19 @@ export async function submitShareLink(
   if (!sb) return { ok: false, reason: "unconfigured" };
 
   // S5b (ADR 0022): the READ is cut to the generalized `share_tokens` registry
-  // (capability_type=form so a foreign-type token reads as not_found). The
-  // answers of record stay in `form_instance_fields` (unchanged); only the
+  // (capability_type=form so a foreign-type token reads as not_found), reusing the
+  // shared capability-load head. `stampView: false` — a submit must NOT masquerade
+  // as a first open; viewed_at is stamped explicitly below only when still null.
+  // The answers of record stay in `form_instance_fields` (unchanged); only the
   // share-link stamps move. The legacy `form_share_links` table is still
   // dual-written below for the overlap.
-  const { data: linkRow, error: linkErr } = await sb
-    .from(SHARE_TOKENS_TABLE)
-    .select("*")
-    .eq("token", token)
-    .eq("capability_type", "form")
-    .maybeSingle();
-  if (linkErr) throw linkErr;
-  if (!linkRow) return { ok: false, reason: "not_found" };
+  const res = await loadCapabilityRow<ShareTokenRow>(sb, SHARE_TOKENS_TABLE, token, {
+    capabilityType: "form",
+    stampView: false,
+  });
+  if (!res.ok) return { ok: false, reason: res.reason === "expired" ? "not_found" : res.reason };
 
-  const link = shareTokenRowToFormShareLink(linkRow as ShareTokenRow);
+  const link = shareTokenRowToFormShareLink(res.row);
   if (!isShareLinkActive(link)) return { ok: false, reason: "revoked" };
 
   const { data: fieldRows, error: fieldErr } = await sb

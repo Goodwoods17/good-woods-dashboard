@@ -5,7 +5,7 @@ import Link from "next/link";
 import { MapPin, PencilRuler } from "lucide-react";
 import { usePiecePins, usePinsForDocument } from "../lib/piecePinsStore";
 import { usePieces } from "../lib/piecesStore";
-import { PIN_ROLE_LABELS } from "../lib/multiPinLogic";
+import { PIN_ROLE_LABELS, byPrimaryFirst } from "../lib/multiPinLogic";
 import type { PinRole } from "@shared/lib/types";
 import { cn } from "@shared/lib/utils";
 
@@ -33,9 +33,7 @@ export function DocumentPinsPanel({
     // Deduplicate: one row per piece (a piece may have multiple pins on this doc
     // across pages). Show the primary pin first when there is one.
     const seen = new Set<string>();
-    const sorted = [...pinsForDoc].sort(
-      (a, b) => Number(b.isPrimary) - Number(a.isPrimary)
-    );
+    const sorted = [...pinsForDoc].sort(byPrimaryFirst);
     return sorted.flatMap((pin) => {
       if (seen.has(pin.jobPieceId)) return [];
       seen.add(pin.jobPieceId);
@@ -50,10 +48,7 @@ export function DocumentPinsPanel({
   const count = rows.length;
 
   return (
-    <div
-      data-testid="doc-pins-panel"
-      className="border-t border-[rgba(26,25,22,0.05)] px-6 py-4"
-    >
+    <div data-testid="doc-pins-panel" className="border-t border-[rgba(26,25,22,0.05)] px-6 py-4">
       <div className="flex items-center gap-1.5 mb-3">
         <MapPin className="h-3.5 w-3.5 text-text-tertiary" strokeWidth={1.75} />
         <span className="text-[10px] uppercase tracking-[0.06em] text-text-tertiary font-semibold">

@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { isValidEmail, resolveFromAddress } from "@features/forms/lib/sendShareLink";
-import { SCHEDULING_NOTIFICATIONS_TABLE, type NotificationRow } from "@features/scheduling/lib/notificationsRowMap";
+import { resendDeliver } from "@shared/lib/resendDeliver";
+import {
+  SCHEDULING_NOTIFICATIONS_TABLE,
+  type NotificationRow,
+} from "@features/scheduling/lib/notificationsRowMap";
 import { schedulingEnabled } from "@features/scheduling/lib/featureFlag";
 
 export const runtime = "nodejs";
@@ -82,17 +86,15 @@ export async function POST(request: NextRequest) {
       .update({ status: "approved", recipient_email: recipientEmail })
       .eq("id", notificationId);
 
-    // Deliver via Resend.
+    // Deliver via the shared Resend deliverer (same lazy-imported SDK seam the
+    // Forms P2 send path uses). Plain text only — the scheduling notifications
+    // are honest short prose, not marketing HTML. An html-first path can be
+    // added later.
     const from = resolveFromAddress(process.env.RESEND_FROM);
-    const { Resend } = await import("resend");
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    const { data: sent, error: sendErr } = await resend.emails.send({
+    const { id: emailId, error: sendErr } = await resendDeliver({
       from,
       to: recipientEmail,
       subject: notifRow.subject,
-      // Plain text only — the scheduling notifications are honest short prose,
-      // not marketing HTML. An html-first path can be added later.
       text: notifRow.body,
       html: `<div style="font-family:system-ui,sans-serif;color:#1a1a1a;line-height:1.6;white-space:pre-wrap">${notifRow.body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</div>`,
     });
@@ -108,12 +110,12 @@ export async function POST(request: NextRequest) {
       .update({
         status: "sent",
         sent_at: now,
-        resend_email_id: sent?.id ?? null,
+        resend_email_id: emailId,
         recipient_email: recipientEmail,
       })
       .eq("id", notificationId);
 
-    return NextResponse.json({ ok: true, emailId: sent?.id ?? null });
+    return NextResponse.json({ ok: true, emailId });
   } catch (e) {
     const message = e instanceof Error ? e.message : "unknown";
     console.error("[scheduling/notifications/send] failed:", message);

@@ -1,11 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { UploadCloud, CheckCircle2, Circle, Phone, Mail, ShieldCheck } from "lucide-react";
+import { UploadCloud, CheckCircle2, Circle, ShieldCheck } from "lucide-react";
 import type { DocumentRequestBundle } from "../lib/documentRequestServer";
 import { buildRequestChecklist } from "../lib/documentRequestChecklist";
 import type { DocumentRequestSubmission } from "@shared/lib/types";
 import { PortalBrand } from "@shared/components/layout/PortalBrand";
+import { PortalContactCard } from "@shared/components/layout/PortalContactCard";
 
 /**
  * The public, no-login designer UPLOAD portal (S11, ADR 0022 · milestone #12).
@@ -110,10 +111,7 @@ export function DocumentRequestPortalView({
   }
 
   return (
-    <main
-      className="min-h-screen bg-background"
-      data-testid="document-request-portal-view"
-    >
+    <main className="min-h-screen bg-background" data-testid="document-request-portal-view">
       <PortalBrand pageType="file-request" />
       <div className="mx-auto w-full max-w-2xl px-4 py-8">
         <header className="text-center">
@@ -264,26 +262,7 @@ export function DocumentRequestPortalView({
         ) : null}
 
         {/* Who-to-call card (server-derived, never client-supplied). */}
-        {contact ? (
-          <section
-            data-testid="portal-contact"
-            className="mt-8 rounded-2xl border border-border bg-surface p-4 text-sm"
-          >
-            <p className="font-medium text-text-primary">Questions? Contact {contact.name}</p>
-            <div className="mt-2 flex flex-col gap-1 text-text-secondary">
-              {contact.phone ? (
-                <a href={`tel:${contact.phone}`} className="flex items-center gap-2">
-                  <Phone className="h-4 w-4" strokeWidth={1.75} /> {contact.phone}
-                </a>
-              ) : null}
-              {contact.email ? (
-                <a href={`mailto:${contact.email}`} className="flex items-center gap-2">
-                  <Mail className="h-4 w-4" strokeWidth={1.75} /> {contact.email}
-                </a>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
+        {contact ? <PortalContactCard contact={contact} /> : null}
       </div>
     </main>
   );

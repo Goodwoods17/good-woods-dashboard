@@ -12,20 +12,6 @@ export type ScheduleShareLinkRow = {
   created_by: string | null;
 };
 
-export function rowToScheduleShareLink(row: ScheduleShareLinkRow): ScheduleShareLink {
-  return {
-    id: row.id,
-    jobId: row.job_id,
-    token: row.token,
-    recipientName: row.recipient_name,
-    committedDateSnapshot: row.committed_date_snapshot,
-    viewedAt: row.viewed_at,
-    revokedAt: row.revoked_at,
-    createdAt: row.created_at,
-    createdBy: row.created_by,
-  };
-}
-
 export function scheduleShareLinkToRow(l: ScheduleShareLink): ScheduleShareLinkRow {
   return {
     id: l.id,

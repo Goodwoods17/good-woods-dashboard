@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Check, RotateCcw, ShieldCheck, Users } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import {
@@ -30,10 +30,27 @@ export function DocumentApprovalPanel({
   jobId: string;
   jobName?: string;
 }) {
-  const { approvals, busy, routed, requestApprovals, review } = useDocumentApprovals(
-    documentId,
-    jobName
-  );
+  const { approvals, busy, hydrated, reviewing, routed, requestApprovals, review } =
+    useDocumentApprovals(documentId, jobName);
+  const [error, setError] = useState<string | null>(null);
+
+  async function handleRoute() {
+    setError(null);
+    try {
+      await requestApprovals(jobId);
+    } catch {
+      setError("Couldn't route for approval — try again.");
+    }
+  }
+
+  async function handleReview(role: ReviewerRole, status: ApprovalStatus) {
+    setError(null);
+    try {
+      await review(role, status);
+    } catch {
+      setError("Couldn't save that verdict — try again.");
+    }
+  }
 
   const overall = useMemo(() => computeRoutingStatus(approvals), [approvals]);
   const approved = useMemo(() => approvedCount(approvals), [approvals]);
@@ -67,17 +84,27 @@ export function DocumentApprovalPanel({
         )}
       </div>
 
-      {!routed ? (
+      {error ? (
+        <p data-testid="approval-error" role="alert" className="mb-2 text-xs text-status-blocked">
+          {error}
+        </p>
+      ) : null}
+
+      {!hydrated ? (
+        <p data-testid="approval-loading" className="text-xs text-text-tertiary" aria-live="polite">
+          Loading approval routing…
+        </p>
+      ) : !routed ? (
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-text-tertiary max-w-xs">
-            Route this drawing to the architect, GC, and PM at once. It moves to
-            Approved only after all three sign off.
+            Route this drawing to the architect, GC, and PM at once. It moves to Approved only after
+            all three sign off.
           </p>
           <button
             type="button"
             data-testid="approval-route-btn"
             disabled={busy}
-            onClick={() => void requestApprovals(jobId)}
+            onClick={() => void handleRoute()}
             className={cn(
               "inline-flex items-center gap-1.5 rounded-full bg-ink-pill px-3 py-1.5",
               "text-xs font-medium text-white duration-fast hover:bg-accent-active",
@@ -93,6 +120,7 @@ export function DocumentApprovalPanel({
         <ul className="space-y-1.5">
           {REVIEWER_ROLES.map((role) => {
             const status = statusByRole.get(role) ?? "pending";
+            const rowBusy = reviewing.includes(role);
             return (
               <li
                 key={role}
@@ -110,11 +138,13 @@ export function DocumentApprovalPanel({
                     type="button"
                     data-testid="approval-approve"
                     title="Approve"
-                    onClick={() => void review(role, "approved")}
+                    disabled={rowBusy}
+                    onClick={() => void handleReview(role, "approved")}
                     className={cn(
                       "inline-flex items-center justify-center rounded-full h-6 w-6 duration-fast",
                       "text-text-tertiary hover:text-status-on-track hover:bg-status-on-track-soft/40",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+                      "disabled:opacity-50 disabled:pointer-events-none",
                       status === "approved" && "text-status-on-track bg-status-on-track-soft/40"
                     )}
                   >
@@ -124,11 +154,13 @@ export function DocumentApprovalPanel({
                     type="button"
                     data-testid="approval-reject"
                     title="Needs revision"
-                    onClick={() => void review(role, "needs_revision")}
+                    disabled={rowBusy}
+                    onClick={() => void handleReview(role, "needs_revision")}
                     className={cn(
                       "inline-flex items-center justify-center rounded-full h-6 w-6 duration-fast",
                       "text-text-tertiary hover:text-status-blocked hover:bg-status-blocked-soft/40",
                       "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
+                      "disabled:opacity-50 disabled:pointer-events-none",
                       status === "needs_revision" && "text-status-blocked bg-status-blocked-soft/40"
                     )}
                   >

@@ -1,4 +1,4 @@
-import type { FormShareLink, RecipientType } from "@shared/lib/types";
+import type { FormShareLink } from "@shared/lib/types";
 
 export type FormShareLinkRow = {
   id: string;
@@ -18,40 +18,6 @@ export type FormShareLinkRow = {
   created_at: string;
   created_by: string | null;
 };
-
-const RECIPIENT_TYPES: RecipientType[] = ["designer", "customer", "other"];
-
-/** Coerce a DB recipient_type to the validated union (unknown → "other"). */
-function toRecipientType(value: string): RecipientType {
-  return RECIPIENT_TYPES.includes(value as RecipientType) ? (value as RecipientType) : "other";
-}
-
-/** Coerce the jsonb locked_field_ids to a string[] (tolerates null / bad shape). */
-function toLockedFieldIds(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string");
-}
-
-export function rowToFormShareLink(row: FormShareLinkRow): FormShareLink {
-  return {
-    id: row.id,
-    instanceId: row.instance_id,
-    token: row.token,
-    recipientName: row.recipient_name,
-    recipientType: toRecipientType(row.recipient_type),
-    lockedFieldIds: toLockedFieldIds(row.locked_field_ids),
-    sentAt: row.sent_at,
-    viewedAt: row.viewed_at,
-    startedAt: row.started_at ?? null,
-    submittedAt: row.submitted_at,
-    progress: typeof row.progress === "number" ? row.progress : null,
-    revokedAt: row.revoked_at,
-    submitIp: row.submit_ip ?? null,
-    submitUserAgent: row.submit_user_agent ?? null,
-    createdAt: row.created_at,
-    createdBy: row.created_by,
-  };
-}
 
 export function formShareLinkToRow(l: FormShareLink): FormShareLinkRow {
   return {

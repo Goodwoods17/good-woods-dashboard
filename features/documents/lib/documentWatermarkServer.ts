@@ -6,6 +6,7 @@ import { rowToShareToken, type ShareTokenRow } from "@shared/lib/shareTokensRowM
 import { JOB_DOCUMENTS_BUCKET } from "@features/drawings/lib/storage";
 import { isClientSafeDocument } from "./documentShare";
 import { rowToDocument, type DocumentRow } from "./documentsRowMap";
+import { DOC_COLUMNS } from "./documentsServerShared";
 import type { ProjectDocument } from "@shared/lib/types";
 import {
   buildWatermarkText,
@@ -24,9 +25,6 @@ import {
  * view portal enforces, so a recipient can't fetch an internal doc by guessing its
  * id. Imported only by the server route under src/app/api/documents/portal.
  */
-
-const DOC_COLUMNS =
-  "id, project_id, kind, label, drive_url, version, is_current, notes, uploaded_by, created_at, source, storage_path, mime, page_count";
 
 export type PortalFileResult =
   | {

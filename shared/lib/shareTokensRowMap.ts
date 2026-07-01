@@ -40,7 +40,7 @@ export function toCapabilityType(value: string): CapabilityType {
 }
 
 /** Coerce the `state` jsonb to a safe object (tolerates null / bad shape). */
-function toState(value: unknown): ShareTokenState {
+export function toState(value: unknown): ShareTokenState {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
   return value as ShareTokenState;
 }

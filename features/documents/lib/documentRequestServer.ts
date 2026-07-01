@@ -1,5 +1,5 @@
 import "server-only";
-import { DOCUMENTS_TABLE, SHARE_TOKENS_TABLE, JOBS_TABLE } from "@shared/lib/supabase";
+import { DOCUMENTS_TABLE, SHARE_TOKENS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { loadCapabilityRow } from "@shared/lib/capabilityLink";
 import { rowToShareToken, type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
@@ -8,6 +8,7 @@ import type { CapabilityType, DocumentRequestSubmission } from "@shared/lib/type
 import { sniffMime, isAllowedUploadMime, uploadExtensionFor } from "./uploadMimeSniff";
 import { checkUploadAllowed, type UploadUsage } from "./uploadQuota";
 import { buildRequestChecklist, type RequestChecklist } from "./documentRequestChecklist";
+import { loadJobContact } from "./documentsServerShared";
 
 /**
  * Server-only data + WRITE path for the no-login /d/<token> designer UPLOAD
@@ -327,44 +328,6 @@ function sanitiseFilename(name: string, ext: string): string {
     .slice(0, 120);
   const stem = base.replace(/\.[^.]*$/, "").trim() || "Designer upload";
   return `${stem}.${ext}`;
-}
-
-async function loadJobContact(
-  sb: NonNullable<ReturnType<typeof getServiceRoleClient>>,
-  jobId: string
-): Promise<{ jobName: string; contact: DocumentRequestBundle["contact"] }> {
-  const { data: jobRow } = await sb
-    .from(JOBS_TABLE)
-    .select("name, payer_id")
-    .eq("id", jobId)
-    .maybeSingle();
-  const job = jobRow as { name: string | null; payer_id: string | null } | null;
-  const jobName = job?.name ?? "Your project";
-  if (!job?.payer_id) return { jobName, contact: null };
-
-  const { data: contactRow } = await sb
-    .from("contacts")
-    .select("name, emails, phones")
-    .eq("id", job.payer_id)
-    .maybeSingle();
-  const c = contactRow as { name: string | null; emails: unknown; phones: unknown } | null;
-  if (!c?.name) return { jobName, contact: null };
-  return {
-    jobName,
-    contact: { name: c.name, phone: firstString(c.phones), email: firstString(c.emails) },
-  };
-}
-
-function firstString(value: unknown): string | null {
-  if (!Array.isArray(value)) return null;
-  for (const v of value) {
-    if (typeof v === "string" && v.trim()) return v.trim();
-    if (v && typeof v === "object" && typeof (v as { value?: unknown }).value === "string") {
-      const s = (v as { value: string }).value.trim();
-      if (s) return s;
-    }
-  }
-  return null;
 }
 
 /**

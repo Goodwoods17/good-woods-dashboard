@@ -2,7 +2,12 @@ import "server-only";
 import { SHARE_TOKENS_TABLE, DOCUMENTS_TABLE, JOBS_TABLE } from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { rowToShareToken, type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
-import { buildDocumentShareEmail, resolveFromAddress } from "./documentSendShareLink";
+import { resendDeliver, resolveFromAddress, type EmailDeliverer } from "@shared/lib/resendDeliver";
+import { buildDocumentShareEmail } from "./documentSendShareLink";
+
+// Re-exported so the route handler + tests keep importing the deliverer seam
+// from this module (the canonical type now lives in @shared/lib/resendDeliver).
+export type { EmailDeliverer };
 
 /**
  * Server-only send path for the owner's manual "Send email" button on a
@@ -22,38 +27,6 @@ import { buildDocumentShareEmail, resolveFromAddress } from "./documentSendShare
  * successful send and never cleared (idempotent — a re-send leaves sentAt
  * as the original date so the owner's "first sent" tracking is preserved).
  */
-
-/** Indirection so the route handler can mock the actual Resend call in tests. */
-export type EmailDeliverer = (args: {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}) => Promise<{ id: string | null; error: string | null }>;
-
-/** The real Resend deliverer. Lazy-imports the SDK so it never hits the client bundle. */
-async function resendDeliver(args: {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}): Promise<{ id: string | null; error: string | null }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { id: null, error: "unconfigured" };
-  const { Resend } = await import("resend");
-  const resend = new Resend(apiKey);
-  const { data, error } = await resend.emails.send({
-    from: args.from,
-    to: args.to,
-    subject: args.subject,
-    html: args.html,
-    text: args.text,
-  });
-  if (error) return { id: null, error: error.message ?? "send failed" };
-  return { id: data?.id ?? null, error: null };
-}
 
 export type SendDocumentShareLinkResult =
   | { ok: true; emailId: string | null }
@@ -111,11 +84,7 @@ export async function sendDocumentShareLinkEmail(
 
   let jobName = "Your project";
   if (jobId) {
-    const { data: jobRow } = await sb
-      .from(JOBS_TABLE)
-      .select("name")
-      .eq("id", jobId)
-      .maybeSingle();
+    const { data: jobRow } = await sb.from(JOBS_TABLE).select("name").eq("id", jobId).maybeSingle();
     jobName = (jobRow as { name?: string | null } | null)?.name?.trim() || jobName;
   }
 
