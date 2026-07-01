@@ -1,5 +1,5 @@
 import { FileLock2 } from "lucide-react";
-import { PortalBrand } from "@shared/components/layout/PortalBrand";
+import { PortalInactive } from "@shared/components/layout/PortalInactive";
 
 /**
  * Clean public-facing state for a document-view token that can’t be opened —
@@ -21,20 +21,12 @@ export function DocumentPortalInactive({
           : "We couldn’t find those documents. Please check the link and try again.";
 
   return (
-    <main
-      className="flex min-h-screen flex-col bg-background"
-      data-testid="document-portal-inactive"
-    >
-      <PortalBrand pageType="documents" />
-      <div className="flex flex-1 items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 text-center shadow-resting">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted">
-            <FileLock2 className="h-5 w-5 text-text-tertiary" strokeWidth={1.75} />
-          </div>
-          <h1 className="font-serif text-xl text-text-primary">Documents unavailable</h1>
-          <p className="mt-2 text-sm text-text-secondary">{message}</p>
-        </div>
-      </div>
-    </main>
+    <PortalInactive
+      icon={FileLock2}
+      title="Documents unavailable"
+      message={message}
+      pageType="documents"
+      testId="document-portal-inactive"
+    />
   );
 }
