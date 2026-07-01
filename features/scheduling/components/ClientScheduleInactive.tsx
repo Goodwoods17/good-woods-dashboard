@@ -1,5 +1,5 @@
 import { LinkIcon } from "lucide-react";
-import { PortalBrand } from "@shared/components/layout/PortalBrand";
+import { PortalInactive } from "@shared/components/layout/PortalInactive";
 
 /**
  * Clean public-facing state for a schedule token that can’t be opened — revoked,
@@ -19,20 +19,12 @@ export function ClientScheduleInactive({
         : "We couldn’t find that schedule. Please check the link and try again.";
 
   return (
-    <main
-      className="flex min-h-screen flex-col bg-background"
-      data-testid="client-schedule-inactive"
-    >
-      <PortalBrand pageType="schedule" />
-      <div className="flex flex-1 items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-8 text-center shadow-resting">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-surface-muted">
-            <LinkIcon className="h-5 w-5 text-text-tertiary" strokeWidth={1.75} />
-          </div>
-          <h1 className="font-serif text-xl text-text-primary">Schedule unavailable</h1>
-          <p className="mt-2 text-sm text-text-secondary">{message}</p>
-        </div>
-      </div>
-    </main>
+    <PortalInactive
+      icon={LinkIcon}
+      title="Schedule unavailable"
+      message={message}
+      pageType="schedule"
+      testId="client-schedule-inactive"
+    />
   );
 }
