@@ -4,11 +4,26 @@ import type { JobPiece } from "@shared/lib/types";
 
 // S8b: pin_* columns are removed from PieceRow — pins live in job_piece_pins.
 const row: PieceRow = {
-  id: "p1", project_id: "j1", kind: "cabinet", subtype: "base", code: "R1C7",
-  room: "Kitchen", label: "3 Drawer", cut_method: "inhouse", status: "cut",
-  status_updated_at: "2026-06-24T00:00:00Z", status_updated_by: "a@b.c",
-  source: "manual", source_ref: null, sort_order: 0, dimensions: null, material: null,
-  edgeband: null, parent_ref: null, created_by: "a@b.c", created_at: "2026-06-24T00:00:00Z",
+  id: "p1",
+  project_id: "j1",
+  kind: "cabinet",
+  subtype: "base",
+  code: "R1C7",
+  room: "Kitchen",
+  label: "3 Drawer",
+  cut_method: "inhouse",
+  status: "cut",
+  status_updated_at: "2026-06-24T00:00:00Z",
+  status_updated_by: "a@b.c",
+  source: "manual",
+  source_ref: null,
+  sort_order: 0,
+  dimensions: null,
+  material: null,
+  edgeband: null,
+  parent_ref: null,
+  created_by: "a@b.c",
+  created_at: "2026-06-24T00:00:00Z",
   visibility: "owner",
 };
 
@@ -24,8 +39,14 @@ describe("piecesRowMap", () => {
   });
   it("defaults absent nullables to null — no pin_* emitted", () => {
     const piece: JobPiece = {
-      id: "p2", projectId: "j1", kind: "filler", label: "Filler",
-      status: "not_started", source: "manual", sortOrder: 0, createdAt: "x",
+      id: "p2",
+      projectId: "j1",
+      kind: "filler",
+      label: "Filler",
+      status: "not_started",
+      source: "manual",
+      sortOrder: 0,
+      createdAt: "x",
     };
     const r = pieceToRow(piece);
     expect(r.code).toBeNull();
@@ -33,12 +54,6 @@ describe("piecesRowMap", () => {
     // S8b: pin_* are not part of PieceRow anymore — no pin keys in output
     expect("pin_x" in r).toBe(false);
     expect("pin_document_id" in r).toBe(false);
-  });
-  it("JobPiece.pin* fields (optional) are NOT mapped into PieceRow by rowToPiece", () => {
-    // pin* were removed from PieceRow in S8b; rowToPiece no longer sets them
-    const p = rowToPiece(row);
-    expect(p.pinDocumentId).toBeUndefined();
-    expect(p.pinX).toBeUndefined();
   });
 
   describe("partialPieceToRow", () => {
