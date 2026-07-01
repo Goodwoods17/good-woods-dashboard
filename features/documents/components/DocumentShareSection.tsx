@@ -3,10 +3,16 @@
 import { useMemo, useState } from "react";
 import { Check, Copy, Link2, Ban, Eye, AlertTriangle, Mail, Send } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { Pill } from "@shared/components/ui/Pill";
+import { useCopyToClipboard } from "@shared/lib/useCopyToClipboard";
 import type { ProjectDocument, ShareToken } from "@shared/lib/types";
 import { useDocumentShareLinks } from "../lib/documentShareLinksStore";
 import { selectClientSafeDocuments, countExcludedDriveLinks } from "../lib/documentShare";
-import { isValidEmail, NOTIFY_PREF_LABELS, type NotifyPreference } from "../lib/documentSendShareLink";
+import {
+  isValidEmail,
+  NOTIFY_PREF_LABELS,
+  type NotifyPreference,
+} from "../lib/documentSendShareLink";
 
 /**
  * Owner mint / list / revoke / email for no-login document VIEW links (S2+S3,
@@ -32,6 +38,7 @@ export function DocumentShareSection({
   const [recipient, setRecipient] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [notifyPref, setNotifyPref] = useState<NotifyPreference | "">("");
+  const [mintError, setMintError] = useState<string | null>(null);
 
   const safe = useMemo(() => selectClientSafeDocuments(docs), [docs]);
   const driveWarn = useMemo(() => countExcludedDriveLinks(docs), [docs]);
@@ -41,13 +48,20 @@ export function DocumentShareSection({
 
   async function handleMint() {
     if (!anchorId) return;
-    await create(anchorId, recipient.trim() || null, {
-      expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
-      notifyPreference: notifyPref || null,
-    });
-    setRecipient("");
-    setExpiresAt("");
-    setNotifyPref("");
+    setMintError(null);
+    try {
+      await create(anchorId, recipient.trim() || null, {
+        expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
+        notifyPreference: notifyPref || null,
+      });
+      // Clear the form only once the link actually landed.
+      setRecipient("");
+      setExpiresAt("");
+      setNotifyPref("");
+    } catch {
+      // Preserve the form values so the owner can retry without re-typing.
+      setMintError("Couldn't create the link — try again.");
+    }
   }
 
   return (
@@ -135,6 +149,16 @@ export function DocumentShareSection({
         </button>
       </div>
 
+      {mintError ? (
+        <p
+          data-testid="document-share-mint-error"
+          role="alert"
+          className="mt-2 text-xs text-status-blocked"
+        >
+          {mintError}
+        </p>
+      ) : null}
+
       {activeLinks.length > 0 ? (
         <ul className="mt-3 space-y-1.5" data-testid="document-share-links">
           {activeLinks.map((l) => (
@@ -146,7 +170,11 @@ export function DocumentShareSection({
             />
           ))}
         </ul>
-      ) : null}
+      ) : (
+        <p data-testid="document-share-empty" className="mt-3 text-xs text-text-tertiary">
+          No share links yet — create one above.
+        </p>
+      )}
     </div>
   );
 }
@@ -158,27 +186,50 @@ function ShareLinkRow({
 }: {
   link: ShareToken;
   designerEmail: string | null;
-  onRevoke: () => void;
+  onRevoke: () => Promise<void> | void;
 }) {
-  const [copied, setCopied] = useState(false);
+  const { copied, copy } = useCopyToClipboard();
+  const [copyFailed, setCopyFailed] = useState(false);
   const [email, setEmail] = useState(designerEmail ?? "");
   const [sending, setSending] = useState(false);
   const [sendNote, setSendNote] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [revokeFailed, setRevokeFailed] = useState(false);
 
   const url =
-    typeof window !== "undefined" ? `${window.location.origin}/d/${link.token}` : `/d/${link.token}`;
+    typeof window !== "undefined"
+      ? `${window.location.origin}/d/${link.token}`
+      : `/d/${link.token}`;
 
   // Whether this link has already been emailed (sentAt recorded in state).
-  const sentAt =
-    typeof link.state.sentAt === "string" ? link.state.sentAt : null;
+  const sentAt = typeof link.state.sentAt === "string" ? link.state.sentAt : null;
 
-  async function copy() {
+  // A link past its expiry is dead on the public portal even though it isn't
+  // revoked — surface that here so it doesn't read as live.
+  const isExpired = link.expiresAt ? new Date(link.expiresAt) < new Date() : false;
+
+  async function handleCopy() {
+    setCopyFailed(false);
+    // The hook owns the copied-then-reset feedback; we only add a failure hint.
+    // Typed `unknown` so we tolerate either a boolean-returning or throwing hook.
     try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      const ok: unknown = await copy(url);
+      if (ok === false) setCopyFailed(true);
     } catch {
-      /* clipboard denied — the link is still visible in the row */
+      setCopyFailed(true);
+    }
+  }
+
+  async function handleRevoke() {
+    if (revoking) return;
+    setRevoking(true);
+    setRevokeFailed(false);
+    try {
+      await onRevoke();
+    } catch {
+      setRevokeFailed(true);
+    } finally {
+      setRevoking(false);
     }
   }
 
@@ -218,13 +269,26 @@ function ShareLinkRow({
     <li
       data-testid="document-share-link-row"
       data-link-id={link.id}
-      className="rounded-lg bg-surface px-3 py-2 text-xs"
+      data-expired={isExpired ? "true" : undefined}
+      className={cn("rounded-lg bg-surface px-3 py-2 text-xs", isExpired && "opacity-60")}
     >
       {/* Row header: recipient + views + revoke */}
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate font-medium text-text-primary">
-            {link.recipientName ?? "Anyone with the link"}
+          <div className="flex items-center gap-1.5">
+            <span className="truncate font-medium text-text-primary">
+              {link.recipientName ?? "Anyone with the link"}
+            </span>
+            {isExpired ? (
+              <Pill
+                tone={{
+                  bg: "bg-status-blocked-soft/40",
+                  text: "text-status-blocked",
+                  dot: "bg-status-blocked",
+                }}
+                label="Expired"
+              />
+            ) : null}
           </div>
           <div className="flex items-center gap-2 text-text-tertiary">
             <span className="inline-flex items-center gap-1" data-testid="document-share-views">
@@ -242,23 +306,29 @@ function ShareLinkRow({
               </span>
             ) : null}
             {link.expiresAt ? (
-              <span>
-                · expires {new Date(link.expiresAt).toLocaleDateString("en-CA")}
-              </span>
+              <span>· expires {new Date(link.expiresAt).toLocaleDateString("en-CA")}</span>
             ) : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            onClick={copy}
+            onClick={handleCopy}
             data-testid="document-share-copy"
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-text-secondary duration-fast hover:text-text-primary"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-1 duration-fast",
+              copyFailed ? "text-status-blocked" : "text-text-secondary hover:text-text-primary"
+            )}
           >
             {copied ? (
               <>
                 <Check className="h-3.5 w-3.5" strokeWidth={2} />
                 Copied
+              </>
+            ) : copyFailed ? (
+              <>
+                <Copy className="h-3.5 w-3.5" strokeWidth={1.75} />
+                Copy failed
               </>
             ) : (
               <>
@@ -269,12 +339,17 @@ function ShareLinkRow({
           </button>
           <button
             type="button"
-            onClick={onRevoke}
+            onClick={handleRevoke}
+            disabled={revoking}
             data-testid="document-share-revoke"
-            className="inline-flex items-center gap-1 rounded-full px-2 py-1 text-text-tertiary duration-fast hover:text-status-blocked"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full px-2 py-1 duration-fast",
+              "disabled:opacity-50 disabled:pointer-events-none",
+              revokeFailed ? "text-status-blocked" : "text-text-tertiary hover:text-status-blocked"
+            )}
           >
             <Ban className="h-3.5 w-3.5" strokeWidth={1.75} />
-            Revoke
+            {revokeFailed ? "Retry revoke" : "Revoke"}
           </button>
         </div>
       </div>

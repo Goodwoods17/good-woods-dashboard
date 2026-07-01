@@ -9,8 +9,13 @@ import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { rowToFormInstance, type FormInstanceRow } from "./formInstancesRowMap";
 import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import { formShareLinkToShareTokenState, shareTokenRowToFormShareLink } from "./formShareTokenMap";
-import { buildShareEmail, resolveFromAddress, type SendMode } from "./sendShareLink";
+import { buildShareEmail, type SendMode } from "./sendShareLink";
+import { resendDeliver, resolveFromAddress, type EmailDeliverer } from "@shared/lib/resendDeliver";
 import { isShareLinkActive } from "./shareLink";
+
+// Re-exported so the route handler's test can keep importing the deliverer seam
+// type from this module (the deliverer itself now lives in the shared module).
+export type { EmailDeliverer };
 
 /**
  * Server-only send path for the owner's manual "Send to client" / "Send reminder"
@@ -24,38 +29,6 @@ import { isShareLinkActive } from "./shareLink";
  * `unconfigured` is the path they exercise. Tests MOCK the Resend send (no real
  * email is ever sent in CI).
  */
-
-/** Indirection so the route handler can mock the actual Resend call in tests. */
-export type EmailDeliverer = (args: {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}) => Promise<{ id: string | null; error: string | null }>;
-
-/** The real Resend deliverer. Lazy-imports the SDK so it never hits the client bundle. */
-async function resendDeliver(args: {
-  from: string;
-  to: string;
-  subject: string;
-  html: string;
-  text: string;
-}): Promise<{ id: string | null; error: string | null }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { id: null, error: "unconfigured" };
-  const { Resend } = await import("resend");
-  const resend = new Resend(apiKey);
-  const { data, error } = await resend.emails.send({
-    from: args.from,
-    to: args.to,
-    subject: args.subject,
-    html: args.html,
-    text: args.text,
-  });
-  if (error) return { id: null, error: error.message ?? "send failed" };
-  return { id: data?.id ?? null, error: null };
-}
 
 export type SendShareLinkResult =
   | { ok: true; mode: SendMode; emailId: string | null }

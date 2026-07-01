@@ -18,7 +18,7 @@ import {
   type ShapeData,
   type ShapeKind,
 } from "@shared/lib/types";
-import { cn } from "@shared/lib/utils";
+import { cn, newId } from "@shared/lib/utils";
 import { DrawingUpload } from "./DrawingUpload";
 import { DrawingDoc } from "./DrawingDoc";
 import { PiecePin } from "./PiecePin";
@@ -37,12 +37,6 @@ import { useMarkupHistory } from "../lib/useMarkupHistory";
 import { PEN_COLORS, HIGHLIGHTER_COLORS } from "../lib/strokes";
 import { nextStatus } from "../lib/pipelines";
 
-function newId(): string {
-  return (typeof crypto !== "undefined" && "randomUUID" in crypto)
-    ? crypto.randomUUID()
-    : `piece_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
-}
-
 export function DrawingsView({ jobId }: { jobId: string }) {
   const job = useJob(jobId);
   const docs = useProjectDocuments(jobId);
@@ -51,9 +45,11 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const pieces = useProjectPieces(jobId);
   const { createPiece, updatePiece, deletePiece } = usePieces();
   // S8b: pins come from the job_piece_pins collection (ADR 0023).
-  // S9: also expose createPin/updatePin/deletePin for the multi-pin panel.
-  const { pins, createPin, updatePin, deletePin } = usePiecePins();
-  const { createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation } = useAnnotations();
+  // S9: createPin drives placing new pins; PiecePinPanel pulls its own
+  // update/delete for the multi-pin panel.
+  const { pins, createPin } = usePiecePins();
+  const { createAnnotation, updateAnnotation, deleteAnnotation, restoreAnnotation } =
+    useAnnotations();
 
   const [activeId, setActiveId] = useState<string | null>(null);
   const [armedId, setArmedId] = useState<string | null>(null);
@@ -71,26 +67,23 @@ export function DrawingsView({ jobId }: { jobId: string }) {
   const [highlighterColor, setHighlighterColor] = useState<string>(HIGHLIGHTER_COLORS[0]);
   const [shapeKind, setShapeKind] = useState<ShapeKind>("arrow");
   const [selectedAnnId, setSelectedAnnId] = useState<string | null>(null);
-  const [editingText, setEditingText] = useState<{ id?: string; x: number; y: number; value: string } | null>(null);
+  const [editingText, setEditingText] = useState<{
+    id?: string;
+    x: number;
+    y: number;
+    value: string;
+  } | null>(null);
 
   const active = docs.find((d) => d.id === activeId) ?? docs[0] ?? null;
 
   // S8b: pins that reference this document on the current page. One marker per
   // pin row — the primary pin bridges the current single-pin UX. We derive the
   // piece for each pin via a Map lookup so the render is O(pins) not O(pins×pieces).
-  const piecesById = useMemo(
-    () => new Map(pieces.map((p) => [p.id, p])),
-    [pieces]
-  );
+  const piecesById = useMemo(() => new Map(pieces.map((p) => [p.id, p])), [pieces]);
   // S9: lookup map for document names used by PiecePinPanel.
-  const docsById = useMemo(
-    () => new Map(docs.map((d) => [d.id, d])),
-    [docs]
-  );
+  const docsById = useMemo(() => new Map(docs.map((d) => [d.id, d])), [docs]);
   const docPins = useMemo(
-    () => pins.filter(
-      (pin) => pin.documentId === active?.id && (pin.page ?? 1) === currentPage
-    ),
+    () => pins.filter((pin) => pin.documentId === active?.id && (pin.page ?? 1) === currentPage),
     [pins, active?.id, currentPage]
   );
 
@@ -119,7 +112,8 @@ export function DrawingsView({ jobId }: { jobId: string }) {
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
-        if (e.shiftKey) history.redo(); else history.undo();
+        if (e.shiftKey) history.redo();
+        else history.undo();
       } else if ((e.key === "Delete" || e.key === "Backspace") && selectedAnnotation) {
         e.preventDefault();
         void deleteAnnotation(selectedAnnotation.id);
@@ -147,7 +141,10 @@ export function DrawingsView({ jobId }: { jobId: string }) {
 
   async function onTrashDoc(doc: ProjectDocument) {
     if (busyId) return;
-    if (armedId !== doc.id) { setArmedId(doc.id); return; }
+    if (armedId !== doc.id) {
+      setArmedId(doc.id);
+      return;
+    }
     setBusyId(doc.id);
     try {
       if (doc.source === "upload" && doc.storagePath) await removeDrawing(doc.storagePath);
@@ -198,43 +195,87 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     const n = docs.filter((d) => d.source === "sketch").length + 1;
     const id = newId();
     await createDocument({
-      id, projectId: jobId, kind: "other", label: `Sketch ${n}`,
-      driveUrl: null, version: null, isCurrent: true, notes: null,
-      uploadedBy: user?.email ?? null, createdAt: new Date().toISOString(),
-      source: "sketch", storagePath: null, mime: null, pageCount: 0,
+      id,
+      projectId: jobId,
+      kind: "other",
+      label: `Sketch ${n}`,
+      driveUrl: null,
+      version: null,
+      isCurrent: true,
+      notes: null,
+      uploadedBy: user?.email ?? null,
+      createdAt: new Date().toISOString(),
+      source: "sketch",
+      storagePath: null,
+      mime: null,
+      pageCount: 0,
     });
     setArmedId(null);
     setActiveId(id);
     setActiveTool("pen");
   }
 
-  async function handleCreate(d: { kind: PieceKind; label: string; code?: string; subtype?: string }) {
+  async function handleCreate(d: {
+    kind: PieceKind;
+    label: string;
+    code?: string;
+    subtype?: string;
+  }) {
     if (!pendingPin || !active) return;
     const id = newId();
     // S8b: pass pin location via the optional JobPiece.pin* fields. createPiece
     // extracts them and inserts a primary pin row in job_piece_pins atomically —
     // the pin fields are NOT written to the job_pieces row (pieceToRow drops them).
     await createPiece({
-      id, projectId: jobId, kind: d.kind, label: d.label, code: d.code ?? null,
-      subtype: d.subtype ?? null, room: null, cutMethod: null, status: "not_started",
-      statusUpdatedAt: null, statusUpdatedBy: null, source: "manual", sourceRef: null,
-      pinDocumentId: active.id, pinPage: currentPage, pinX: pendingPin.x, pinY: pendingPin.y,
-      sortOrder: pieces.length, dimensions: null, material: null, edgeband: null,
-      parentRef: null, createdBy: user?.email ?? null, createdAt: new Date().toISOString(),
+      id,
+      projectId: jobId,
+      kind: d.kind,
+      label: d.label,
+      code: d.code ?? null,
+      subtype: d.subtype ?? null,
+      room: null,
+      cutMethod: null,
+      status: "not_started",
+      statusUpdatedAt: null,
+      statusUpdatedBy: null,
+      source: "manual",
+      sourceRef: null,
+      pinDocumentId: active.id,
+      pinPage: currentPage,
+      pinX: pendingPin.x,
+      pinY: pendingPin.y,
+      sortOrder: pieces.length,
+      dimensions: null,
+      material: null,
+      edgeband: null,
+      parentRef: null,
+      createdBy: user?.email ?? null,
+      createdAt: new Date().toISOString(),
     });
     setPendingPin(null);
     setSelectedPieceId(id);
   }
 
   async function handleCommitStroke(s: {
-    type: AnnotationType; color: string; size: number; data: StrokeData;
+    type: AnnotationType;
+    color: string;
+    size: number;
+    data: StrokeData;
   }) {
     if (!active) return;
     const now = new Date().toISOString();
     const a: Annotation = {
-      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
-      type: s.type, data: s.data, color: s.color, strokeWidth: s.size,
-      createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+      id: newId(),
+      documentId: active.id,
+      projectId: jobId,
+      page: currentPage,
+      type: s.type,
+      data: s.data,
+      color: s.color,
+      strokeWidth: s.size,
+      createdBy: user?.email ?? null,
+      createdAt: now,
+      updatedAt: now,
     };
     await createAnnotation(a);
     history.recordAdd(a);
@@ -250,9 +291,17 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     if (!active) return;
     const now = new Date().toISOString();
     const a: Annotation = {
-      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
-      type: "shape", data: s.data, color: s.color, strokeWidth: s.size,
-      createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+      id: newId(),
+      documentId: active.id,
+      projectId: jobId,
+      page: currentPage,
+      type: "shape",
+      data: s.data,
+      color: s.color,
+      strokeWidth: s.size,
+      createdBy: user?.email ?? null,
+      createdAt: now,
+      updatedAt: now,
     };
     await createAnnotation(a);
     history.recordAdd(a);
@@ -276,9 +325,15 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     if (editing.id) {
       const before = docAnnotations.find((a) => a.id === editing.id);
       if (!before) return;
-      if (!text) { await deleteAnnotation(before.id); history.recordDelete(before); setSelectedAnnId(null); return; }
+      if (!text) {
+        await deleteAnnotation(before.id);
+        history.recordDelete(before);
+        setSelectedAnnId(null);
+        return;
+      }
       const after: Annotation = {
-        ...before, data: { ...(before.data as { x: number; y: number; fontSize: number }), text },
+        ...before,
+        data: { ...(before.data as { x: number; y: number; fontSize: number }), text },
         updatedAt: new Date().toISOString(),
       };
       await updateAnnotation(after.id, after);
@@ -288,9 +343,17 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     if (!text) return;
     const now = new Date().toISOString();
     const a: Annotation = {
-      id: newId(), documentId: active.id, projectId: jobId, page: currentPage,
-      type: "text", data: { x: editing.x, y: editing.y, text, fontSize: 0.022 },
-      color: penColor, strokeWidth: null, createdBy: user?.email ?? null, createdAt: now, updatedAt: now,
+      id: newId(),
+      documentId: active.id,
+      projectId: jobId,
+      page: currentPage,
+      type: "text",
+      data: { x: editing.x, y: editing.y, text, fontSize: 0.022 },
+      color: penColor,
+      strokeWidth: null,
+      createdBy: user?.email ?? null,
+      createdAt: now,
+      updatedAt: now,
     };
     await createAnnotation(a);
     history.recordAdd(a);
@@ -312,13 +375,17 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     const to = nextStatus(p.kind, p.status);
     if (!to) return;
     await updatePiece(p.id, {
-      status: to, statusUpdatedAt: new Date().toISOString(), statusUpdatedBy: user?.email ?? null,
+      status: to,
+      statusUpdatedAt: new Date().toISOString(),
+      statusUpdatedBy: user?.email ?? null,
     });
   }
 
   async function handleSetStatus(p: JobPiece, status: string) {
     await updatePiece(p.id, {
-      status, statusUpdatedAt: new Date().toISOString(), statusUpdatedBy: user?.email ?? null,
+      status,
+      statusUpdatedAt: new Date().toISOString(),
+      statusUpdatedBy: user?.email ?? null,
     });
   }
 
@@ -338,8 +405,10 @@ export function DrawingsView({ jobId }: { jobId: string }) {
     <div className="flex h-screen flex-col">
       <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border bg-surface px-6 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Link href={`/jobs/${jobId}`}
-            className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary duration-fast">
+          <Link
+            href={`/jobs/${jobId}`}
+            className="inline-flex items-center gap-1.5 text-xs text-text-tertiary hover:text-text-secondary duration-fast"
+          >
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </Link>
           <h1 className="truncate font-serif text-title text-text-primary">
@@ -349,35 +418,56 @@ export function DrawingsView({ jobId }: { jobId: string }) {
         <div className="flex flex-wrap items-center gap-2">
           {canMarkup && (
             <MarkupToolbar
-              activeTool={activeTool} onTool={selectTool} canPin={canPin}
-              penColor={penColor} onPenColor={setPenColor}
-              highlighterColor={highlighterColor} onHighlighterColor={setHighlighterColor}
-              shapeKind={shapeKind} onShapeKind={setShapeKind}
-              selectionActive={selectedAnnotation != null} onDeleteSelection={handleDeleteSelection}
-              canUndo={history.canUndo} canRedo={history.canRedo}
-              onUndo={history.undo} onRedo={history.redo}
+              activeTool={activeTool}
+              onTool={selectTool}
+              canPin={canPin}
+              penColor={penColor}
+              onPenColor={setPenColor}
+              highlighterColor={highlighterColor}
+              onHighlighterColor={setHighlighterColor}
+              shapeKind={shapeKind}
+              onShapeKind={setShapeKind}
+              selectionActive={selectedAnnotation != null}
+              onDeleteSelection={handleDeleteSelection}
+              canUndo={history.canUndo}
+              canRedo={history.canRedo}
+              onUndo={history.undo}
+              onRedo={history.redo}
             />
           )}
           {active?.source === "sketch" && (
-            <button type="button" onClick={() => setShowDots((v) => !v)}
+            <button
+              type="button"
+              onClick={() => setShowDots((v) => !v)}
               aria-pressed={showDots}
               className={cn(
                 "inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-sm font-medium duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
-                showDots ? "bg-surface-muted text-text-primary" : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
-              )}>
+                showDots
+                  ? "bg-surface-muted text-text-primary"
+                  : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
+              )}
+            >
               <Grid3x3 className="h-4 w-4" /> Dots
             </button>
           )}
-          <button type="button" onClick={() => setShowChecklist((v) => !v)}
+          <button
+            type="button"
+            onClick={() => setShowChecklist((v) => !v)}
             aria-pressed={showChecklist}
             className={cn(
               "inline-flex min-h-[44px] items-center gap-1.5 rounded-full px-3 text-sm font-medium duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft",
-              showChecklist ? "bg-surface-muted text-text-primary" : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
-            )}>
+              showChecklist
+                ? "bg-surface-muted text-text-primary"
+                : "border border-border bg-surface text-text-secondary hover:bg-surface-muted"
+            )}
+          >
             <ListChecks className="h-4 w-4" /> Checklist
           </button>
-          <button type="button" onClick={handleNewSketch}
-            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-medium text-text-secondary duration-fast hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft">
+          <button
+            type="button"
+            onClick={handleNewSketch}
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-full border border-border bg-surface px-3 text-sm font-medium text-text-secondary duration-fast hover:bg-surface-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
+          >
             <SquarePen className="h-4 w-4" /> New sketch
           </button>
           <DrawingUpload jobId={jobId} />
@@ -387,33 +477,49 @@ export function DrawingsView({ jobId }: { jobId: string }) {
       <div className="flex min-h-0 flex-1">
         <aside className="w-56 shrink-0 overflow-auto border-r border-border bg-surface p-2">
           {docs.length === 0 ? (
-            <p className="p-2 text-xs text-text-tertiary">No drawings yet. Upload a PDF or image.</p>
+            <p className="p-2 text-xs text-text-tertiary">
+              No drawings yet. Upload a PDF or image.
+            </p>
           ) : (
             docs.map((d) => {
               const armed = armedId === d.id;
               return (
-                <div key={d.id}
+                <div
+                  key={d.id}
                   className={cn(
                     "flex items-center gap-1 rounded-md duration-fast",
                     active?.id === d.id ? "bg-surface-muted" : "hover:bg-surface-muted"
-                  )}>
-                  <button onClick={() => selectDoc(d.id)}
-                    className="flex min-h-[44px] min-w-0 flex-1 flex-col justify-center rounded-md px-2.5 py-1.5 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent">
-                    <span className={cn("block truncate",
-                      active?.id === d.id ? "text-text-primary" : "text-text-secondary")}>
+                  )}
+                >
+                  <button
+                    onClick={() => selectDoc(d.id)}
+                    className="flex min-h-[44px] min-w-0 flex-1 flex-col justify-center rounded-md px-2.5 py-1.5 text-left text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  >
+                    <span
+                      className={cn(
+                        "block truncate",
+                        active?.id === d.id ? "text-text-primary" : "text-text-secondary"
+                      )}
+                    >
                       {d.label}
                     </span>
                     <span className="text-micro uppercase tracking-wider text-text-tertiary">
-                      {d.source === "sketch" ? "Sketch" : DOCUMENT_KIND_LABELS[d.kind]}{d.source === "link" ? " · link" : ""}
+                      {d.source === "sketch" ? "Sketch" : DOCUMENT_KIND_LABELS[d.kind]}
+                      {d.source === "link" ? " · link" : ""}
                     </span>
                   </button>
-                  <button onClick={() => onTrashDoc(d)} disabled={busyId === d.id}
+                  <button
+                    onClick={() => onTrashDoc(d)}
+                    disabled={busyId === d.id}
                     className={cn(
                       "flex h-11 w-9 shrink-0 items-center justify-center rounded-md duration-fast focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40",
-                      armed ? "bg-status-blocked text-white" : "text-text-tertiary hover:bg-status-blocked-soft hover:text-status-blocked"
+                      armed
+                        ? "bg-status-blocked text-white"
+                        : "text-text-tertiary hover:bg-status-blocked-soft hover:text-status-blocked"
                     )}
                     aria-label={armed ? `Confirm delete ${d.label}` : `Delete ${d.label}`}
-                    title={armed ? "Tap again to delete" : "Delete drawing"}>
+                    title={armed ? "Tap again to delete" : "Delete drawing"}
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>
@@ -424,8 +530,12 @@ export function DrawingsView({ jobId }: { jobId: string }) {
 
         <main className="relative min-w-0 flex-1 overflow-auto p-4">
           {active ? (
-            <DrawingDoc doc={active} disablePan={activeTool !== "pan"} onPlace={handlePlace}
-              onPageChange={setCurrentPage} showDots={showDots}
+            <DrawingDoc
+              doc={active}
+              disablePan={activeTool !== "pan"}
+              onPlace={handlePlace}
+              onPageChange={setCurrentPage}
+              showDots={showDots}
               overlay={
                 <>
                   {docPins.map((pin) => {
@@ -441,14 +551,24 @@ export function DrawingsView({ jobId }: { jobId: string }) {
                       />
                     );
                   })}
-                  <MarkupLayer annotations={docAnnotations} activeTool={activeTool}
-                    penColor={penColor} highlighterColor={highlighterColor} shapeKind={shapeKind}
-                    selectedId={selectedAnnId} onSelect={setSelectedAnnId}
-                    onCommit={handleCommitStroke} onCommitShape={handleCommitShape}
-                    onErase={handleErase} onUpdate={handleUpdateAnnotation}
-                    onRequestText={handleRequestText} onEditText={handleEditText} />
+                  <MarkupLayer
+                    annotations={docAnnotations}
+                    activeTool={activeTool}
+                    penColor={penColor}
+                    highlighterColor={highlighterColor}
+                    shapeKind={shapeKind}
+                    selectedId={selectedAnnId}
+                    onSelect={setSelectedAnnId}
+                    onCommit={handleCommitStroke}
+                    onCommitShape={handleCommitShape}
+                    onErase={handleErase}
+                    onUpdate={handleUpdateAnnotation}
+                    onRequestText={handleRequestText}
+                    onEditText={handleEditText}
+                  />
                 </>
-              } />
+              }
+            />
           ) : (
             <p className="text-sm text-text-tertiary">Select or upload a drawing.</p>
           )}
@@ -472,10 +592,15 @@ export function DrawingsView({ jobId }: { jobId: string }) {
 
         {showChecklist && (
           <aside className="w-72 shrink-0 overflow-auto border-l border-border bg-surface">
-            <PieceChecklist pieces={pieces} selectedId={selectedPieceId}
-              onSelect={(p) => setSelectedPieceId(p.id)} onAdvance={handleAdvance}
-              onSetStatus={handleSetStatus} onSetCutMethod={handleSetCutMethod}
-              onDelete={handleDeletePiece} />
+            <PieceChecklist
+              pieces={pieces}
+              selectedId={selectedPieceId}
+              onSelect={(p) => setSelectedPieceId(p.id)}
+              onAdvance={handleAdvance}
+              onSetStatus={handleSetStatus}
+              onSetCutMethod={handleSetCutMethod}
+              onDelete={handleDeletePiece}
+            />
             {/* S9: per-piece pin management panel when a piece is selected */}
             {selectedPieceId && active && (
               <PiecePinPanel

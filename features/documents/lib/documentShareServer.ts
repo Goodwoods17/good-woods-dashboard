@@ -6,6 +6,7 @@ import { rowToShareToken, type ShareTokenRow } from "@shared/lib/shareTokensRowM
 import { rowToDocument, type DocumentRow } from "./documentsRowMap";
 import { computeSuperseded, selectClientSafeDocuments, type SupersededInfo } from "./documentShare";
 import { buildPortalFileUrl } from "./documentWatermark";
+import { DOC_COLUMNS, loadJobContact } from "./documentsServerShared";
 import { CLIENT_SAFE_KINDS, type ProjectDocument } from "@shared/lib/types";
 
 // CLIENT_SAFE_KINDS is a typed DocumentKind[]; PostgREST's `.in()` wants string[].
@@ -27,10 +28,6 @@ const CLIENT_SAFE_KIND_VALUES: string[] = CLIENT_SAFE_KINDS;
  * watermark route (S4) — the bytes are never exposed beyond the token capability,
  * and the recipient name + date is stamped in at render time.
  */
-
-/** The explicit, audited column list — NEVER `*` on a public path. */
-const DOC_COLUMNS =
-  "id, project_id, kind, label, drive_url, version, is_current, notes, uploaded_by, created_at, source, storage_path, mime, page_count";
 
 /** One document as it appears on the portal, with its watermark-route open URL. */
 export type PortalDocument = {
@@ -157,43 +154,4 @@ export async function recordFurthestPage(token: string, page: number): Promise<b
     .eq("token", token)
     .eq("capability_type", "document_view");
   return !error;
-}
-
-async function loadJobContact(
-  sb: NonNullable<ReturnType<typeof getServiceRoleClient>>,
-  jobId: string
-): Promise<{ jobName: string; contact: DocumentPortalBundle["contact"] }> {
-  const { data: jobRow } = await sb
-    .from("jobs")
-    .select("name, payer_id")
-    .eq("id", jobId)
-    .maybeSingle();
-  const job = jobRow as { name: string | null; payer_id: string | null } | null;
-  const jobName = job?.name ?? "Your project";
-
-  if (!job?.payer_id) return { jobName, contact: null };
-  const { data: contactRow } = await sb
-    .from("contacts")
-    .select("name, emails, phones")
-    .eq("id", job.payer_id)
-    .maybeSingle();
-  const c = contactRow as { name: string | null; emails: unknown; phones: unknown } | null;
-  if (!c?.name) return { jobName, contact: null };
-  return {
-    jobName,
-    contact: { name: c.name, phone: firstString(c.phones), email: firstString(c.emails) },
-  };
-}
-
-/** First non-empty string in a jsonb array column (contacts.emails / .phones). */
-function firstString(value: unknown): string | null {
-  if (!Array.isArray(value)) return null;
-  for (const v of value) {
-    if (typeof v === "string" && v.trim()) return v.trim();
-    if (v && typeof v === "object" && typeof (v as { value?: unknown }).value === "string") {
-      const s = (v as { value: string }).value.trim();
-      if (s) return s;
-    }
-  }
-  return null;
 }

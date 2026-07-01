@@ -72,7 +72,8 @@ export function useDocumentShareLinks(documentIds: string[]): UseDocumentShareLi
       setBusy(true);
       try {
         const state: ShareToken["state"] = {};
-        if (opts.notifyPreference) state.notifyPreference = opts.notifyPreference as "everything" | "major" | "digest";
+        if (opts.notifyPreference)
+          state.notifyPreference = opts.notifyPreference as "everything" | "major" | "digest";
         const link: ShareToken = {
           id: crypto.randomUUID(),
           capabilityType: "document_view",
@@ -94,7 +95,10 @@ export function useDocumentShareLinks(documentIds: string[]): UseDocumentShareLi
         const { error } = await getSupabase()
           .from(SHARE_TOKENS_TABLE)
           .insert(shareTokenToRow(link));
-        if (!error) setLinks((prev) => [link, ...prev]);
+        // Propagate the failure so the UI can preserve the form + show an error,
+        // instead of silently no-op'ing a link the caller thinks was created.
+        if (error) throw error;
+        setLinks((prev) => [link, ...prev]);
       } finally {
         setBusy(false);
       }
@@ -106,7 +110,13 @@ export function useDocumentShareLinks(documentIds: string[]): UseDocumentShareLi
     async (id: string) => {
       if (!supabaseReady) return;
       const now = new Date().toISOString();
-      await getSupabase().from(SHARE_TOKENS_TABLE).update({ revoked_at: now }).eq("id", id);
+      const { error } = await getSupabase()
+        .from(SHARE_TOKENS_TABLE)
+        .update({ revoked_at: now })
+        .eq("id", id);
+      // Only drop the link locally once the write actually landed — otherwise a
+      // failed revoke would look revoked in the UI while staying live publicly.
+      if (error) throw error;
       setLinks((prev) => prev.map((l) => (l.id === id ? { ...l, revokedAt: now } : l)));
     },
     [supabaseReady]

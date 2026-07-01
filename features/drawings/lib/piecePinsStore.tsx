@@ -14,6 +14,7 @@ import { JOB_PIECE_PINS_TABLE, getSupabase, hasSupabase } from "@shared/lib/supa
 import type { JobPiecePin } from "@shared/lib/types";
 import { rowToPin, pinToRow, type PinRow } from "./piecePinsRowMap";
 import { optimistic } from "@shared/lib/optimistic";
+import { byPrimaryFirst } from "./multiPinLogic";
 
 // S8a (ADR 0023): the pins store + live subscription land BEFORE any UI reads
 // the new table. Dual-read holds during the overlap — the embedded
@@ -207,10 +208,7 @@ export function usePinsForPiece(jobPieceId: string): JobPiecePin[] {
     () =>
       pins
         .filter((p) => p.jobPieceId === jobPieceId)
-        .sort(
-          (a, b) =>
-            Number(b.isPrimary) - Number(a.isPrimary) || a.createdAt.localeCompare(b.createdAt)
-        ),
+        .sort((a, b) => byPrimaryFirst(a, b) || a.createdAt.localeCompare(b.createdAt)),
     [pins, jobPieceId]
   );
 }

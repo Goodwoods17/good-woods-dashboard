@@ -17,16 +17,17 @@ export type PinPatch = { id: string; patch: Partial<JobPiecePin> };
  * and the target receives `isPrimary: true`. Returns an empty array when the
  * target is already primary or is not found.
  */
-export function buildSetPrimaryPatches(
-  pins: JobPiecePin[],
-  pinId: string
-): PinPatch[] {
+export function buildSetPrimaryPatches(pins: JobPiecePin[], pinId: string): PinPatch[] {
   const target = pins.find((p) => p.id === pinId);
   if (!target || target.isPrimary) return [];
   return pins
     .filter((p) => p.jobPieceId === target.jobPieceId)
     .map((p) => ({ id: p.id, patch: { isPrimary: p.id === pinId } }));
 }
+
+/** Comparator: primary pins sort before non-primary. */
+export const byPrimaryFirst = (a: JobPiecePin, b: JobPiecePin) =>
+  Number(b.isPrimary) - Number(a.isPrimary);
 
 export const PIN_ROLE_LABELS: Record<PinRole, string> = {
   plan: "Plan",

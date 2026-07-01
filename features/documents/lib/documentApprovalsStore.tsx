@@ -24,11 +24,7 @@ import {
   type DocumentApproval,
   type ReviewerRole,
 } from "./approvalRouting";
-import {
-  approvalToRow,
-  rowToApproval,
-  type DocumentApprovalRow,
-} from "./documentApprovalsRowMap";
+import { approvalToRow, rowToApproval, type DocumentApprovalRow } from "./documentApprovalsRowMap";
 
 async function loadApprovals(documentId: string): Promise<DocumentApproval[]> {
   if (!hasSupabase() || !documentId) return [];
@@ -43,25 +39,36 @@ async function loadApprovals(documentId: string): Promise<DocumentApproval[]> {
 export type UseDocumentApprovals = {
   approvals: DocumentApproval[];
   busy: boolean;
+  /** True once the first load has resolved — guards a routed/not-routed flash. */
+  hydrated: boolean;
+  /** Roles with an in-flight verdict write (per-row busy for disabling buttons). */
+  reviewing: ReviewerRole[];
   /** Whether the document has been routed yet (any slot exists). */
   routed: boolean;
   /** Route the document to every required reviewer at once + enqueue notices. */
   requestApprovals: (jobId: string) => Promise<void>;
   /** Record one reviewer's verdict. */
-  review: (role: ReviewerRole, status: ApprovalStatus, reviewerName?: string | null) => Promise<void>;
+  review: (
+    role: ReviewerRole,
+    status: ApprovalStatus,
+    reviewerName?: string | null
+  ) => Promise<void>;
 };
 
-export function useDocumentApprovals(
-  documentId: string,
-  jobName?: string
-): UseDocumentApprovals {
+export function useDocumentApprovals(documentId: string, jobName?: string): UseDocumentApprovals {
   const [approvals, setApprovals] = useState<DocumentApproval[]>([]);
   const [busy, setBusy] = useState(false);
+  const [hydrated, setHydrated] = useState(false);
+  const [reviewing, setReviewing] = useState<ReviewerRole[]>([]);
   const supabaseReady = hasSupabase();
 
   const refresh = useCallback(async () => {
-    if (!supabaseReady) return;
+    if (!supabaseReady) {
+      setHydrated(true);
+      return;
+    }
     setApprovals(await loadApprovals(documentId));
+    setHydrated(true);
   }, [supabaseReady, documentId]);
 
   useEffect(() => {
@@ -80,7 +87,9 @@ export function useDocumentApprovals(
         const { error } = await getSupabase()
           .from(DOCUMENT_APPROVALS_TABLE)
           .upsert(rows, { onConflict: "document_id,reviewer_role" });
-        if (error) return;
+        // Surface the failure so the panel can tell the owner the routing didn't
+        // land, rather than silently leaving the doc un-routed.
+        if (error) throw error;
         setApprovals(rows.map(rowToApproval));
 
         // Reuse the notification queue: one draft per reviewer, addressed by role.
@@ -106,24 +115,37 @@ export function useDocumentApprovals(
   );
 
   const review = useCallback(
-    async (
-      role: ReviewerRole,
-      status: ApprovalStatus,
-      reviewerName: string | null = null
-    ) => {
+    async (role: ReviewerRole, status: ApprovalStatus, reviewerName: string | null = null) => {
       if (!supabaseReady || !documentId) return;
       const reviewedAt = status === "pending" ? null : new Date().toISOString();
-      // Optimistic local update first.
-      setApprovals((prev) =>
-        prev.map((a) =>
+      // Optimistic local update first, snapshotting the prior row to roll back to.
+      let prevRow: DocumentApproval | undefined;
+      setApprovals((prev) => {
+        prevRow = prev.find((a) => a.reviewerRole === role);
+        return prev.map((a) =>
           a.reviewerRole === role ? { ...a, status, reviewedAt, reviewerName } : a
-        )
-      );
-      await getSupabase()
-        .from(DOCUMENT_APPROVALS_TABLE)
-        .update({ status, reviewed_at: reviewedAt, reviewer_name: reviewerName })
-        .eq("document_id", documentId)
-        .eq("reviewer_role", role);
+        );
+      });
+      setReviewing((r) => (r.includes(role) ? r : [...r, role]));
+      try {
+        const { error } = await getSupabase()
+          .from(DOCUMENT_APPROVALS_TABLE)
+          .update({ status, reviewed_at: reviewedAt, reviewer_name: reviewerName })
+          .eq("document_id", documentId)
+          .eq("reviewer_role", role);
+        // Roll the optimistic row back on failure so the panel never shows a
+        // verdict the database rejected.
+        if (error) {
+          if (prevRow) {
+            setApprovals((prev) =>
+              prev.map((a) => (a.reviewerRole === role ? (prevRow as DocumentApproval) : a))
+            );
+          }
+          throw error;
+        }
+      } finally {
+        setReviewing((r) => r.filter((x) => x !== role));
+      }
     },
     [supabaseReady, documentId]
   );
@@ -131,6 +153,8 @@ export function useDocumentApprovals(
   return {
     approvals,
     busy,
+    hydrated,
+    reviewing,
     routed: approvals.length > 0,
     requestApprovals,
     review,

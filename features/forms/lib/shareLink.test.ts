@@ -8,7 +8,7 @@ import {
   lockedAnswerKeys,
   missingVisibleRequiredFields,
 } from "./shareLink";
-import { rowToFormShareLink, formShareLinkToRow } from "./formShareLinksRowMap";
+import { formShareLinkToRow } from "./formShareLinksRowMap";
 
 function field(id: string, over: Partial<FormInstanceField> = {}): FormInstanceField {
   const now = "2026-06-25T00:00:00.000Z";
@@ -167,9 +167,7 @@ describe("missingVisibleRequiredFields — public submit soft-warn helper", () =
   });
 
   it("ignores required fields that are filled", () => {
-    const fields = [
-      field("a", { type: "short_text", value: "hello", config: { required: true } }),
-    ];
+    const fields = [field("a", { type: "short_text", value: "hello", config: { required: true } })];
     expect(missingVisibleRequiredFields(fields)).toEqual([]);
   });
 
@@ -221,21 +219,13 @@ describe("missingVisibleRequiredFields — public submit soft-warn helper", () =
   });
 });
 
-describe("formShareLinksRowMap round-trip", () => {
-  it("round-trips a link through row ↔ domain", () => {
+describe("formShareLinksRowMap encoder", () => {
+  it("encodes a link's fields onto the legacy dual-write row", () => {
     const l = link({ lockedFieldIds: ["a", "b"], recipientType: "customer" });
-    expect(rowToFormShareLink(formShareLinkToRow(l))).toEqual(l);
-  });
-
-  it("coerces an unknown recipient_type to 'other'", () => {
-    const row = formShareLinkToRow(link());
-    row.recipient_type = "alien";
-    expect(rowToFormShareLink(row).recipientType).toBe("other");
-  });
-
-  it("coerces a null/garbage locked_field_ids to []", () => {
-    const row = formShareLinkToRow(link());
-    row.locked_field_ids = null;
-    expect(rowToFormShareLink(row).lockedFieldIds).toEqual([]);
+    const row = formShareLinkToRow(l);
+    expect(row.id).toBe(l.id);
+    expect(row.instance_id).toBe(l.instanceId);
+    expect(row.recipient_type).toBe("customer");
+    expect(row.locked_field_ids).toEqual(["a", "b"]);
   });
 });

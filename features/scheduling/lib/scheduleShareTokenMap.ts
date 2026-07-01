@@ -1,4 +1,4 @@
-import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
+import { toState, type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import type { ScheduleShareLink } from "@shared/lib/types";
 
 /**
@@ -40,9 +40,7 @@ export function scheduleShareLinkToShareTokenRow(link: ScheduleShareLink): Share
 
 /** A schedule `share_tokens` row → ScheduleShareLink (snapshot read back out of state). */
 export function shareTokenRowToScheduleShareLink(row: ShareTokenRow): ScheduleShareLink {
-  const state = (row.state && typeof row.state === "object" ? row.state : {}) as {
-    committedDateSnapshot?: string;
-  };
+  const state = toState(row.state);
   return {
     id: row.id,
     jobId: row.job_id ?? "",

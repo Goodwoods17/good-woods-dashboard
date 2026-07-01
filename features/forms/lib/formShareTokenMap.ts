@@ -1,4 +1,4 @@
-import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
+import { toState, type ShareTokenRow } from "@shared/lib/shareTokensRowMap";
 import type { FormShareLink, RecipientType, ShareTokenState } from "@shared/lib/types";
 
 /**
@@ -78,9 +78,7 @@ export function formShareLinkToShareTokenRow(link: FormShareLink): ShareTokenRow
 
 /** A form `share_tokens` row → FormShareLink (form-specific bits read back from state). */
 export function shareTokenRowToFormShareLink(row: ShareTokenRow): FormShareLink {
-  const state = (
-    row.state && typeof row.state === "object" && !Array.isArray(row.state) ? row.state : {}
-  ) as ShareTokenState;
+  const state = toState(row.state);
   return {
     id: row.id,
     instanceId: row.form_instance_id ?? "",

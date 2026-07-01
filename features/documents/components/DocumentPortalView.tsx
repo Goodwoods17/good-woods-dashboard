@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
-import { FileText, Phone, Mail, History, ExternalLink, ShieldAlert } from "lucide-react";
+import { FileText, History, ExternalLink, ShieldAlert } from "lucide-react";
 import { DOCUMENT_KIND_LABELS } from "@shared/lib/types";
 import { PortalBrand } from "@shared/components/layout/PortalBrand";
+import { PortalContactCard } from "@shared/components/layout/PortalContactCard";
 import type { DocumentPortalBundle } from "../lib/documentShareServer";
 
 /**
@@ -143,37 +144,7 @@ export function DocumentPortalView({
           )}
         </section>
 
-        {contact ? (
-          <section
-            data-testid="portal-contact"
-            className="mt-8 rounded-2xl border border-border bg-surface p-5 text-center shadow-resting"
-          >
-            <p className="text-xs uppercase tracking-[0.06em] text-text-tertiary">
-              Questions? Who to call
-            </p>
-            <p className="mt-1 text-sm font-medium text-text-primary">{contact.name}</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
-              {contact.phone ? (
-                <a
-                  href={`tel:${contact.phone}`}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium text-text-secondary duration-fast hover:text-text-primary"
-                >
-                  <Phone className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  {contact.phone}
-                </a>
-              ) : null}
-              {contact.email ? (
-                <a
-                  href={`mailto:${contact.email}`}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-surface-muted px-3 py-1.5 text-xs font-medium text-text-secondary duration-fast hover:text-text-primary"
-                >
-                  <Mail className="h-3.5 w-3.5" strokeWidth={1.75} />
-                  {contact.email}
-                </a>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
+        {contact ? <PortalContactCard contact={contact} /> : null}
 
         <p className="mt-6 text-center text-[11px] text-text-tertiary">
           Shared securely by Good Woods. Links expire and can be revoked at any time.
