@@ -40,6 +40,10 @@ export function DocumentShareSection({
   const [expiresAt, setExpiresAt] = useState("");
   const [notifyPref, setNotifyPref] = useState<NotifyPreference | "">("");
   const [mintError, setMintError] = useState<string | null>(null);
+  // Two-tap revoke confirm (matches the document-delete arm/confirm in
+  // DrawingsView): only one row can be armed at a time; arming another row or
+  // minting a link disarms the previous one so a stray tap can't revoke.
+  const [armedRevokeId, setArmedRevokeId] = useState<string | null>(null);
 
   const safe = useMemo(() => selectClientSafeDocuments(docs), [docs]);
   const driveWarn = useMemo(() => countExcludedDriveLinks(docs), [docs]);
@@ -50,6 +54,7 @@ export function DocumentShareSection({
   async function handleMint() {
     if (!anchorId) return;
     setMintError(null);
+    setArmedRevokeId(null);
     try {
       await create(anchorId, recipient.trim() || null, {
         expiresAt: expiresAt ? new Date(expiresAt).toISOString() : null,
@@ -161,6 +166,8 @@ export function DocumentShareSection({
               key={l.id}
               link={l}
               designerEmail={designerEmail ?? null}
+              armed={armedRevokeId === l.id}
+              onArmChange={(armed) => setArmedRevokeId(armed ? l.id : null)}
               onRevoke={() => revoke(l.id)}
             />
           ))}
@@ -177,10 +184,14 @@ export function DocumentShareSection({
 function ShareLinkRow({
   link,
   designerEmail,
+  armed,
+  onArmChange,
   onRevoke,
 }: {
   link: ShareToken;
   designerEmail: string | null;
+  armed: boolean;
+  onArmChange: (armed: boolean) => void;
   onRevoke: () => Promise<void> | void;
 }) {
   const { copied, copy } = useCopyToClipboard();
@@ -217,12 +228,19 @@ function ShareLinkRow({
 
   async function handleRevoke() {
     if (revoking) return;
+    // First tap arms; the second tap on this same row actually revokes.
+    if (!armed) {
+      onArmChange(true);
+      return;
+    }
     setRevoking(true);
     setRevokeFailed(false);
     try {
       await onRevoke();
+      // On success the row unmounts (it leaves the active list).
     } catch {
       setRevokeFailed(true);
+      onArmChange(false); // disarm so a stray tap doesn't immediately retry
     } finally {
       setRevoking(false);
     }
@@ -337,14 +355,23 @@ function ShareLinkRow({
             onClick={handleRevoke}
             disabled={revoking}
             data-testid="document-share-revoke"
+            data-armed={armed ? "true" : undefined}
+            aria-label={
+              armed ? "Tap again to confirm revoking this share link" : "Revoke this share link"
+            }
+            title={armed ? "Tap again to confirm — this link stops working" : "Revoke this link"}
             className={cn(
               "inline-flex items-center gap-1 rounded-full px-2 py-1 duration-fast",
               "disabled:opacity-50 disabled:pointer-events-none",
-              revokeFailed ? "text-status-blocked" : "text-text-tertiary hover:text-status-blocked"
+              armed
+                ? "bg-status-blocked text-white"
+                : revokeFailed
+                  ? "text-status-blocked"
+                  : "text-text-tertiary hover:text-status-blocked"
             )}
           >
             <Ban className="h-3.5 w-3.5" strokeWidth={1.75} />
-            {revokeFailed ? "Retry revoke" : "Revoke"}
+            {armed ? "Tap again to confirm" : revokeFailed ? "Retry revoke" : "Revoke"}
           </button>
         </div>
       </div>

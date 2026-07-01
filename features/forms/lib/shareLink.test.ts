@@ -8,7 +8,6 @@ import {
   lockedAnswerKeys,
   missingVisibleRequiredFields,
 } from "./shareLink";
-import { formShareLinkToRow } from "./formShareLinksRowMap";
 
 function field(id: string, over: Partial<FormInstanceField> = {}): FormInstanceField {
   const now = "2026-06-25T00:00:00.000Z";
@@ -216,16 +215,5 @@ describe("missingVisibleRequiredFields — public submit soft-warn helper", () =
       field("b", { type: "yes_no", value: "yes", config: { required: true } }),
     ];
     expect(missingVisibleRequiredFields(fields)).toEqual([]);
-  });
-});
-
-describe("formShareLinksRowMap encoder", () => {
-  it("encodes a link's fields onto the legacy dual-write row", () => {
-    const l = link({ lockedFieldIds: ["a", "b"], recipientType: "customer" });
-    const row = formShareLinkToRow(l);
-    expect(row.id).toBe(l.id);
-    expect(row.instance_id).toBe(l.instanceId);
-    expect(row.recipient_type).toBe("customer");
-    expect(row.locked_field_ids).toEqual(["a", "b"]);
   });
 });

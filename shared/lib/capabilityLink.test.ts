@@ -20,7 +20,7 @@ function makeFakeClient(opts: { maybeSingle: { data: FakeRow | null; error: unkn
   return { sb, update, updateEq };
 }
 
-const TABLE = "form_share_links";
+const TABLE = "share_tokens";
 const TOKEN = "tok_123";
 
 describe("loadCapabilityRow", () => {
