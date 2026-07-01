@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Plus } from "lucide-react";
 import { cn } from "@shared/lib/utils";
+import { PillButton } from "@shared/components/ui/PillButton";
 import {
   DOCUMENT_KIND_LABELS,
   DOCUMENT_KIND_ORDER,
@@ -112,9 +113,7 @@ export function AddDocumentForm({
           )}
         />
         {url.trim().length > 0 && !urlOk && (
-          <p className="text-xs text-status-blocked mt-1">
-            Not a recognised Google Drive URL.
-          </p>
+          <p className="text-xs text-status-blocked mt-1">Not a recognised Google Drive URL.</p>
         )}
         {parsed && parsed.kind === "folder" && (
           <p className="text-xs text-text-tertiary mt-1">
@@ -209,17 +208,14 @@ export function AddDocumentForm({
       {err && <p className="text-xs text-status-blocked">{err}</p>}
 
       <div className="flex items-center justify-end">
-        <button
+        <PillButton
           type="submit"
           disabled={!canSubmit}
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full bg-ink-pill text-white px-3 py-1.5 text-xs font-medium hover:bg-accent-active transition-colors duration-fast",
-            "disabled:bg-text-disabled disabled:cursor-not-allowed"
-          )}
+          className="disabled:bg-text-disabled disabled:opacity-100"
         >
           <Plus className="h-3.5 w-3.5" strokeWidth={2} />
           {busy ? "Saving" : "Add document"}
-        </button>
+        </PillButton>
       </div>
     </form>
   );

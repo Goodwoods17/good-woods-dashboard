@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Check, Copy, Link2, Ban, Eye, AlertTriangle, Mail, Send } from "lucide-react";
 import { cn } from "@shared/lib/utils";
 import { Pill } from "@shared/components/ui/Pill";
+import { PillButton } from "@shared/components/ui/PillButton";
 import { useCopyToClipboard } from "@shared/lib/useCopyToClipboard";
 import type { ProjectDocument, ShareToken } from "@shared/lib/types";
 import { useDocumentShareLinks } from "../lib/documentShareLinksStore";
@@ -67,7 +68,7 @@ export function DocumentShareSection({
   return (
     <div
       data-testid="document-share-section"
-      className="px-6 py-4 border-b border-[rgba(26,25,22,0.05)] bg-surface-muted/20"
+      className="px-6 py-4 border-b border-hairline bg-surface-muted/20"
     >
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -132,21 +133,15 @@ export function DocumentShareSection({
             </option>
           ))}
         </select>
-        <button
-          type="button"
+        <PillButton
           onClick={handleMint}
           disabled={!anchorId || busy}
           data-testid="document-share-mint"
-          className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium duration-fast",
-            !anchorId || busy
-              ? "bg-surface-muted text-text-tertiary cursor-not-allowed"
-              : "bg-ink-pill text-white hover:bg-accent-active"
-          )}
+          className="disabled:bg-surface-muted disabled:text-text-tertiary disabled:opacity-100"
         >
           <Link2 className="h-3.5 w-3.5" strokeWidth={2} />
           Create share link
-        </button>
+        </PillButton>
       </div>
 
       {mintError ? (
@@ -368,21 +363,16 @@ function ShareLinkRow({
             className="flex-1 min-w-[10rem] rounded-full border border-border bg-surface px-2.5 py-1 text-xs text-text-primary placeholder:text-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent-soft"
           />
         </div>
-        <button
-          type="button"
+        <PillButton
+          size="xs"
           onClick={handleSend}
           disabled={!isValidEmail(email) || sending}
           data-testid="document-share-send"
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium duration-fast",
-            !isValidEmail(email) || sending
-              ? "bg-surface-muted text-text-tertiary cursor-not-allowed"
-              : "bg-ink-pill text-white hover:bg-accent-active"
-          )}
+          className="disabled:bg-surface-muted disabled:text-text-tertiary disabled:opacity-100"
         >
           <Send className="h-3 w-3" strokeWidth={1.75} />
           {sending ? "Sending…" : sentAt ? "Resend" : "Send email"}
-        </button>
+        </PillButton>
         {sendNote ? (
           <span data-testid="document-share-send-note" className="text-text-tertiary text-[11px]">
             {sendNote}

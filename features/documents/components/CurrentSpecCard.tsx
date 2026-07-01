@@ -2,11 +2,7 @@
 
 import { BookOpen, Pin, PinOff, Share2 } from "lucide-react";
 import { cn } from "@shared/lib/utils";
-import {
-  DOCUMENT_KIND_LABELS,
-  CLIENT_SAFE_KINDS,
-  type ProjectDocument,
-} from "@shared/lib/types";
+import { DOCUMENT_KIND_LABELS, CLIENT_SAFE_KINDS, type ProjectDocument } from "@shared/lib/types";
 import { useDocuments, useProjectDocuments } from "../lib/documentsStore";
 import { selectCurrentSpecDocuments } from "../lib/currentSpec";
 import { projectFilesEnabled } from "@shared/lib/projectFilesFlag";
@@ -51,7 +47,7 @@ export function CurrentSpecCard({ projectId }: { projectId: string }) {
       className="bg-surface rounded-xl shadow-resting overflow-hidden"
       aria-label="Current spec"
     >
-      <header className="px-6 py-4 flex items-center justify-between gap-3 border-b border-[rgba(26,25,22,0.05)]">
+      <header className="px-6 py-4 flex items-center justify-between gap-3 border-b border-hairline">
         <div className="flex items-start gap-2.5">
           <BookOpen
             className="mt-0.5 h-4 w-4 text-text-tertiary shrink-0"
@@ -85,15 +81,11 @@ export function CurrentSpecCard({ projectId }: { projectId: string }) {
 
       {current.length === 0 ? (
         <div className="px-6 py-5 text-sm text-text-tertiary">
-          Use the{" "}
-          <span className="font-medium text-text-secondary">Documents</span> card below to
+          Use the <span className="font-medium text-text-secondary">Documents</span> card below to
           mark drawings or specifications as the current working set.
         </div>
       ) : (
-        <ul
-          className="divide-y divide-[rgba(26,25,22,0.05)]"
-          aria-label="Pinned documents"
-        >
+        <ul className="divide-y divide-hairline" aria-label="Pinned documents">
           {current.map((doc) => (
             <li
               key={doc.id}
@@ -113,9 +105,7 @@ export function CurrentSpecCard({ projectId }: { projectId: string }) {
                   {DOCUMENT_KIND_LABELS[doc.kind]}
                 </span>
                 <div className="min-w-0">
-                  <div className="text-sm font-medium text-text-primary truncate">
-                    {doc.label}
-                  </div>
+                  <div className="text-sm font-medium text-text-primary truncate">{doc.label}</div>
                   {doc.version && (
                     <div className="text-[10px] font-mono uppercase tracking-[0.06em] text-text-tertiary">
                       {doc.version}

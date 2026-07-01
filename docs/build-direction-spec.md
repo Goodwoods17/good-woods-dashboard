@@ -256,6 +256,8 @@ All colors defined as CSS variables in `globals.css` and mapped into `tailwind.c
 - Never use pure `#FFFFFF` background or pure `#000000` text — always the warm tokens above.  
 - Status colors are **semantic only**. Never use `--status-blocked` for non-status purposes (e.g., "delete" buttons use `--accent` or a dedicated `destructive` variant if needed).  
 - The `--status-andon` red is reserved for active andon alerts and critical safety. Don't dilute it.
+- **Hairline dividers** use the `hairline` border token (`border-hairline` / `divide-hairline`), which maps to `rgba(26, 25, 22, 0.05)` — a 5%-opacity ink tint for card edges, header rules, and list separators. Prefer it over the raw `border-[rgba(26,25,22,0.05)]` arbitrary value. It is translucent by design (unlike the opaque `--border`/`--border-faint`), so it reads consistently over muted and sunken fills.
+- **Primary button:** the canonical ink-pill call-to-action is `PillButton` (`shared/components/ui/PillButton.tsx`) — `rounded-full bg-ink-pill text-white hover:bg-accent-active`, with `primary`/`subtle` variants and `xs`/`sm`/`md` sizes. Reach for it instead of hand-rolling the pill classes. Not to be confused with the unrelated, currently-unused shadcn `Button` in `button.tsx`.
 
 ### 3.2 Typography
 

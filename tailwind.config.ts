@@ -55,6 +55,13 @@ const config: Config = {
           "andon-soft": "var(--status-andon-soft)",
         },
       },
+      borderColor: {
+        // Translucent ink hairline for card edges, dividers, and section
+        // rules. Unlike the opaque `border`/`border-faint` tokens it tints
+        // whatever sits behind it, so it reads consistently over muted and
+        // sunken fills. Also available as `divide-hairline`.
+        hairline: "rgba(26, 25, 22, 0.05)",
+      },
       fontFamily: {
         sans: ["var(--font-inter)", "system-ui", "-apple-system", "sans-serif"],
         serif: ["var(--font-cormorant)", "Tiempos Headline", "Georgia", "serif"],
