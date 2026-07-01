@@ -36,9 +36,7 @@ function eq(actual: number, expected: number, label: string, tolerance = 0.01) {
     console.log(`  ✓ ${label}: ${actual.toFixed(2)}`);
   } else {
     failed += 1;
-    console.log(
-      `  ✗ ${label}: expected ${expected.toFixed(2)}, got ${actual.toFixed(2)}`,
-    );
+    console.log(`  ✗ ${label}: expected ${expected.toFixed(2)}, got ${actual.toFixed(2)}`);
   }
 }
 
@@ -143,11 +141,12 @@ console.log("\nTest 3: Pre-work lines excluded from quoted price");
   eq(totals.overhead, 80, "overhead on direct (not prework)");
   eq(totals.quoted, 1350 + 80, "quoted excludes prework");
   // internalCost = direct + prework + overhead + contingency (here contingency = 0)
-  eq(totals.internalCost, 1000 + 340 + 80 + 0, "internalCost = direct + prework + overhead + contingency");
-  ok(
-    totals.internalCost > totals.totalCost,
-    "internalCost > totalCost (prework eats into margin)",
+  eq(
+    totals.internalCost,
+    1000 + 340 + 80 + 0,
+    "internalCost = direct + prework + overhead + contingency"
   );
+  ok(totals.internalCost > totals.totalCost, "internalCost > totalCost (prework eats into margin)");
 }
 
 // ─── Test 4: Disabled rooms excluded ────────────────────────────────────
@@ -178,10 +177,7 @@ console.log("\nTest 4: Disabled rooms drop their lines from totals");
   eq(totals.costs.direct, 1000, "direct excludes disabled room");
   eq(totals.quoted, 1350 + 80, "quoted excludes disabled room");
   eq(totals.perRoom["r1"].price, 1350, "kitchen room price");
-  ok(
-    !totals.perRoom["r2"] || totals.perRoom["r2"].price === 0,
-    "bathroom room excluded or zero",
-  );
+  ok(!totals.perRoom["r2"] || totals.perRoom["r2"].price === 0, "bathroom room excluded or zero");
 }
 
 // ─── Test 5: Contingency % on top of quoted ─────────────────────────────
@@ -200,28 +196,27 @@ console.log("\nTest 5: Contingency adds % on top");
 console.log("\nTest 6: Delivery calculator");
 {
   const cd = computeDeliveryCost(
-    { ...emptyDelivery(), miles: 10, travelHours: 1, loadMinutesPerCabinet: 5, gasRatePerMile: 0.55 },
+    {
+      ...emptyDelivery(),
+      miles: 10,
+      travelHours: 1,
+      loadMinutesPerCabinet: 5,
+      gasRatePerMile: 0.55,
+    },
     8, // cabinet count
-    DEFAULT_LABOUR_RATES,
+    DEFAULT_LABOUR_RATES
   );
   eq(cd.gasCost, 10 * 2 * 0.55, "gas = miles × 2 × $/mi");
   eq(cd.travelCost, 1 * DEFAULT_LABOUR_RATES.installRate, "travel = hrs × install rate");
   eq(cd.loadingHours, (8 * 5) / 60, "loadingHours = cabs × min / 60");
-  eq(
-    cd.loadingCost,
-    cd.loadingHours * DEFAULT_LABOUR_RATES.shopRate,
-    "loading = hrs × shop rate",
-  );
+  eq(cd.loadingCost, cd.loadingHours * DEFAULT_LABOUR_RATES.shopRate, "loading = hrs × shop rate");
   eq(cd.total, cd.gasCost + cd.travelCost + cd.loadingCost, "total = sum of 3");
 }
 
 // ─── Test 7: Deficiencies ───────────────────────────────────────────────
 console.log("\nTest 7: Deficiencies budget");
 {
-  const cd = computeDeficienciesCost(
-    { hoursBudget: 4, contingencyPct: 3 },
-    DEFAULT_LABOUR_RATES,
-  );
+  const cd = computeDeficienciesCost({ hoursBudget: 4, contingencyPct: 3 }, DEFAULT_LABOUR_RATES);
   eq(cd.budgetCost, 4 * DEFAULT_LABOUR_RATES.installRate, "budget = hrs × install rate");
   eq(cd.contingencyPct, 3, "contingency % passes through");
 }
@@ -236,7 +231,7 @@ console.log("\nTest 8: Pre-work breakdown");
       design: { hours: 3 },
       estimating: { hours: 1 },
     },
-    DEFAULT_LABOUR_RATES,
+    DEFAULT_LABOUR_RATES
   );
   eq(pw.totalHours, 6, "total hours = 6");
   eq(pw.totalCost, 6 * DEFAULT_LABOUR_RATES.designRate, "total = 6 × design rate");
@@ -285,7 +280,13 @@ console.log("\nTest 10: Realistic kitchen estimate end-to-end");
   const lines: LineItem[] = [
     newLine({ category: "Casework", qty: 3, unit: "ea", unitPrice: 80, markupPct: 35 }),
     newLine({ category: "CNC subcontract", qty: 1, unit: "ea", unitPrice: 400, markupPct: 35 }),
-    newLine({ category: "Door materials & profiles", qty: 25, unit: "sqft", unitPrice: 42, markupPct: 35 }),
+    newLine({
+      category: "Door materials & profiles",
+      qty: 25,
+      unit: "sqft",
+      unitPrice: 42,
+      markupPct: 35,
+    }),
     newLine({ category: "Finishing", qty: 25, unit: "sqft", unitPrice: 11, markupPct: 35 }),
     newLine({
       category: "Assembly",
@@ -348,7 +349,7 @@ console.log("\nTest 10: Realistic kitchen estimate end-to-end");
   console.log(
     `\n  → Quoted: $${totals.quoted.toFixed(2)}, totalCost: $${totals.totalCost.toFixed(2)}, ` +
       `internalCost: $${totals.internalCost.toFixed(2)}, margin: ${totals.effectiveMarginPct.toFixed(1)}%, ` +
-      `net after pre-work: $${(totals.quoted - totals.internalCost).toFixed(2)}`,
+      `net after pre-work: $${(totals.quoted - totals.internalCost).toFixed(2)}`
   );
 }
 
@@ -382,16 +383,16 @@ console.log("\nTest 12: Contingency does NOT inflate margin %");
   const m10 = computeTotals(lines, { overheadPct: 8, contingencyPct: 10 });
   ok(
     m5.effectiveMarginPct <= m0.effectiveMarginPct,
-    `margin 5% (${m5.effectiveMarginPct.toFixed(2)}) <= margin 0% (${m0.effectiveMarginPct.toFixed(2)})`,
+    `margin 5% (${m5.effectiveMarginPct.toFixed(2)}) <= margin 0% (${m0.effectiveMarginPct.toFixed(2)})`
   );
   ok(
     m10.effectiveMarginPct <= m5.effectiveMarginPct,
-    `margin 10% (${m10.effectiveMarginPct.toFixed(2)}) <= margin 5% (${m5.effectiveMarginPct.toFixed(2)})`,
+    `margin 10% (${m10.effectiveMarginPct.toFixed(2)}) <= margin 5% (${m5.effectiveMarginPct.toFixed(2)})`
   );
   eq(
     m10.internalCost,
     m10.costs.direct + m10.costs.prework + m10.overhead + m10.contingency,
-    "internalCost includes contingency",
+    "internalCost includes contingency"
   );
 }
 
@@ -419,6 +420,7 @@ console.log("\nTest 13: Invoice line items sum to job.revenue");
   const totals = computeTotals(lines, { overheadPct: 8, contingencyPct: 3 });
   const job = createJobFromEstimate({
     client: "Test",
+    payerId: "test-payer",
     project: "Test",
     lines,
     overheadPct: 8,
@@ -426,15 +428,12 @@ console.log("\nTest 13: Invoice line items sum to job.revenue");
     existingJobs: [],
     cabinetSummary: emptyCabinetSummary(),
   });
-  const invSum = job.invoice!.lineItems.reduce(
-    (acc, li) => acc + li.qty * li.unitPrice,
-    0,
-  );
+  const invSum = job.invoice!.lineItems.reduce((acc, li) => acc + li.qty * li.unitPrice, 0);
   eq(invSum, job.revenue, "invoice sum reconciles to revenue", 0.05);
 
   // The qty < 1 line should print at its full marked-up price, not half.
-  const installLi = job.invoice!.lineItems.find((li) =>
-    li.description.includes("Line item") || li.description.includes("Install"),
+  const installLi = job.invoice!.lineItems.find(
+    (li) => li.description.includes("Line item") || li.description.includes("Install")
   );
   // Find the install-priced line (it's the second invoice line, since
   // the first is casework and the third+ are overhead/contingency).
@@ -442,18 +441,18 @@ console.log("\nTest 13: Invoice line items sum to job.revenue");
   eq(
     installLine.qty * installLine.unitPrice,
     totals.lineSubtotals[1].price,
-    "qty<1 install line preserved through invoice",
+    "qty<1 install line preserved through invoice"
   );
   void installLi;
 
   // Overhead + contingency present as invoice lines
   ok(
     job.invoice!.lineItems.some((li) => li.description.startsWith("Workshop overhead")),
-    "invoice has an overhead line",
+    "invoice has an overhead line"
   );
   ok(
     job.invoice!.lineItems.some((li) => li.description === "Contingency"),
-    "invoice has a contingency line",
+    "invoice has a contingency line"
   );
 }
 
@@ -483,6 +482,7 @@ console.log("\nTest 14: Saved Job cost-revenue reconciliation");
   const totals = computeTotals(lines, { overheadPct: 8, contingencyPct: 5 });
   const job = createJobFromEstimate({
     client: "Test",
+    payerId: "test-payer",
     project: "Test",
     lines,
     overheadPct: 8,
@@ -517,12 +517,9 @@ console.log("\nTest 15: Cabinet partitioning by room");
 
   const kitchenHrs = deriveLabourHoursFromCabinets(
     parts.get("r-kitchen")!,
-    DEFAULT_ASSEMBLY_MINUTES,
+    DEFAULT_ASSEMBLY_MINUTES
   );
-  const bathHrs = deriveLabourHoursFromCabinets(
-    parts.get("r-bath")!,
-    DEFAULT_ASSEMBLY_MINUTES,
-  );
+  const bathHrs = deriveLabourHoursFromCabinets(parts.get("r-bath")!, DEFAULT_ASSEMBLY_MINUTES);
   eq(kitchenHrs, (4 * 60) / 60, "kitchen assembly hours (4 base × 60)");
   eq(bathHrs, (4 * 45) / 60, "bath assembly hours (4 wall × 45)");
 }
@@ -546,7 +543,7 @@ console.log("\nTest 16: Negative inputs clamp to 0");
   eq(totals.lineSubtotals[3].cost, 1000, "negative waste → 0 waste");
   ok(
     totals.quoted >= 0,
-    `quoted never goes negative even with garbage inputs (got ${totals.quoted.toFixed(2)})`,
+    `quoted never goes negative even with garbage inputs (got ${totals.quoted.toFixed(2)})`
   );
 }
 

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { UploadCloud } from "lucide-react";
 import { PageHeader } from "@shared/components/layout/PageHeader";
 import { useJobs } from "@features/jobs/lib/jobsStore";
+import { useContacts } from "@features/contacts/lib/contactsStore";
 import { useWorkspaceSettings } from "@shared/lib/workspaceSettings";
 import {
   emptyCabinetSummary,
@@ -124,6 +125,7 @@ const AUTO_DERIVED_SECTIONS: SectionId[] = ["assembly", "install"];
 export function EstimatorView() {
   const router = useRouter();
   const { createJob, jobs } = useJobs();
+  const { contacts } = useContacts();
   const { settings } = useWorkspaceSettings();
   const { cabinetTypes, itemsWithOffers } = useCatalog();
   const { operations, sessions } = useLabour();
@@ -219,7 +221,13 @@ export function EstimatorView() {
     [cabinetTypes]
   );
 
-  const [client, setClient] = useState("");
+  // The billable client is a real contact (jobs.payer_id is NOT NULL). The
+  // job's legacy `client` text mirrors the payer's name, matching /jobs/new.
+  const [payerId, setPayerId] = useState<string | null>(null);
+  const payerName = useMemo(
+    () => contacts.find((c) => c.id === payerId)?.name ?? "",
+    [contacts, payerId]
+  );
   const [project, setProject] = useState("");
   const [activeTemplate, setActiveTemplate] = useState<EstimateTemplate>(defaultTemplate());
   const [templatePickerOpen, setTemplatePickerOpen] = useState(false);
@@ -584,10 +592,11 @@ export function EstimatorView() {
   }
 
   async function saveAsJob() {
-    if (!client.trim() || !project.trim()) return;
+    if (!payerId || !project.trim()) return;
     setSubmitting(true);
     const job = createJobFromEstimate({
-      client,
+      client: payerName,
+      payerId,
       project,
       lines: allLines,
       overheadPct,
@@ -681,9 +690,9 @@ export function EstimatorView() {
           </div>
 
           <ProjectSection
-            client={client}
+            payerId={payerId}
             project={project}
-            onClient={setClient}
+            onPayer={setPayerId}
             onProject={setProject}
           />
 
@@ -729,7 +738,7 @@ export function EstimatorView() {
           preworkCost={preworkCostBreakdown.totalCost}
           preworkHours={preworkCostBreakdown.totalHours}
           rooms={rooms}
-          canSave={Boolean(client.trim() && project.trim())}
+          canSave={Boolean(payerId && project.trim())}
           submitting={submitting}
           onSave={saveAsJob}
           capacityWarning={capacityWarning}
