@@ -1,6 +1,10 @@
 import "server-only";
 import type { FormInstance, FormShareLink } from "@shared/lib/types";
-import { FORM_INSTANCES_TABLE, SHARE_TOKENS_TABLE } from "@shared/lib/supabase";
+import {
+  FORM_INSTANCES_TABLE,
+  FORM_SHARE_LINKS_TABLE,
+  SHARE_TOKENS_TABLE,
+} from "@shared/lib/supabase";
 import { getServiceRoleClient } from "@shared/lib/serviceClient";
 import { rowToFormInstance, type FormInstanceRow } from "./formInstancesRowMap";
 import type { ShareTokenRow } from "@shared/lib/shareTokensRowMap";
@@ -57,8 +61,9 @@ export async function sendShareLinkEmail(args: SendShareLinkArgs): Promise<SendS
   const sb = getServiceRoleClient();
   if (!sb) return { ok: false, reason: "unconfigured" };
 
-  // ADR 0022: the READ lives on the generalized `share_tokens` registry
-  // (capability_type=form).
+  // S5b (ADR 0022): the READ is cut to the generalized `share_tokens` registry
+  // (capability_type=form). The legacy `form_share_links` table is still
+  // dual-written below for the overlap.
   const { data: linkRow, error: linkErr } = await sb
     .from(SHARE_TOKENS_TABLE)
     .select("*")
@@ -105,8 +110,9 @@ export async function sendShareLinkEmail(args: SendShareLinkArgs): Promise<SendS
   }
 
   // Stamp sent_at on the first successful send (idempotent — never overwritten,
-  // so a reminder keeps the original sent date the owner counts from). sentAt
-  // lives in the `share_tokens` state jsonb (the read path).
+  // so a reminder keeps the original sent date the owner counts from). Dual-write:
+  // sentAt lives in the `share_tokens` state jsonb (the read path), mirrored to
+  // the legacy dedicated `sent_at` column.
   if (link.sentAt === null) {
     const now = new Date().toISOString();
     await sb
@@ -114,6 +120,7 @@ export async function sendShareLinkEmail(args: SendShareLinkArgs): Promise<SendS
       .update({ state: formShareLinkToShareTokenState({ ...link, sentAt: now }) })
       .eq("id", link.id)
       .eq("capability_type", "form");
+    await sb.from(FORM_SHARE_LINKS_TABLE).update({ sent_at: now }).eq("id", link.id);
   }
 
   return { ok: true, mode: args.mode, emailId: result.id };
